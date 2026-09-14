@@ -1,0 +1,104 @@
+// NeuroNest — Prisma schema (Phase 1).
+// See docs/schema-decisions.md for the rationale behind every table and field.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PARENT
+  CLINICIAN
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+  INVITED
+}
+
+enum ClinicianApplicationStatus {
+  PENDING
+  REVIEWED
+  APPROVED
+  REJECTED
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  ACCOUNT_SETUP
+}
+
+enum VerificationChannel {
+  EMAIL
+}
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String     @unique
+  passwordHash    String?
+  name            String
+  role            Role       @default(PARENT)
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  selfExcludedAt  DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  refreshTokens      RefreshToken[]
+  verificationTokens VerificationToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model VerificationToken {
+  id         String                @id @default(uuid()) @db.Uuid
+  userId     String                @db.Uuid
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       VerificationTokenType
+  channel    VerificationChannel   @default(EMAIL)
+  tokenHash  String
+  attempts   Int                   @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime              @default(now())
+
+  @@index([userId, type])
+  @@index([tokenHash])
+  @@map("verification_tokens")
+}
+
+model ClinicianApplication {
+  id         String                     @id @default(uuid()) @db.Uuid
+  name       String
+  email      String
+  context    String
+  status     ClinicianApplicationStatus @default(PENDING)
+  reviewNote String?
+  createdAt  DateTime                   @default(now())
+  updatedAt  DateTime                   @updatedAt
+
+  @@index([status])
+  @@map("clinician_applications")
+}
