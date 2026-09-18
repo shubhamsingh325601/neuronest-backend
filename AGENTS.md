@@ -1,115 +1,81 @@
-# AGENTS.md
+# Agent Guidelines & Contributor Rules
 
-Instructions for anyone — human or agent — working in this repo. `CLAUDE.md` points here.
+Instructions for AI agents and human contributors working in the NeuroNest backend repository (`CLAUDE.md` points here).
 
-## Overview
+---
 
-NeuroNest backend. AI-assisted therapy for children with autism / ADHD. **Phase 1**
-ships only the auth + onboarding foundation (see
-[`docs/plans/0001-phase-1-auth-onboarding.md`](docs/plans/0001-phase-1-auth-onboarding.md)).
-Out of scope this phase: video upload, AI engine, doctor app, admin panel UI, billing,
-RAG/chat. Do not scaffold them.
+## 1. Overview & Project Roadmap
 
-## Stack
+NeuroNest is an AI-assisted therapy backend for children with autism and ADHD.
 
-NestJS 11 · TypeScript 5.7 · Node 22 · PostgreSQL 16 via Prisma 6 · in-house JWT auth
-(argon2id passwords, opaque rotating refresh tokens) · modular monolith.
+> [!TIP]
+> **Active Milestone & Phase Roadmap**:
+> Implementation roadmap, phase scopes, and active task status are tracked exclusively in [`docs/plans/README.md`](docs/plans/README.md). Always consult the newest **Active** plan in `docs/plans/` before designing or scaffolding new features to align with the current project milestone.
 
-Pinned deliberately below the latest majors (no NestJS 12 / Prisma 7) to keep
-`@nestjs/throttler`, `nestjs-pino`, and `@sentry/nestjs` peer deps happy. Revisit later.
+---
 
-## Commands
+## 2. Cardinal Rules (Non-Negotiable)
 
-| | |
+1. **Path Aliases Only — No `../` in Imports**:
+   - `@app/*` &rarr; `src/*`
+   - `@common/*` &rarr; `src/common/*`
+   - `@modules/*` &rarr; `src/modules/*`
+   - `@test/*` &rarr; `test/*`
+   - Same-directory or sub-directory imports remain `./relative`. Relative parent traversing (`../`) is strictly prohibited.
+2. **Modular Monolith & Feature Folders**:
+   - Modules live in `src/modules/<domain>/`. Shared cross-cutting infra lives in `src/common/<concern>/`.
+   - Each use-case is self-contained in `src/modules/<domain>/features/<use-case>/` containing its controller, service, DTOs, and unit spec.
+   - **No repository layer**: Prisma is the data access layer.
+3. **Explicit Route Authorization**:
+   - Every controller handler must be decorated with either `@Public()` or an explicit permission: `@Auth('<permission>')`.
+   - Any unannotated handler causes the automated security guard (`test/rbac-route-coverage.e2e-spec.ts`) to fail.
+4. **Strict DTO Validation**:
+   - Every input field must have `class-validator` decorators.
+   - Global `ValidationPipe` is set to `whitelist: true`, `forbidNonWhitelisted: true`, and `transform: true`. Undeclared fields yield a `400 VALIDATION_ERROR`.
+5. **Uniform RFC 9457 Error Handling**:
+   - Throw NestJS `HttpException` subclasses with an object body: `throw new ConflictException({ code: 'STABLE_CODE', message: '...' })`.
+   - `AllExceptionsFilter` repackages all thrown exceptions into an RFC 9457 `application/problem+json` envelope. Do not format error responses manually.
+6. **Zero Account Enumeration**:
+   - Public auth endpoints must never leak account existence.
+   - Signup with already-verified email &rarr; `409 Conflict`.
+   - Resend verification & forgot-password &rarr; always `202 Accepted`.
+   - Login credential failures &rarr; uniform `401 INVALID_CREDENTIALS`.
+7. **Tokens Hashed at Rest**:
+   - Refresh tokens and verification tokens must only be stored as SHA-256 hashes (`@common/crypto/token.util`). Never store or log raw secrets.
+8. **OpenAPI Spec Synchronization**:
+   - The OpenAPI specification is generated from live metadata.
+   - When modifying or adding routes, keep `EXPECTED` in `test/docs.e2e-spec.ts` in sync (method, path, operationId).
+
+---
+
+## 3. Context-Loading Matrix (When to Read Which File)
+
+To maintain a lean context window, **do not read the entire `docs/` directory**. Read only the specific skill or document needed for your current task:
+
+| Developer / Agent Task | Skill to Invoke | Reference Document to Load | Scope & Guidance |
+|---|---|---|---|
+| **Add a new endpoint or use-case** | `.claude/skills/feature-slice/` | [`docs/api-conventions.md`](docs/api-conventions.md) | Feature-folder layout, DTO validation, `@ApiOperation`, HTTP status codes, OpenAPI drift guard. |
+| **Add or gate RBAC permissions** | `.claude/skills/add-permission/` | [`docs/rbac.md`](docs/rbac.md) | Update `PERMISSIONS` tuple and `ROLE_PERMISSIONS`, apply `@Auth()`, service-level scoping. |
+| **Modify schema, run migrations, Docker** | `.claude/skills/prisma-migration/` | [`docs/database-and-docker.md`](docs/database-and-docker.md)<br>[`docs/schema-decisions.md`](docs/schema-decisions.md) | Relational normalization, UUIDv4 keys, JSONB, `migrate dev` vs `deploy`, Docker Postgres lifecycle. |
+| **Write or run unit / E2E tests** | — | [`docs/testing.md`](docs/testing.md) | Unit test mocking (`PrismaService`, `EmailService`), Docker throwaway Postgres, test data truncation, guardrails. |
+| **Auth logic, tokens, password reset** | — | [`docs/auth-flows.md`](docs/auth-flows.md) | Argon2id hashing, rotating refresh tokens, family reuse revocation, email verification sequences. |
+| **Understand architecture or scalability** | — | [`docs/architecture.md`](docs/architecture.md) | Modular monolith topology, request pipeline, observability (Pino, Sentry), 2–3 year growth seams. |
+| **Check project status or delivery plans** | — | [`docs/plans/README.md`](docs/plans/README.md) | Delivery plans per phase; current active milestone. |
+
+---
+
+## 4. Essential Commands
+
+| Command | Description |
 |---|---|
-| `npm run start:dev` | Watch dev server (`http://localhost:3000`, docs at `/docs`) |
-| `npm run build` | `nest build` |
-| `npm test` | Unit tests (no DB) |
-| `npm run test:e2e` | E2E (needs `TEST_DATABASE_URL`, throwaway Postgres) |
-| `npm run lint` / `npm run format` | ESLint (flat config v9) / Prettier |
-| `docker compose up -d` | Local Postgres |
-| `npm run prisma:migrate` | `prisma migrate dev` |
-| `npm run db:seed` | Idempotent first-ADMIN seed (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) |
-
-## Conventions
-
-- **Module per domain** under `src/modules/<domain>/`; shared infra under
-  `src/common/<concern>/` (`@Global` where it needs DI).
-- **Folder per use-case**: `modules/<domain>/features/<use-case>/` holds
-  `<use-case>.controller.ts`, `<use-case>.service.ts`, `dto/`, `<use-case>.service.spec.ts`.
-  Cross-feature helpers → `modules/<domain>/shared/`. **No controller/service/repository
-  layering. No repository layer — Prisma is it. No DDD ceremony.**
-- **Path-alias imports only. No `../` in import paths.** Aliases (`tsconfig.json` `paths`,
-  mirrored in both jest configs):
-  `@app/*` → `src/*`, `@common/*` → `src/common/*`, `@modules/*` → `src/modules/*`,
-  `@test/*` → `test/*`. Same-folder / child imports stay `./relative`.
-- **Controllers**: one `@ApiTags`, an explicit `@ApiOperation({ operationId })` on every
-  handler, explicit `@HttpCode` where not 200/201, and `@Public()` or `@Auth(...)` on
-  every handler.
-- **DTOs**: every field validated with class-validator; global `ValidationPipe`
-  (`whitelist`, `forbidNonWhitelisted`, `transform`).
-- **Errors**: throw Nest `HttpException` subclasses with an object body
-  `{ code: 'STABLE_CODE', message: '...' }`. `AllExceptionsFilter` repackages every throw
-  into one RFC 9457 `application/problem+json` envelope (`type`, `title`, `status`,
-  `detail`, `instance` + `code` / `requestId` / `timestamp` extension members) — see
-  [docs/api-conventions.md](docs/api-conventions.md) and
-  [docs/auth-flows.md](docs/auth-flows.md). Never leak account existence — signup on a verified email → 409;
-  `resend-verification` / `forgot-password` always 202; login failure is a single
-  `INVALID_CREDENTIALS`.
-- **Secrets/tokens**: only SHA-256 hashes at rest (`@common/crypto/token.util`). Never
-  log them (pino redaction covers common keys).
-- **Email**: `.toLowerCase().trim()` every inbound address before use.
-- **OpenAPI**: no committed spec file — built at boot from live code. Keep
-  `test/docs.e2e-spec.ts`'s `EXPECTED` list in sync with routes (method, path,
-  operationId); a mismatch fails the build.
-
-## Testing
-
-- One `*.spec.ts` next to each service. Unit tests mock `PrismaService` and
-  `EmailService`; **no DB**.
-- E2E specs (`test/*.e2e-spec.ts`): real app, `EmailService` → `FakeEmailService`,
-  throwaway Postgres truncated between specs. Suites: `auth.e2e-spec.ts`
-  (signup→verify→login→refresh→logout), `deactivate.e2e-spec.ts`,
-  `clinician-application.e2e-spec.ts` (public submit + admin review / approve / reject /
-  account-setup), `rbac-route-coverage.e2e-spec.ts` (every route gated or `@Public()`),
-  `error-shape.e2e-spec.ts` (RFC 9457 envelope), `docs.e2e-spec.ts` (doc-drift guard).
-- **ts-jest is slow** (full type-check per file, ~tens of seconds). If it becomes
-  painful, set `isolatedModules: true` on the ts-jest transform or move to `@swc/jest`.
-
-## Security notes
-
-argon2id password hashing (params from `ARGON2_*` env) · access tokens are short-lived
-signed JWTs · refresh tokens are opaque 32-byte randoms, hashed at rest, rotated every
-refresh, reuse revokes the whole family · every `/v1/auth/*` route fixed at 5 req/60 s ·
-no account enumeration on any public endpoint · all secrets via env, `.env` gitignored,
-`.env.example` committed with no values · password reset & deactivation revoke all
-sessions · `JwtAuthGuard` re-reads account status from the DB each request, so
-deactivation / suspension takes effect on the next request, not at token expiry.
-
-## Added beyond the original brief
-
-`@nestjs/throttler` (rate limiting) · `nestjs-pino` + `pino-http` + `pino-pretty`
-(structured logs) · `@sentry/nestjs` (error reporting) · `@scalar/nestjs-api-reference`
-(API docs UI) · `joi` (env validation) · `resend` (email) · one extra table
-`VerificationToken` backing email verification, password reset, and clinician account setup ·
-`tsconfig-paths` (alias resolution for `ts-node` seed script) · `dotenv` (seed script).
-
-## Build notes
-
-- `nest build` rewrites the `@app`/`@common`/`@modules` aliases to relative `require()`
-  paths in emitted JS, so `node dist/main.js` (`start:prod`) works with no extra flags.
-  Raw `tsc` does **not** — only build via `nest build`.
-- `tsconfig.build.json` sets `"include": ["src/**/*"]` so `dist/main.js` lands at the
-  root of `dist/` (without it, root-level `jest.config.ts` / `prisma/seed.ts` widen the
-  inferred rootDir and output goes to `dist/src/`).
-- The `db:seed` script runs `ts-node -r tsconfig-paths/register` so alias imports would
-  resolve there too (the seed itself currently uses none).
-
-## Pointers
-
-- Design docs: [`docs/`](docs/README.md) — architecture, schema decisions, auth flows,
-  RBAC, API conventions, adding a permission.
-- Plans: [`docs/plans/`](docs/plans/README.md) — one file per phase; the newest
-  **Active** row is current.
-- Skills: [`.claude/skills/`](.claude/skills/) — repo-local Agent Skills that encode
-  these conventions.
+| `npm run start:dev` | Launch watch-mode development server (`http://localhost:3000`, docs at `/docs`) |
+| `npm run build` | Compile the NestJS application to `dist/` via `nest build` |
+| `npm test` | Run all unit tests (in-memory, mocked Prisma/Email, fast) |
+| `npm run test:e2e` | Run E2E test suite (requires Docker Postgres running) |
+| `npm run lint` | Check and fix lint issues via ESLint (flat config v9) |
+| `npm run format` | Format codebase via Prettier |
+| `npm run docker:up` / `docker:down` | Start or stop local PostgreSQL Docker container |
+| `npm run prisma:migrate` | Author a new migration via `prisma migrate dev` (dev DB only) |
+| `npm run prisma:deploy` | Apply pending migrations via `prisma migrate deploy` (CI / prod) |
+| `npm run prisma:generate` | Regenerate `@prisma/client` types |
+| `npm run db:seed` | Run idempotent database seed script (`prisma/seed.ts`) |

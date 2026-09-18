@@ -13,9 +13,8 @@ description: >-
 
 Phase 2 authorization is a **static role → permission map in code**
 (`src/common/authz/permissions.ts`). No CASL, no RBAC tables, no `AbilityFactory` —
-those are deliberate non-goals until a rule needs a *condition*. Full model in
-`docs/rbac.md`; this is the procedure. The canonical checklist is
-`docs/adding-a-permission.md` — keep the two in sync if you change one.
+those are deliberate non-goals until a rule needs a *condition*. Full model, guard order,
+and canonical checklist are in `docs/rbac.md`.
 
 ## Naming
 

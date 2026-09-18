@@ -1,7 +1,13 @@
-# Schema decisions
+# Schema Decisions (ADR)
 
-Source of truth: `prisma/schema.prisma`. Postgres 16, all tables `@@map`-ed to
-`snake_case`, all ids `uuid` (`@db.Uuid`).
+Source of truth: `prisma/schema.prisma`. PostgreSQL 16, all tables `@@map`-ed to `snake_case`, all primary keys UUIDv4 (`@db.Uuid`).
+
+This document serves as the **Architecture Decision Record (ADR)** explaining the *why* behind individual tables, columns, constraints, and cryptographic choices.
+
+> [!NOTE]
+> For general database normalization rules, JSONB conventions, Docker Compose containerization, and Prisma migration workflows (`migrate dev` vs `deploy`), see [`database-and-docker.md`](database-and-docker.md).
+
+---
 
 ## Enums
 

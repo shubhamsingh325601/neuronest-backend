@@ -1,34 +1,41 @@
 # Architecture
 
-## Shape: modular monolith
+This document defines the high-level system architecture, request lifecycle, observability, and long-term scalability design for the NeuroNest backend.
 
-One deployable Nest application. The domain is split into **modules** (`src/modules/<domain>/`),
-and cross-cutting infrastructure lives in `src/common/<concern>/`. There is no separate
-service mesh, no message bus, no per-module database. When a domain genuinely needs to
-split out later, the module boundary is already the seam.
+---
 
-Phase 1 modules:
+## 1. System Topology: Modular Monolith
 
+NeuroNest is structured as a **modular monolith** running on NestJS 11 and Node 22. Domain logic is segregated into bounded modules (`src/modules/<domain>/`), while shared cross-cutting concerns reside in `src/common/<concern>/`.
+
+There is deliberately no microservice mesh, event bus, or distributed database at this stage. The modular monolith provides maximal developer velocity, unified transactions, simple deployments, and zero network serialization overhead. If a specific domain (such as real-time audio/video processing or AI inference) requires independent scaling in the future, the module boundary provides the natural extraction seam.
+
+### Domain Modules
 | Module | Responsibility |
-|--------|----------------|
-| `auth` | signup, email verification, login, refresh, logout, forgot/reset password |
-| `users` | `GET /users/me`, self-deactivation |
-| `clinicians` | public clinician-**application** submission (first feature of the clinician domain) |
-| `health` | liveness + DB probe |
+|---|---|
+| `auth` | Signup, email verification, login, refresh rotation, logout, password reset |
+| `users` | Current user profile (`GET /users/me`), self-deactivation |
+| `clinicians` | Public clinician application intake and admin review workflow |
+| `health` | Liveness and database connectivity probes |
 
-`common` modules (each `@Global` where it needs DI): `PrismaModule`, `EmailModule`,
-`CryptoModule`, `AuthzModule`, `LoggingModule`, plus config, filters, throttler config,
-and OpenAPI wiring.
+### Common Infrastructure Modules
+Shared infrastructure modules are marked `@Global()` when dependency injection is required across modules:
+- `PrismaModule`: Database connectivity and transaction management (`@common/prisma`).
+- `EmailModule`: Abstract email delivery provider (`@common/email`).
+- `CryptoModule`: Cryptographic utilities, argon2id hashing, and SHA-256 token hashing (`@common/crypto`).
+- `AuthzModule`: Static RBAC permission mapping and guards (`@common/authz`).
+- `LoggingModule`: Structured Pino logging and request correlation (`@common/logging`).
 
-## Layout: folder per use-case
+---
 
-Inside a module there is **no controller/service/repository layering**. Instead, one
-folder per use-case:
+## 2. Layout: Feature Folders per Use-Case
+
+Within domain modules, NeuroNest avoids traditional horizontal layering (controllers &rarr; services &rarr; repositories). Instead, code is organized by **vertical use-case slices**:
 
 ```
 src/modules/auth/
   auth.module.ts
-  shared/                         # helpers used by >1 feature in this module
+  shared/                         # Utilities shared across multiple features in this module
     refresh-token.service.ts
     verification-token.service.ts
     session-tokens.dto.ts
@@ -36,86 +43,124 @@ src/modules/auth/
     signup/
       signup.controller.ts
       signup.service.ts
-      signup.service.spec.ts
-      dto/signup.dto.ts
+      signup.service.spec.ts      # Co-located unit test
+      dto/signup.dto.ts           # Input/Output DTOs for this feature
     login/
       ...
 ```
 
-Rationale: a use-case is the unit people actually work on. Keeping its controller,
-service, DTOs, and test in one folder means a change touches one directory, and the
-folder list doubles as a feature list. Prisma **is** the repository layer — wrapping it
-in hand-written repositories buys nothing this phase.
+### Rationale
+- **High Cohesion**: Everything required to understand, modify, or test an endpoint exists in one directory.
+- **Self-Documenting Codebase**: The directory tree doubles as a feature catalog.
+- **No Redundant Abstractions**: Prisma is the data access layer; handwritten repositories are avoided.
 
-Cross-feature helpers for a module go in `modules/<domain>/shared/`. Anything shared
-across modules is `common` infrastructure.
+---
 
-## API versioning
+## 3. Request Lifecycle Pipeline
 
-NestJS URI versioning, `defaultVersion: '1'` (`main.ts`). Every domain route is under
-`/v1/…`. Exceptions:
-
-- `GET /health` is also exposed **version-neutral** at `/health` (`HealthAliasController`,
-  `@ApiExcludeController`) so uptime monitors have a path that never moves. The
-  versioned `GET /v1/health` is the one documented.
-- `/docs` and `/openapi.json` are mounted with `app.use(...)` outside the Nest router,
-  so they are unversioned.
-
-## Request lifecycle
+Every incoming HTTP request passes through an explicit, ordered pipeline:
 
 ```
-request
+Incoming Request
   │
-  ├─ ThrottlerGuard        (APP_GUARD #1) — rate limit; @AuthThrottle() tightens /v1/auth/*
-  ├─ JwtAuthGuard          (APP_GUARD #2) — authn: verify access token, then re-read the
-  │                                          account and reject non-ACTIVE / deleted
-  │                                          users; @Public() routes skip this
-  ├─ PermissionsGuard      (APP_GUARD #3) — authz: role → permission check for @Auth(...) /
-  │                                          @RequirePermissions() routes
-  ├─ ValidationPipe        (global) — whitelist + forbidNonWhitelisted + transform on the DTO
-  ├─ Controller handler → Service
-  │      ownership checks ("acting on your own account") happen inline in the service
+  ├─ 1. ThrottlerGuard (APP_GUARD)
+  │     Evaluates IP-based rate limits. @AuthThrottle() tightens auth routes to 5 req/60s.
   │
-  └─ AllExceptionsFilter   (global) — normalises every throw to one RFC 9457
-         `application/problem+json` shape:
-         { type, title, status, detail, instance, code, requestId, timestamp }
-         (+ errors[] for validation failures). `code` / `requestId` / `timestamp` are
-         extension members; `type` is a stable URI built from `code`, `title` a static
-         phrase per code.
-         HttpException passes through (honours an optional `code`);
-         Prisma P2002 → 409, P2025 → 404; anything else → 500 + Sentry.captureException
+  ├─ 2. JwtAuthGuard (APP_GUARD)
+  │     Validates access token signature and expiration.
+  │     Re-reads user status from DB: rejects DEACTIVATED / SUSPENDED accounts immediately.
+  │     Skipped if the handler is decorated with @Public().
+  │
+  ├─ 3. PermissionsGuard (APP_GUARD)
+  │     Evaluates user role against the static ROLE_PERMISSIONS map.
+  │     Enforces @Auth('<permission>') or @RequirePermissions('<permission>').
+  │
+  ├─ 4. ValidationPipe (Global)
+  │     Runs class-validator on the request body/query DTO.
+  │     Enforces whitelist: true, forbidNonWhitelisted: true, and transform: true.
+  │
+  ├─ 5. Controller & Service Execution
+  │     Controller handles HTTP parameter binding.
+  │     Service executes business logic and database queries.
+  │     Data ownership / tenancy checks ("can user X access resource Y?") happen here.
+  │
+  └─ 6. AllExceptionsFilter (Global Filter)
+        Catches all thrown exceptions and standardizes them into the
+        RFC 9457 `application/problem+json` envelope.
+        Captures 5xx server errors in Sentry.
 ```
 
-Guards run in registration order (`app.module.ts` `providers`): rate-limit → authenticate
-→ authorize.
+---
 
-## Why in-house JWT (not Auth0 / Cognito / Passport strategies)
+## 4. API Versioning & Routing
 
-- **Refresh-token semantics we control.** Opaque 32-byte refresh tokens, SHA-256 hash at
-  rest, rotated every refresh, with reuse detection that revokes the whole token family.
-  That behaviour is a product decision, not something to bend a third party around.
-- **No per-seat identity-provider cost** for a consumer product with a large parent base.
-- **Data residency / audit** stay in our Postgres.
-- The surface is small and well-trodden: argon2id password hashing, short-lived signed
-  access tokens, a refresh-token table. `@nestjs/jwt` signs/verifies the access token;
-  everything else is ~three services (`AccessTokenService`, `RefreshTokenService`,
-  `VerificationTokenService`).
+- **URI Versioning**: Configured with `defaultVersion: '1'` in `main.ts`. All domain routes are exposed under `/v1/` (e.g. `/v1/auth/login`, `/v1/users/me`).
+- **Unversioned Paths**:
+  - `GET /health` is exposed version-neutral (`HealthAliasController`) for infrastructure health checkers, while `GET /v1/health` is documented in OpenAPI.
+  - `/docs` (Scalar API reference) and `/openapi.json` (raw OpenAPI document) are mounted directly on the Express instance outside the versioning router.
 
-Documented upgrade path: if federated login or enterprise SSO becomes a requirement, the
-`auth` module is the integration point — the guards and the `AuthenticatedUser` shape
-stay, only token issuance changes.
+---
 
-## Configuration & boot
+## 5. In-House Authentication Architecture
 
-`ConfigModule.forRoot({ isGlobal, load: [configuration], validationSchema })`. The Joi
-`envValidationSchema` runs at boot — a missing or malformed variable crashes the process
-immediately rather than at the first request that needs it. Typed access via
-`ConfigService<AppConfig, true>` and namespaced slices (`config.get('jwt', { infer: true })`).
-`.env.example` lists every variable with no secrets.
+NeuroNest uses a self-contained authentication architecture rather than external IDPs (Auth0, Cognito, Firebase):
 
-## Observability
+1. **Opaque Rotating Refresh Tokens**:
+   - 32-byte cryptographically secure random tokens.
+   - Only the SHA-256 hash is stored in PostgreSQL (`RefreshToken` table).
+   - Rotated on every refresh call: the old token is revoked, and a new pair is issued.
+   - Automatic family reuse detection: using an already-revoked refresh token revokes all active sessions for that user family.
+2. **Short-Lived Stateless Access Tokens**:
+   - Signed JWTs containing `sub`, `email`, and `role`.
+   - Verified statelessly, but complemented by DB-backed account status checks in `JwtAuthGuard` to ensure instant revocation upon suspension or deactivation.
+3. **Password Security**:
+   - Argon2id with production memory and iteration parameters (`ARGON2_*`).
+4. **Data Ownership & Privacy**:
+   - All user data and credentials remain strictly within our PostgreSQL instance, fulfilling healthcare privacy and regulatory standards.
 
-- **Logging** — `nestjs-pino`; the per-request `id` is reused as `requestId` in the error
-  shape; token/secret keys are redacted; `pino-pretty` only in development.
-- **Sentry** — `src/instrument.ts` is imported first in `main.ts`; `SentryModule.forRoot()`
-  in `AppModule`; the exception filter reports every 5xx. No-op when `SENTRY_DSN` is unset.
+---
+
+## 6. Observability & Error Handling
+
+- **Structured JSON Logging (`nestjs-pino`)**:
+  - Every request is tagged with a unique `requestId` (`x-request-id` header or UUIDv4).
+  - Sensitive parameters (passwords, tokens, authorization headers) are redacted automatically.
+  - Pretty-printing enabled in local development; high-performance JSON emitted in production.
+- **RFC 9457 Problem Details**:
+  - All errors (validation, business logic, unauthorized access, server crashes) conform to the RFC 9457 standard (`application/problem+json`).
+  - See [`docs/api-conventions.md`](api-conventions.md) for full envelope details.
+- **Error Tracking (`@sentry/nestjs`)**:
+  - Initialized at application startup (`src/instrument.ts`).
+  - `AllExceptionsFilter` automatically logs unhandled 5xx exceptions to Sentry with the attached `requestId`.
+
+---
+
+## 7. 2–3 Year Scalability & Growth Seams
+
+The architecture is deliberately designed to scale seamlessly for 2–3 years through predictable traffic milestones:
+
+### 1. Stateless Horizontally Scalable Application Instances
+The NestJS application maintains zero in-memory session state. All session persistence lives in PostgreSQL via hashed refresh tokens. Multiple instances of the backend container can run behind an Application Load Balancer (ALB / Nginx) with round-robin routing.
+
+### 2. Database Scaling Path
+- **Read Replicas**: For read-heavy operations (e.g. reading clinical questionnaires or user profiles), Prisma supports read/write replica routing (`@prisma/extension-read-replicas`).
+- **Connection Pooling**: Managed via PgBouncer or Neon connection poolers for high-concurrency connection scaling.
+
+### 3. Caching & Distributed State Seam (Redis)
+When request volume reaches thresholds requiring distributed caching:
+- Rate limiting can migrate from `@nestjs/throttler` in-memory storage to `@nest-lab/throttler-storage-redis`.
+- User permission caching can be layered into `PermissionsGuard` without altering domain services.
+
+### 4. Forward-Compatible Data Modeling
+- **Relational Normalization (3NF)** ensures referential integrity as core data volume expands.
+- **PostgreSQL `jsonb`** is utilized for extensible schemas (clinical responses, flexible metadata, audit snapshots) without requiring disruptive schema migrations.
+
+---
+
+## 8. Deep-Dive References
+
+- [API Conventions & Error Shapes](api-conventions.md) — HTTP verbs, RFC 9457 Problem Details, status codes.
+- [Database & Docker Architecture](database-and-docker.md) — PostgreSQL conventions, JSONB, Docker Compose, Prisma migrations.
+- [Testing Architecture](testing.md) — Unit test mocking, E2E test setup, guardrail suites.
+- [Authentication Sequences](auth-flows.md) — Step-by-step token flows and state transitions.
+- [Role-Based Access Control (RBAC)](rbac.md) — Static permission mapping and authorization guards.

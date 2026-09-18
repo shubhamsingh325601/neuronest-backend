@@ -61,7 +61,7 @@ and an import in `src/app.module.ts`.
 - **Module**: add the controller to `controllers: [...]` and the service to
   `providers: [...]` in `<domain>.module.ts`.
 
-## Tests
+## Tests (see docs/testing.md)
 
 - `<use-case>.service.spec.ts` — unit, next to the service. Mock `PrismaService` and
   `EmailService` (`{ user: { findUnique: jest.fn() } }` style, `Test.createTestingModule`
@@ -74,7 +74,8 @@ and an import in `src/app.module.ts`.
 
 `test/docs.e2e-spec.ts` holds an `EXPECTED` array of every `{ method, path, operationId }`.
 The spec is built from live metadata at boot, so **add your new route's row** or the
-suite fails. Match the `operationId` you put in `@ApiOperation`.
+suite fails. Match the `operationId` you put in `@ApiOperation`. Detailed rationale in
+`docs/testing.md`.
 
 ## Verify
 

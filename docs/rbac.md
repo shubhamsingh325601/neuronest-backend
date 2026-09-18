@@ -1,22 +1,31 @@
-# RBAC
+# Role-Based Access Control (RBAC) & Permissions
 
-Phase 1 authorization is a **static role → permission map in code**. No RBAC tables, no
-per-row policy rows, no `@casl/ability` yet — those are deliberate non-goals until rules
-become conditional.
+This document defines the authorization model, decorator lifecycle, guard execution order, and the checklist for introducing new permissions in the NeuroNest backend.
 
-## The map
+---
 
-`src/common/authz/permissions.ts`:
+## 1. Authorization Model: Static Code-Based Map
 
-```ts
+NeuroNest employs a **compile-time static role-to-permission mapping in code** (`src/common/authz/permissions.ts`). 
+
+There are deliberately no dynamic RBAC database tables (`roles`, `permissions`, `role_permissions`) and no complex policy engines in this phase. The static map provides:
+- **Zero Database Overhead**: Permission checks run synchronously in memory without database queries.
+- **Compile-Time Type Safety**: Permissions are defined as a TypeScript `as const` tuple; invalid permission strings in `@Auth()` decorators fail type checking at compile time.
+- **Auditable in Version Control**: All role permissions and capability grants are versioned in git history.
+
+### The Canonical Mapping (`src/common/authz/permissions.ts`)
+
+```typescript
 export const PERMISSIONS = [
   'user:read:self',
   'user:deactivate:self',
-  'clinician-application:list',    // GET  /v1/clinician-applications(/:id)   — ADMIN only
+  'clinician-application:list',    // GET  /v1/clinician-applications(/:id) — ADMIN only
   'clinician-application:review',  // POST /v1/clinician-applications/:id/(approve|reject)
 ] as const;
 
-const SELF_PERMISSIONS = ['user:read:self', 'user:deactivate:self'];
+export type Permission = (typeof PERMISSIONS)[number];
+
+const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   PARENT:    [...SELF_PERMISSIONS],
@@ -24,70 +33,114 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ADMIN:     [...PERMISSIONS],
 };
 
-roleHasPermission(role, permission): boolean
+export function roleHasPermission(role: Role, permission: Permission): boolean {
+  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
+}
 ```
 
-The `clinician-application:*` pair became live in Phase 3 (admin review of clinician
-applications). Both are unconditional `ADMIN`-only grants — `roleHasPermission` in
-`PermissionsGuard` fully enforces them, no service-side scope check is involved — so
-no decision note was warranted (per [adding-a-permission.md](adding-a-permission.md)),
-just the two lines already in `permissions.ts`.
+---
 
-Adding one? [adding-a-permission.md](adding-a-permission.md) is the step-by-step: the
-naming convention, where to declare and grant it, and when a change warrants a decision
-note in this file rather than just another line in `permissions.ts`.
+## 2. Decorators Reference
 
-## Decorators
+| Decorator | Target | Effect |
+|---|---|---|
+| `@Public()` | Handler / Class | Skips `JwtAuthGuard` **and** `PermissionsGuard`. Route is publicly accessible. |
+| `@Auth(...perms)` | Handler | Marks route authenticated + requires specified permissions. Automatically configures OpenAPI Bearer security and 401 response documentation. |
+| `@RequirePermissions(...perms)` | Handler | Attaches permission metadata without OpenAPI swagger side-effects. |
+| `@CurrentUser()` | Parameter | Extracts the authenticated user object (`id`, `email`, `role`, `status`) attached by `JwtAuthGuard`. |
 
-| Decorator | Effect |
-|-----------|--------|
-| `@Public()` | Skip `JwtAuthGuard` **and** `PermissionsGuard`. |
-| `@Auth(...perms)` | Mark authenticated + require `perms`; also adds `@ApiBearerAuth()` / 401 response docs. |
-| `@RequirePermissions(...perms)` | Attach required permissions only (no OpenAPI side-effects). |
-| `@CurrentUser()` | Param decorator → `request.user` (`AuthenticatedUser`: `id`, `email`, `role`, `status`). |
+> [!NOTE]
+> Every route handler must have an explicit security annotation (`@Public()` or `@Auth(...)`). Handlers missing both fail the automated security guard (`test/rbac-route-coverage.e2e-spec.ts`).
 
-Routes with neither `@Public()` nor any permission requirement are authenticated but not
-permission-gated (they pass `PermissionsGuard` on the "no `required` list" branch).
+---
 
-## Guard order
+## 3. Guard Execution Order
 
-Registered as `APP_GUARD` in `app.module.ts`, executed in this order:
+Guards are registered as `APP_GUARD` providers in `app.module.ts` and execute in strict sequential order:
 
-1. **`ThrottlerGuard`** — rate limiting. `/v1/auth/*` controllers add `@AuthThrottle()`
-   (fixed 5 req / 60 s).
-2. **`JwtAuthGuard`** — authentication. Verifies the bearer access-token signature and
-   expiry, then re-reads the account from the database (indexed PK lookup) and rejects
-   it if the row is gone (`INVALID_TOKEN`) or its current `status` is not `ACTIVE`
-   (`ACCOUNT_NOT_ACTIVE`) — so deactivation / suspension bites on the next request, not
-   at token expiry. Populates `request.user` from that fresh row. `@Public()`
-   short-circuits to allow.
-3. **`PermissionsGuard`** — authorization. Reads `@RequirePermissions` metadata and
-   checks each against `roleHasPermission(user.role, perm)`. Missing ⇒ 403
-   `INSUFFICIENT_PERMISSIONS`. `@Public()` or an empty requirement list ⇒ allow.
+```
+Incoming Request
+  │
+  ├─ 1. ThrottlerGuard (Rate Limiting)
+  │     Evaluates request count against IP limits.
+  │
+  ├─ 2. JwtAuthGuard (Authentication)
+  │     1. Skips if handler has @Public().
+  │     2. Verifies Bearer JWT signature and TTL.
+  │     3. Re-reads account status from PostgreSQL (indexed PK lookup).
+  │     4. Rejects immediately if user row is deleted or status != ACTIVE.
+  │     5. Attaches AuthenticatedUser to request.user.
+  │
+  └─ 3. PermissionsGuard (Authorization)
+        1. Skips if handler has @Public() or requires no permissions.
+        2. Checks each required permission against roleHasPermission(user.role, perm).
+        3. Throws 403 INSUFFICIENT_PERMISSIONS if any permission is missing.
+```
 
-## Ownership
+---
 
-"Acting on your own account" is **not** a permission — it is checked inline in the
-service. `GET /v1/users/me` and `POST /v1/users/me/deactivate` operate on
-`@CurrentUser().id` directly, so there is no cross-user object to authorize. When a route
-can address another user's resource, the service compares ids and throws `FORBIDDEN`
-itself.
+## 4. How to Add a Permission (Checklist)
 
-## Migration path to `@casl/ability`
+Whenever a new protected endpoint or use-case is introduced, follow this 4-step checklist:
 
-The static map is a strict subset of what CASL expresses. When a rule first needs a
-**condition** (e.g. "a CLINICIAN may read a child record *only if* assigned to that
-child's caseload"):
+### Step 1: Naming Convention
+Permissions follow the format: `resource:action[:scope]`, all lowercase, colon-separated:
+- `resource`: Domain entity in kebab-case (e.g. `clinician-application`, `child-profile`, `user`).
+- `action`: Verb describing the operation (e.g. `list`, `read`, `review`, `create`, `deactivate`).
+- `scope` *(optional)*: Use `:self` only when the same action exists at both a self-service scope and an administrative/broad scope (e.g. `user:read:self` vs future `user:read:any`).
+
+### Step 2: Declare in `PERMISSIONS`
+Add the string literal to the `PERMISSIONS` tuple in `src/common/authz/permissions.ts`:
+```typescript
+export const PERMISSIONS = [
+  // ... existing permissions
+  'child-profile:create',
+] as const;
+```
+Because the tuple is `as const`, the `Permission` TypeScript type updates automatically.
+
+### Step 3: Grant in `ROLE_PERMISSIONS`
+Assign the new permission to each role permitted to perform it in `ROLE_PERMISSIONS`:
+- Use `SELF_PERMISSIONS` for actions common to all self-service roles (`PARENT`, `CLINICIAN`, `ADMIN`).
+- Note: `ADMIN` spreads `...PERMISSIONS`, automatically receiving all declared permissions unless explicitly restricted.
+
+### Step 4: Gate the Controller Handler
+Annotate the controller handler with `@Auth('<permission>')`:
+```typescript
+@Post()
+@Auth('child-profile:create')
+@ApiOperation({ operationId: 'childProfileCreate', summary: 'Create a child profile' })
+async create(...) { ... }
+```
+
+---
+
+## 5. RBAC vs. Data Ownership
+
+> [!IMPORTANT]
+> **Data ownership is enforced in the service, NOT in the guard.**
+> 
+> The `PermissionsGuard` only verifies coarse-grained capabilities: *"Does a user with role PARENT have permission to update a child profile?"*
+> 
+> Fine-grained ownership (*"Is this specific child profile linked to this parent's account?"*) must be verified inline within the domain service:
+> 1. Load the resource from PostgreSQL via `PrismaService`.
+> 2. Compare the resource's owner ID with `currentUser.id`.
+> 3. If they do not match, throw:
+>    ```typescript
+>    throw new ForbiddenException({
+>      code: 'FORBIDDEN',
+>      message: 'You do not have permission to access this resource',
+>    });
+>    ```
+
+---
+
+## 6. Future Migration Path to `@casl/ability`
+
+The static map is intentionally designed as a strict subset of CASL. When business rules require **dynamic attribute-based conditions** (e.g., *"A clinician may read a session report only if the child is in their active caseload"*):
 
 1. Keep `PERMISSIONS` as the action vocabulary.
-2. Replace `ROLE_PERMISSIONS` with an `AbilityFactory` that, given a user, calls
-   `can(action, subject, conditions?)` — seeding the unconditional grants straight from
-   the current map so nothing regresses.
-3. Swap `PermissionsGuard`'s `roleHasPermission` call for `ability.can(...)`, resolving
-   the subject from the route.
-4. `@Auth('user:read:self')` style call sites stay; only the guard internals change.
-
-**No database migration is required** to reach this point — the map is code, and CASL
-conditions are evaluated against objects already loaded in the service. RBAC tables would
-only be needed if permissions had to be editable at runtime by admins, which is not a
-Phase 1 (or near-term) requirement.
+2. Replace `ROLE_PERMISSIONS` with a CASL `AbilityFactory` (`createForUser(user)`).
+3. Seed the `AbilityFactory` with the existing static grants so zero existing behavior regresses.
+4. Update `PermissionsGuard` to evaluate `ability.can(action, subject)` where dynamic condition evaluation is needed.
+5. All controller `@Auth('...')` decorators remain completely unchanged.
