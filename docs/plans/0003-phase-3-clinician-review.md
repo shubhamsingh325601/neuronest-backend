@@ -1,8 +1,8 @@
 # Plan 0003 — Phase 3: Clinician Application Review (Admin)
 
-Status: **Active**
+Status: **Done**
 Owner: backend
-Last updated: 2026-09-01
+Last updated: 2026-09-20
 
 > This file is the single source of truth for this phase. It carries every decision,
 > convention, and the exact remaining checklist so work can resume cold. Read it top to
@@ -213,14 +213,12 @@ status: ACTIVE, emailVerifiedAt: now() }`. Return `{ complete: true }`.
 
 ## 8. How to resume
 
-> Phase 3 is **code-complete and pending review** — every §7 slice is checked. If
-> continuing: confirm `npm run lint && npm test && npm run test:e2e` are green (needs
-> local Postgres — `docker compose up -d` — and the `neuronest_test` database; the e2e
-> global-setup runs `prisma migrate deploy` against `TEST_DATABASE_URL`). Migration
-> `20260901162705_phase_3_clinician_review` is committed. Do not touch `permissions.ts`
-> (the two permissions already exist and are ADMIN-granted). Do not scaffold document
-> upload, `Child`, or a job queue (Phase 4). On approval, flip this plan and the
-> `docs/plans/README.md` row to **Done**.
+> Phase 3 is **Done** — closed out 2026-09-20. `npm run lint && npm test (58) &&
+> npm run test:e2e (43)` reconfirmed green against local Postgres. Migration
+> `20260901162705_phase_3_clinician_review` is committed. The stale "unused by any
+> route right now" comment on the two `clinician-application:*` permissions in
+> `permissions.ts` has been corrected — they are actively enforced. Do not scaffold
+> document upload, `Child`, or a job queue here (Phase 4+).
 >
 > Runtime smoke (optional, `npm run start:dev`): seed an ADMIN, `POST
 > /v1/clinician-applications`, `GET /v1/clinician-applications?limit=1` (follow

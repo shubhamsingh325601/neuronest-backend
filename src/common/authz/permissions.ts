@@ -10,8 +10,7 @@ import { Role } from '@prisma/client';
 export const PERMISSIONS = [
   'user:read:self',
   'user:deactivate:self',
-  // Declared for the admin review flow that lands in a later phase; unused by any
-  // route right now, but keeps ADMIN's grant list honest.
+  // Enforced by the admin clinician-application review routes (Phase 3).
   'clinician-application:list',
   'clinician-application:review',
 ] as const;
