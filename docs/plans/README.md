@@ -10,6 +10,7 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0002 | Phase 2 — Standards & Hardening | Done | [0002-phase-2-standards-hardening.md](0002-phase-2-standards-hardening.md) |
 | 0003 | Phase 3 — Clinician Application Review (Admin) | Done | [0003-phase-3-clinician-review.md](0003-phase-3-clinician-review.md) |
 | 0004 | Phase 4 — Child + Clinician↔Child Foundation | Done | [0004-phase-4-child-clinician-foundation.md](0004-phase-4-child-clinician-foundation.md) |
+| 0005 | Phase 5 — Media Upload (Cloudinary, abstracted) | Active | [0005-phase-5-media-upload.md](0005-phase-5-media-upload.md) |
 
 Status values: **Active** (in progress) · **Done** · **Superseded** · **Parked**. The
 newest **Active** row is what's being worked on now.
