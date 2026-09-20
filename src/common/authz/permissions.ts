@@ -13,6 +13,11 @@ export const PERMISSIONS = [
   // Enforced by the admin clinician-application review routes (Phase 3).
   'clinician-application:list',
   'clinician-application:review',
+  // Core Care Domain (Phase 4). Ownership/assignment scoping for `child:read` is
+  // enforced in the service, not here — see docs/rbac.md.
+  'child:create:self',
+  'child:read',
+  'clinician-child:manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -20,8 +25,8 @@ export type Permission = (typeof PERMISSIONS)[number];
 const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  [Role.PARENT]: [...SELF_PERMISSIONS],
-  [Role.CLINICIAN]: [...SELF_PERMISSIONS],
+  [Role.PARENT]: [...SELF_PERMISSIONS, 'child:create:self', 'child:read'],
+  [Role.CLINICIAN]: [...SELF_PERMISSIONS, 'child:read'],
   [Role.ADMIN]: [...PERMISSIONS],
 };
 

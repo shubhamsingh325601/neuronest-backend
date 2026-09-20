@@ -21,6 +21,9 @@ export const PERMISSIONS = [
   'user:deactivate:self',
   'clinician-application:list',    // GET  /v1/clinician-applications(/:id) — ADMIN only
   'clinician-application:review',  // POST /v1/clinician-applications/:id/(approve|reject)
+  'child:create:self',             // POST /v1/children — PARENT only
+  'child:read',                    // GET  /v1/children/:id — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
+  'clinician-child:manage',        // POST /v1/children/:id/clinicians — ADMIN only
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -28,8 +31,8 @@ export type Permission = (typeof PERMISSIONS)[number];
 const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  PARENT:    [...SELF_PERMISSIONS],
-  CLINICIAN: [...SELF_PERMISSIONS],
+  PARENT:    [...SELF_PERMISSIONS, 'child:create:self', 'child:read'],
+  CLINICIAN: [...SELF_PERMISSIONS, 'child:read'],
   ADMIN:     [...PERMISSIONS],
 };
 
@@ -135,7 +138,31 @@ async create(...) { ... }
 
 ---
 
-## 6. Future Migration Path to `@casl/ability`
+## 6. Decision notes
+
+### `child:read` (Phase 4) — first role-diverging grant
+
+Until Phase 4, `ROLE_PERMISSIONS` only ever added self-service permissions equally to
+`PARENT`/`CLINICIAN` (via `SELF_PERMISSIONS`) plus `ADMIN`'s unconditional
+`...PERMISSIONS` spread. `child:read` is the first permission granted to `PARENT` and
+`CLINICIAN` individually for different reasons — a parent reads their **own** child, a
+clinician reads a child they're **assigned to** — while `ADMIN` reads any child
+unconditionally.
+
+The guard only checks that the caller's role holds `child:read` at all. The actual
+scoping happens in `GET /v1/children/{id}`'s service:
+- `PARENT` → `child.parentId === currentUser.id`, else `403 FORBIDDEN`.
+- `CLINICIAN` → a live `ClinicianChildAssignment` row for `(currentUser.id, child.id)`
+  exists, else `403 FORBIDDEN`.
+- `ADMIN` → no check.
+
+This is a single existence/equality check per role — the same shape as the existing
+"compare owner id to current user" pattern in §5, just checking a join-table row
+instead of a direct FK. It does **not** trigger the `@casl/ability` migration note in
+§7: that trigger is for genuinely compound/attribute conditions (e.g. "only if the
+assignment is still active AND made within the last year"), not a single row lookup.
+
+## 7. Future Migration Path to `@casl/ability`
 
 The static map is intentionally designed as a strict subset of CASL. When business rules require **dynamic attribute-based conditions** (e.g., *"A clinician may read a session report only if the child is in their active caseload"*):
 

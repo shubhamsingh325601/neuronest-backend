@@ -55,6 +55,9 @@ model User {
 
   refreshTokens      RefreshToken[]
   verificationTokens VerificationToken[]
+  child                  Child?                     @relation("ChildParent")
+  clinicianAssignments   ClinicianChildAssignment[] @relation("ClinicianAssignments")
+  assignmentsMadeAsAdmin ClinicianChildAssignment[] @relation("AssignmentsMadeByAdmin")
 
   @@map("users")
 }
@@ -101,4 +104,33 @@ model ClinicianApplication {
 
   @@index([status])
   @@map("clinician_applications")
+}
+
+model Child {
+  id          String   @id @default(uuid()) @db.Uuid
+  parentId    String   @unique @db.Uuid
+  parent      User     @relation("ChildParent", fields: [parentId], references: [id], onDelete: Cascade)
+  name        String
+  dateOfBirth DateTime @db.Date
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clinicianAssignments ClinicianChildAssignment[]
+
+  @@map("children")
+}
+
+model ClinicianChildAssignment {
+  id                String   @id @default(uuid()) @db.Uuid
+  clinicianId       String   @db.Uuid
+  clinician         User     @relation("ClinicianAssignments", fields: [clinicianId], references: [id], onDelete: Cascade)
+  childId           String   @db.Uuid
+  child             Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  assignedByAdminId String   @db.Uuid
+  assignedByAdmin   User     @relation("AssignmentsMadeByAdmin", fields: [assignedByAdminId], references: [id], onDelete: Restrict)
+  createdAt         DateTime @default(now())
+
+  @@unique([clinicianId, childId])
+  @@index([childId])
+  @@map("clinician_child_assignments")
 }

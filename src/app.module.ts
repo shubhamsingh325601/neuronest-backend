@@ -13,6 +13,7 @@ import { EmailModule } from '@common/email/email.module';
 import { LoggingModule } from '@common/logging/logging.module';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { AuthModule } from '@modules/auth/auth.module';
+import { ChildrenModule } from '@modules/children/children.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
 import { HealthModule } from '@modules/health/health.module';
 import { UsersModule } from '@modules/users/users.module';
@@ -46,6 +47,7 @@ import { UsersModule } from '@modules/users/users.module';
     AuthModule,
     UsersModule,
     CliniciansModule,
+    ChildrenModule,
     HealthModule,
   ],
   providers: [

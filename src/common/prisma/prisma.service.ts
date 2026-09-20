@@ -19,7 +19,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     if (process.env.NODE_ENV === 'production') {
       throw new Error('truncateAll() must never run in production');
     }
-    const tables = ['verification_tokens', 'refresh_tokens', 'clinician_applications', 'users'];
+    const tables = [
+      'verification_tokens',
+      'refresh_tokens',
+      'clinician_applications',
+      'clinician_child_assignments',
+      'children',
+      'users',
+    ];
     for (const table of tables) {
       await this.$executeRawUnsafe(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE`);
     }

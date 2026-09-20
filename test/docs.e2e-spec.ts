@@ -48,6 +48,13 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     operationId: 'clinicianApplicationReject',
   },
   { method: 'get', path: '/v1/health', operationId: 'healthCheck' },
+  { method: 'post', path: '/v1/children', operationId: 'childCreate' },
+  { method: 'get', path: '/v1/children/{id}', operationId: 'childGet' },
+  {
+    method: 'post',
+    path: '/v1/children/{id}/clinicians',
+    operationId: 'childAssignClinician',
+  },
 ];
 
 describe('OpenAPI spec (e2e)', () => {
