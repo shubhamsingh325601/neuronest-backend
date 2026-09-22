@@ -22,6 +22,16 @@ export const PERMISSIONS = [
   // admin-any) is the same shape as `child:read` — enforced in the service.
   'media:create:self',
   'media:read',
+  // Plan domain (Phase 6). `plan-template:read` and `plan:manage`/`plan:read` scoping
+  // is enforced in the service — see docs/rbac.md decision notes for the two new
+  // scoping *shapes* this phase introduces (query-filter, and note-visibility
+  // withheld from a role that already holds `plan:read`).
+  'plan-template:manage',
+  'plan-template:read',
+  'plan:manage',
+  'plan:read',
+  'plan-note:create',
+  'plan-note:read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -35,8 +45,18 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'child:read',
     'media:create:self',
     'media:read',
+    'plan:read',
   ],
-  [Role.CLINICIAN]: [...SELF_PERMISSIONS, 'child:read', 'media:read'],
+  [Role.CLINICIAN]: [
+    ...SELF_PERMISSIONS,
+    'child:read',
+    'media:read',
+    'plan-template:read',
+    'plan:manage',
+    'plan:read',
+    'plan-note:create',
+    'plan-note:read',
+  ],
   [Role.ADMIN]: [...PERMISSIONS],
 };
 

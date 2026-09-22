@@ -18,6 +18,7 @@ import { ChildrenModule } from '@modules/children/children.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
 import { HealthModule } from '@modules/health/health.module';
 import { MediaModule } from '@modules/media/media.module';
+import { PlansModule } from '@modules/plans/plans.module';
 import { UsersModule } from '@modules/users/users.module';
 
 @Module({
@@ -52,6 +53,7 @@ import { UsersModule } from '@modules/users/users.module';
     CliniciansModule,
     ChildrenModule,
     MediaModule,
+    PlansModule,
     HealthModule,
   ],
   providers: [

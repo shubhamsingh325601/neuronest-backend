@@ -56,6 +56,23 @@ enum MediaProvider {
   CLOUDINARY
 }
 
+enum PlanTemplateStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PlanStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum PlanOrigin {
+  MANUAL
+  AI
+}
+
 model User {
   id              String     @id @default(uuid()) @db.Uuid
   email           String     @unique
@@ -75,6 +92,9 @@ model User {
   clinicianAssignments   ClinicianChildAssignment[] @relation("ClinicianAssignments")
   assignmentsMadeAsAdmin ClinicianChildAssignment[] @relation("AssignmentsMadeByAdmin")
   uploadedMedia          Media[]                    @relation("UploadedMedia")
+  planTemplatesCreated   PlanTemplate[]              @relation("PlanTemplatesCreated")
+  plansCreated           Plan[]                      @relation("PlansCreated")
+  planNotesAuthored      PlanNote[]                   @relation("PlanNotesAuthored")
 
   @@map("users")
 }
@@ -134,6 +154,7 @@ model Child {
 
   clinicianAssignments ClinicianChildAssignment[]
   media                Media[]
+  plans                Plan[]
 
   @@map("children")
 }
@@ -172,4 +193,65 @@ model Media {
 
   @@index([childId])
   @@map("media")
+}
+
+model PlanTemplate {
+  id          String             @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  status      PlanTemplateStatus @default(DRAFT)
+  createdById String             @db.Uuid
+  createdBy   User               @relation("PlanTemplatesCreated", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  days  PlanTemplateDay[]
+  plans Plan[]
+
+  @@map("plan_templates")
+}
+
+model PlanTemplateDay {
+  id             String       @id @default(uuid()) @db.Uuid
+  planTemplateId String       @db.Uuid
+  planTemplate   PlanTemplate @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+  dayNumber      Int
+  title          String
+  instructions   String
+
+  @@unique([planTemplateId, dayNumber])
+  @@map("plan_template_days")
+}
+
+model Plan {
+  id             String       @id @default(uuid()) @db.Uuid
+  childId        String       @db.Uuid
+  child          Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  planTemplateId String       @db.Uuid
+  planTemplate   PlanTemplate @relation(fields: [planTemplateId], references: [id], onDelete: Restrict)
+  status         PlanStatus   @default(ACTIVE)
+  origin         PlanOrigin   @default(MANUAL)
+  startDate      DateTime     @db.Date
+  createdById    String       @db.Uuid
+  createdBy      User         @relation("PlansCreated", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  notes PlanNote[]
+
+  @@index([childId])
+  @@map("plans")
+}
+
+model PlanNote {
+  id        String   @id @default(uuid()) @db.Uuid
+  planId    String   @db.Uuid
+  plan      Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  authorId  String   @db.Uuid
+  author    User     @relation("PlanNotesAuthored", fields: [authorId], references: [id], onDelete: Restrict)
+  note      String
+  createdAt DateTime @default(now())
+
+  @@index([planId])
+  @@map("plan_notes")
 }

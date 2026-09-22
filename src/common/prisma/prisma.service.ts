@@ -20,6 +20,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       throw new Error('truncateAll() must never run in production');
     }
     const tables = [
+      'plan_notes',
+      'plans',
+      'plan_template_days',
+      'plan_templates',
       'media',
       'verification_tokens',
       'refresh_tokens',

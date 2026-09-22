@@ -21,6 +21,90 @@ This document serves as the **Architecture Decision Record (ADR)** explaining th
 | `MediaType` | `PHOTO`, `VIDEO` | What kind of asset a `Media` row is. |
 | `MediaStatus` | `PENDING`, `UPLOADED`, `FAILED` | `PENDING` on ticket creation; `confirm` moves it to a terminal state — see `Media` below. |
 | `MediaProvider` | `CLOUDINARY` | Single value today — the column exists so a second storage backend (e.g. S3) is a value, not a migration, per the provider-agnostic `MediaStorageService` abstraction (`src/common/media-storage/`). |
+| `PlanTemplateStatus` | `DRAFT`, `PUBLISHED`, `ARCHIVED` | `DRAFT` while admin is authoring days; `PUBLISHED` is a one-way gate — only a `PUBLISHED` template can be assigned to a child; `ARCHIVED` is a future "retire this template" state, not yet reachable via any endpoint this phase. |
+| `PlanStatus` | `ACTIVE`, `COMPLETED`, `ARCHIVED` | At most one `ACTIVE` `Plan` per child, enforced in the service (no partial unique index — see `Plan` below). `COMPLETED`/`ARCHIVED` are both terminal; transitioning between them is `409 PLAN_ALREADY_FINAL`. |
+| `PlanOrigin` | `MANUAL`, `AI` | Always `MANUAL` this milestone — the column exists so a future AI-generated-plan pipeline is a value, not a migration. No `AI`-origin code path exists yet. |
+
+## `PlanTemplate` / `PlanTemplateDay` (`plan_templates` / `plan_template_days`) — Phase 6
+
+Admin-owned reusable coaching content library. A template's days are authored **nested,
+in one request** (`POST /v1/plan-templates` with a `days[]` body) — editing days after
+creation is out of scope this phase; a `DRAFT` template with wrong content is deleted
+and recreated, not patched. No template versioning: publishing is a one-way gate, and a
+`PUBLISHED` template's days can never change through this API.
+
+`PlanTemplate`:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | uuid PK | |
+| `title` | string | |
+| `description` | string? | |
+| `status` | `PlanTemplateStatus` default `DRAFT` | |
+| `createdById` | uuid FK → `User` | `onDelete: Restrict` — same audit-trail reasoning as every other `Restrict` FK in this domain (`ClinicianChildAssignment.assignedByAdminId`, `Media.uploadedById`). |
+| `createdAt` / `updatedAt` | DateTime | |
+
+`PlanTemplateDay`:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | uuid PK | |
+| `planTemplateId` | uuid FK → `PlanTemplate` | `onDelete: Cascade` — a day has no meaning outside its template. |
+| `dayNumber` | int | Caller-supplied, validated as a contiguous `1..N` set at create time (service-level, not DB-level). |
+| `title` | string | |
+| `instructions` | string (text) | |
+
+Constraint: `@@unique([planTemplateId, dayNumber])`.
+
+**Intentionally not modeled yet:** no partial-unique-index enforcement of the
+`1..N`-contiguous invariant (service-layer only, same deliberate-simplification
+reasoning as everywhere else in this domain), no day edit/delete endpoints, no template
+deletion flow (hence `Plan.planTemplateId`'s `Restrict` FK below).
+
+## `Plan` (`plans`) — Phase 6
+
+A `PlanTemplate` assigned to a specific child, tracking its lifecycle. "At most one
+`ACTIVE` `Plan` per child" is a **service-layer invariant only** — checked on create
+(`409 PLAN_ALREADY_ACTIVE` if one already exists), not a partial unique index, per the
+same deliberate-simplification call as `ClinicianChildAssignment`'s "no unassign"
+decision.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | uuid PK | |
+| `childId` | uuid FK → `Child` | `onDelete: Cascade`. |
+| `planTemplateId` | uuid FK → `PlanTemplate` | `onDelete: Restrict` — no template-deletion flow exists; a template with plans referencing it must not disappear out from under them. |
+| `status` | `PlanStatus` default `ACTIVE` | `ACTIVE` → `COMPLETED`/`ARCHIVED` via action endpoints (`POST /v1/plans/{id}/complete`, `.../archive`), both idempotent in their own target state, `409 PLAN_ALREADY_FINAL` transitioning between the two terminal states. |
+| `origin` | `PlanOrigin` default `MANUAL` | See enum note above. |
+| `startDate` | `Date` (`@db.Date`) | Anchors the "Today's Focus" day-offset computation — `dayNumber = floor((today - startDate) / 1 day) + 1`, UTC date-only arithmetic, no per-child timezone support this phase. |
+| `createdById` | uuid FK → `User` | `onDelete: Restrict`, same audit-trail reasoning as above. |
+| `createdAt` / `updatedAt` | DateTime | |
+
+Index: `@@index([childId])` — every "this child's plans" lookup (assignment-invariant
+check, Today's Focus) is by `childId`.
+
+**Intentionally not modeled yet:** no plan deletion, no general plan-history list
+endpoint (only "today's focus" is scoped this phase), no weekly/monthly
+goal-tracking/achievement/reporting tables (flagged out-of-scope in
+[plan 0006](plans/0006-phase-6-plan-domain.md) §1).
+
+## `PlanNote` (`plan_notes`) — Phase 6
+
+Append-only clinician-to-clinician coordination thread on a `Plan` — "what other
+clinicians suggested," not a parent-facing feature. Readable by an assigned
+`CLINICIAN` and `ADMIN` only, **not** `PARENT` (a real, non-obvious scoping choice —
+see `docs/rbac.md`'s decision notes). No edit/delete (matches the "working paper"
+framing); no notification/email when a note is left.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | uuid PK | |
+| `planId` | uuid FK → `Plan` | `onDelete: Cascade`. |
+| `authorId` | uuid FK → `User` | `onDelete: Restrict`, same audit-trail reasoning as above. |
+| `note` | string (text) | |
+| `createdAt` | DateTime | List endpoint sorts `(createdAt asc, id asc)` — oldest-first, unlike every other list in this codebase, because a thread reads chronologically. |
+
+Index: `@@index([planId])` — every "this plan's notes" list query is by `planId`.
 
 ## `User` (`users`)
 
@@ -139,11 +223,8 @@ assigned to the same child twice (re-assigning is a `409 CLINICIAN_ALREADY_ASSIG
 not a silent no-op). `@@index([childId])` — every "who is assigned to this child"
 lookup (ownership checks, future assignment listings) is by `childId`.
 
-**Intentionally not modeled yet:** no `PlanTemplate`/`Plan`/`PlanNote`, or
-`MonthlyCallLog` tables — those are Phases 6–7 of the Core Care Domain rollout, each
-gets its own migration once its own plan doc is authored. No unassign/removal support
-on the join (no MVP screen needs it yet). No partial-unique-index enforcement beyond
-what's stated above.
+**Intentionally not modeled yet:** no unassign/removal support on the join (no MVP
+screen needs it yet). No partial-unique-index enforcement beyond what's stated above.
 
 ## `Media` (`media`) — Phase 5
 

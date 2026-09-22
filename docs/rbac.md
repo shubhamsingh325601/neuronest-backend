@@ -26,6 +26,12 @@ export const PERMISSIONS = [
   'clinician-child:manage',        // POST /v1/children/:id/clinicians — ADMIN only
   'media:create:self',             // POST /v1/children/:id/media/upload-tickets, /v1/media/:id/confirm — PARENT only
   'media:read',                    // GET  /v1/children/:id/media — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
+  'plan-template:manage',          // POST /v1/plan-templates(/:id/publish) — ADMIN only
+  'plan-template:read',            // GET  /v1/plan-templates(/:id) — CLINICIAN(published-only)/ADMIN(any)
+  'plan:manage',                   // POST /v1/children/:id/plans, /v1/plans/:id/(complete|archive) — CLINICIAN(assigned)/ADMIN
+  'plan:read',                     // GET  /v1/children/:id/plans/today — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
+  'plan-note:create',              // POST /v1/plans/:id/notes — CLINICIAN(assigned)/ADMIN
+  'plan-note:read',                // GET  /v1/plans/:id/notes — CLINICIAN(assigned)/ADMIN — not PARENT
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -33,8 +39,8 @@ export type Permission = (typeof PERMISSIONS)[number];
 const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  PARENT:    [...SELF_PERMISSIONS, 'child:create:self', 'child:read', 'media:create:self', 'media:read'],
-  CLINICIAN: [...SELF_PERMISSIONS, 'child:read', 'media:read'],
+  PARENT:    [...SELF_PERMISSIONS, 'child:create:self', 'child:read', 'media:create:self', 'media:read', 'plan:read'],
+  CLINICIAN: [...SELF_PERMISSIONS, 'child:read', 'media:read', 'plan-template:read', 'plan:manage', 'plan:read', 'plan-note:create', 'plan-note:read'],
   ADMIN:     [...PERMISSIONS],
 };
 
@@ -177,6 +183,48 @@ instead of a `Child` row's own `id`:
 [plan 0005](plans/0005-phase-5-media-upload.md)), and the service still checks the
 caller is specifically *this child's* parent, not just any parent. Clinician/admin
 media write access is explicitly deferred, not silently added here.
+
+### `plan:manage` / `plan:read` (Phase 6) — `child:read`-shaped, walked from `Plan.childId`
+
+Same existence-check precedent as `child:read`/`media:read` above, walked from a
+`Plan` row's `childId`:
+- `PARENT` (`plan:read` only — `PARENT` does not hold `plan:manage`) → the plan's
+  child's `parentId === currentUser.id`, else `403 FORBIDDEN`.
+- `CLINICIAN` → a live `ClinicianChildAssignment` row for
+  `(currentUser.id, plan.childId)` exists, else `403 FORBIDDEN`. Checked on every
+  `plan:manage` call (assign/complete/archive) and on `plan:read` (today's-focus).
+- `ADMIN` → no check.
+
+Still a single row-existence check, same as `child:read` — does not trigger the
+`@casl/ability` migration note in §7.
+
+### `plan-template:read` (Phase 6) — a new scoping *shape*: query filter, not existence check
+
+Every ownership check so far (`child:read`, `media:read`, `plan:manage`/`plan:read`
+above) answers "does this specific row belong to me." `plan-template:read` for
+`CLINICIAN` answers a different question — "only show `PUBLISHED` rows":
+- `CLINICIAN` → list and get queries add `where: { status: 'PUBLISHED' }`. Fetching a
+  `DRAFT`/`ARCHIVED` template by id is `404 PLAN_TEMPLATE_NOT_FOUND`, not `403` — a
+  clinician has no business knowing a non-published template exists at all.
+- `ADMIN` → sees every status, no filter.
+
+This is still a single, non-compound condition (`status = PUBLISHED`), so it does not
+trigger the `@casl/ability` migration note in §7 — flagged here only because it is a
+different *shape* of scoping than every prior decision note, worth naming so a future
+reader doesn't assume all scoping is existence-checks.
+
+### `plan-note:read` (Phase 6) — withheld from a role that already holds `plan:read` on the same `Plan`
+
+`PlanNote` is clinician-to-clinician coordination ("what other clinicians suggested"),
+not a parent-facing feature (§3 row 7 of
+[plan 0006](plans/0006-phase-6-plan-domain.md)). `PARENT` holds `plan:read` but **not**
+`plan-note:create`/`plan-note:read` — a parent can read a `Plan` and its "today's
+focus," but not the notes clinicians leave on it. This is the first case in this
+codebase where a role holding read access to a resource is deliberately denied read
+access to a related sub-resource; noted here so it isn't "fixed" as an oversight later.
+Scoping for `CLINICIAN`/`ADMIN` on both `plan-note:create` and `plan-note:read` is the
+same existence-check shape as `plan:manage` above, walked from `PlanNote.planId` →
+`Plan.childId`.
 
 ## 7. Future Migration Path to `@casl/ability`
 

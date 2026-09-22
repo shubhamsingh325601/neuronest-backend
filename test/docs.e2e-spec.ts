@@ -70,6 +70,56 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     path: '/v1/children/{childId}/media',
     operationId: 'mediaList',
   },
+  {
+    method: 'post',
+    path: '/v1/plan-templates',
+    operationId: 'planTemplateCreate',
+  },
+  {
+    method: 'get',
+    path: '/v1/plan-templates',
+    operationId: 'planTemplateList',
+  },
+  {
+    method: 'get',
+    path: '/v1/plan-templates/{id}',
+    operationId: 'planTemplateGet',
+  },
+  {
+    method: 'post',
+    path: '/v1/plan-templates/{id}/publish',
+    operationId: 'planTemplatePublish',
+  },
+  {
+    method: 'post',
+    path: '/v1/children/{childId}/plans',
+    operationId: 'planAssign',
+  },
+  {
+    method: 'post',
+    path: '/v1/plans/{id}/complete',
+    operationId: 'planComplete',
+  },
+  {
+    method: 'post',
+    path: '/v1/plans/{id}/archive',
+    operationId: 'planArchive',
+  },
+  {
+    method: 'get',
+    path: '/v1/children/{childId}/plans/today',
+    operationId: 'planTodayFocus',
+  },
+  {
+    method: 'post',
+    path: '/v1/plans/{id}/notes',
+    operationId: 'planNoteCreate',
+  },
+  {
+    method: 'get',
+    path: '/v1/plans/{id}/notes',
+    operationId: 'planNoteList',
+  },
 ];
 
 describe('OpenAPI spec (e2e)', () => {

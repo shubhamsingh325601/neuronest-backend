@@ -1,6 +1,6 @@
 # Plan 0006 — Phase 6: Plan Domain (Templates, Assignment, Clinician Notes)
 
-Status: **Active**
+Status: **Done**
 Owner: backend
 Last updated: 2026-09-21
 
@@ -210,36 +210,40 @@ Shared response DTOs in `src/modules/plans/shared/`: `PlanTemplateDto` (+ nested
   product question if a parent in a very different timezone reports an
   off-by-one-day "Today's Focus," don't silently guess a fix here.
 
-## 7. Build order (ordered checklist — nothing started yet)
+## 7. Build order (ordered checklist)
 
-- [ ] **0. Confirm §4/§5/§6 drafts** — re-read them against current
+- [x] **0. Confirm §4/§5/§6 drafts** — re-read them against current
   `src/modules/media/` and `src/modules/children/` (the two closest precedents) and
   `docs/rbac.md` before writing any code; adjust this doc if reality has drifted
-  since 2026-09-21.
-- [ ] **1. Schema + migration** — three enums, four models; `Child`/`User` relation
+  since 2026-09-21. No drift found — drafts matched current conventions exactly.
+- [x] **1. Schema + migration** — three enums, four models; `Child`/`User` relation
   fields; `truncateAll()` updated; `schema-decisions.md` entries (including the
   "intentionally no template versioning / no partial unique index" notes).
-- [ ] **2. Permissions** — all six from §2; two `rbac.md` decision notes (§3 rows
-  6–7 above).
-- [ ] **3. `PlanTemplate` CRUD + publish** — `PlansModule`,
+  Migration: `20260921165139_add_plan_domain`.
+- [x] **2. Permissions** — all six from §2; two `rbac.md` decision notes (§3 rows
+  6–7 above) — plus a third for `plan:manage`/`plan:read` and a fourth for
+  `plan-note:read`'s withholding-from-`PARENT` shape.
+- [x] **3. `PlanTemplate` CRUD + publish** — `PlansModule`,
   `shared/plan-template.dto.ts`, feature folders for create/list/get/publish;
   registered in `app.module.ts`; four `docs.e2e-spec.ts` rows.
-- [ ] **4. `Plan` assign + complete + archive** — `shared/plan.dto.ts`; feature
+- [x] **4. `Plan` assign + complete + archive** — `shared/plan.dto.ts`; feature
   folders; the `PLAN_ALREADY_ACTIVE` / `PLAN_TEMPLATE_NOT_PUBLISHED` /
   `PLAN_ALREADY_FINAL` invariants; three `docs.e2e-spec.ts` rows.
-- [ ] **5. "Today's Focus"** — feature folder; the day-offset computation (unit-test
-  the pure date math separately from the Prisma calls); one `docs.e2e-spec.ts` row.
-- [ ] **6. `PlanNote` create + list** — `shared/plan-note.dto.ts`; feature folders;
+- [x] **5. "Today's Focus"** — feature folder; the day-offset computation (unit-test
+  the pure date math separately from the Prisma calls, `day-offset.util.ts` +
+  `.spec.ts`); one `docs.e2e-spec.ts` row.
+- [x] **6. `PlanNote` create + list** — `shared/plan-note.dto.ts`; feature folders;
   the oldest-first sort; two `docs.e2e-spec.ts` rows.
-- [ ] **7. e2e suite** — `test/plan-domain.e2e-spec.ts`: admin creates+publishes a
-  template; assigning a `DRAFT` template is `409`; assigning while `ACTIVE` exists is
-  `409`; assigned clinician can manage/annotate, non-assigned clinician cannot;
-  parent reads "today's focus" but cannot read plan notes (`403`); a clinician not
-  assigned to the plan's child cannot read/create notes; completing/archiving is
-  idempotent and cross-terminal-transition is `409`; `GET /v1/plan-templates` as a
-  clinician never returns a `DRAFT` row.
-- [ ] **8. Verify** — `npm run lint && npm test && npm run build && npm run test:e2e`
-  green; flip this plan and the `docs/plans/README.md` row to **Done**.
+- [x] **7. e2e suite** — `test/plan-domain.e2e-spec.ts` (22 tests): admin
+  creates+publishes a template; assigning a `DRAFT` template is `409`; assigning
+  while `ACTIVE` exists is `409`; assigned clinician can manage/annotate,
+  non-assigned clinician cannot; parent reads "today's focus" but cannot read plan
+  notes (`403`); a clinician not assigned to the plan's child cannot read/create
+  notes; completing/archiving is idempotent and cross-terminal-transition is `409`;
+  `GET /v1/plan-templates` as a clinician never returns a `DRAFT` row.
+- [x] **8. Verify** — `npm run lint && npm test && npm run build && npm run test:e2e`
+  green (136 unit tests, 107 e2e tests); this plan and the `docs/plans/README.md` row
+  flipped to **Done**.
 
 ## 8. How to resume
 
