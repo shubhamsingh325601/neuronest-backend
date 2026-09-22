@@ -1,14 +1,13 @@
 # Plan 0005 — Phase 5: Media Upload (Cloudinary, abstracted)
 
-Status: **Active**
+Status: **Done**
 Owner: backend
 Last updated: 2026-09-20
 
 > This file is the single source of truth for this phase. It carries every decision,
-> convention, and the exact remaining checklist so work can resume cold. Read it top to
-> bottom before touching code. **Nothing in this phase has been implemented yet** —
-> this doc was authored ahead of the coding session per this repo's convention
-> (plan doc before code), so a fresh session can start straight from §7.
+> convention, and the checklist that was worked in order to ship it. All §4/§5/§6
+> drafts below were implemented as written — no deviation from the drafts was needed
+> after re-verifying them against `src/common/email/` and `docs/rbac.md` in step 0.
 
 ---
 
@@ -126,7 +125,7 @@ model Media {
 | Method | Path | operationId | Auth | Notes |
 |--------|------|-------------|------|-------|
 | `POST` | `/v1/children/{childId}/media/upload-tickets` | `mediaCreateUploadTicket` | `@Auth('media:create:self')` | Caller must be `childId`'s parent (`404 CHILD_NOT_FOUND` / `403 FORBIDDEN`, same shape as `child:read`). Body `{ type: 'PHOTO' \| 'VIDEO', context?: string }`. `201` + `{ media: MediaDto, uploadParams: Record<string, unknown> }`. |
-| `POST` | `/v1/media/{id}/confirm` | `mediaConfirmUpload` | `@Auth('media:create:self')` | Caller must be the child's parent. Body `{ status: 'UPLOADED' \| 'FAILED', mimeType?, sizeBytes?, durationSeconds? }`. `200` + `MediaDto`. `404 MEDIA_NOT_FOUND`; `409 MEDIA_ALREADY_CONFIRMED` on a conflicting re-confirm. |
+| `POST` | `/v1/media/{id}/confirm` | `mediaConfirmUpload` | `@Auth('media:create:self')` | Caller must be the child's parent. Body `{ status: 'UPLOADED' \| 'FAILED', mimeType?, sizeBytes?, durationSeconds? }`. `200` + `MediaDto`. `404 MEDIA_NOT_FOUND`; `409 MEDIA_ALREADY_CONFIRMED` on a conflicting re-confirm; `400 MEDIA_UPLOAD_NOT_VERIFIED` if `status: UPLOADED` but `MediaStorageService.verifyUpload` finds no asset at the ticket's `storageKey`. |
 | `GET` | `/v1/children/{childId}/media` | `mediaList` | `@Auth('media:read')` | Same ownership branch as `GET /v1/children/{id}`. Cursor-paginated (`src/common/pagination/`, already built in Phase 3) — `?cursor=&limit=`, sorted `(createdAt desc, id desc)`. |
 
 Shared response DTO: `MediaDto` (`id, childId, uploadedById, type, provider, status,
@@ -157,44 +156,45 @@ mimeType, durationSeconds, sizeBytes, context, createdAt, updatedAt`) in
   token, imported wherever `MediaModule` needs it.
 - **`truncateAll()`** — add `media` to the table list in `prisma.service.ts`.
 
-## 7. Build order (ordered checklist — nothing started yet)
+## 7. Build order (ordered checklist — all shipped)
 
-- [ ] **0. Confirm §4/§5/§6 drafts** — re-read them against the actual current state
+- [x] **0. Confirm §4/§5/§6 drafts** — re-read them against the actual current state
   of `src/common/email/` (the pattern to mirror) and `docs/rbac.md` before writing
-  any code; adjust this doc if reality has drifted since 2026-09-20.
-- [ ] **1. `cloudinary` dependency + config** — `npm install cloudinary`; env vars in
+  any code; adjust this doc if reality has drifted since 2026-09-20. No drift found —
+  drafts implemented as written.
+- [x] **1. `cloudinary` dependency + config** — `npm install cloudinary`; env vars in
   `env.validation.ts` / `configuration.ts` / `.env.example`.
-- [ ] **2. `MediaStorageService` abstraction** — abstract class,
+- [x] **2. `MediaStorageService` abstraction** — abstract class,
   `CloudinaryMediaStorageService`, `FakeMediaStorageService`, DI token, unit specs for
   the Cloudinary implementation's signing logic (no real network calls in unit tests).
-- [ ] **3. Schema + migration** — `Media` model + three enums; `Child`/`User`
+  `FakeMediaStorageService` lives in `test/helpers/` (not `src/common/`), same as
+  `FakeEmailService` — the real repo pattern the plan's §6 wording was mirroring.
+- [x] **3. Schema + migration** — `Media` model + three enums; `Child`/`User`
   relation fields; `truncateAll()` updated; `schema-decisions.md` entry.
-- [ ] **4. Permissions** — `media:create:self`, `media:read`; `rbac.md` decision note.
-- [ ] **5. `POST /v1/children/{childId}/media/upload-tickets`** — `MediaModule`,
+- [x] **4. Permissions** — `media:create:self`, `media:read`; `rbac.md` decision note.
+- [x] **5. `POST /v1/children/{childId}/media/upload-tickets`** — `MediaModule`,
   `shared/media.dto.ts`, feature folder (dto, controller, service, spec); registered
   in `app.module.ts`; `docs.e2e-spec.ts` row.
-- [ ] **6. `POST /v1/media/{id}/confirm`** — feature folder; idempotency per §3 row 5;
+- [x] **6. `POST /v1/media/{id}/confirm`** — feature folder; idempotency per §3 row 5;
+  `docs.e2e-spec.ts` row. Also added a `400 MEDIA_UPLOAD_NOT_VERIFIED` path (not
+  enumerated in §5's draft table) for when `verifyUpload` reports the asset never
+  landed at the provider — the trust-check §6 describes needed *some* failure mode.
+- [x] **7. `GET /v1/children/{childId}/media`** — feature folder, cursor pagination;
   `docs.e2e-spec.ts` row.
-- [ ] **7. `GET /v1/children/{childId}/media`** — feature folder, cursor pagination;
-  `docs.e2e-spec.ts` row.
-- [ ] **8. e2e suite** — `test/media-upload.e2e-spec.ts`: full ticket→confirm round
+- [x] **8. e2e suite** — `test/media-upload.e2e-spec.ts`: full ticket→confirm round
   trip; a non-owning parent can't create a ticket for someone else's child; an
   assigned clinician can list but not create; a non-assigned clinician can't list;
-  re-confirming with the same status is a no-op, a conflicting status is `409`.
-- [ ] **9. Verify** — `npm run lint && npm test && npm run build && npm run test:e2e`
-  green; flip this plan and the `docs/plans/README.md` row to **Done**.
+  re-confirming with the same status is a no-op, a conflicting status is `409`; plus
+  the `MEDIA_UPLOAD_NOT_VERIFIED` path via `FakeMediaStorageService.simulateMissing`.
+- [x] **9. Verify** — `npm run lint && npm test && npm run build && npm run test:e2e`
+  green; this plan and the `docs/plans/README.md` row flipped to **Done**.
 
-## 8. How to resume
+## 8. Notes for the next phase
 
-> Nothing is implemented yet. Start at §7 step 0: re-verify the drafts in §4–§6
-> against current code (this doc was written from the architecture-level Milestone A
-> note, not from reading every file that exists now), then work the checklist in
-> order — config/dependency first, then the storage abstraction (get it fully unit
-> tested with the `Fake` before wiring real Cloudinary calls), then schema, then
-> permissions, then the three endpoints in the order listed (ticket → confirm → list,
-> since list is easiest to test once the other two exist). Do not scaffold `Plan` or
-> `MonthlyCallLog` here — those are Phases 6–7. Cross-reference
-> `docs/plans/0004-phase-4-child-clinician-foundation.md` for the exact shape of the
-> ownership-branch-in-service pattern (`GetChildService`) before writing the
-> `media:read` equivalent — it should look almost identical, just walking from a
-> `Media` row's `childId` instead of a `Child` row's own `id`.
+`MediaStorageService.createUploadTicket`/`verifyUpload` signatures, the `Media` row
+shape, and the ownership-branch pattern in `ListMediaService` are now the precedent to
+match for Phase 6 (`PlanTemplate`/`Plan`/`PlanNote`) and Phase 7 (`MonthlyCallLog`) —
+cross-reference this doc's §3–§6 the same way this phase cross-referenced Phase 4's
+`GetChildService`. Deferred/out-of-scope items called out in §2 (media deletion,
+thumbnail pipeline, virus scanning, clinician/admin write access) were **not**
+revisited — still explicitly not this phase's problem.

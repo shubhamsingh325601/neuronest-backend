@@ -10,7 +10,18 @@ export const envValidationSchema = Joi.object({
   PORT: Joi.number().port().default(3000),
   APP_WEB_URL: Joi.string().uri().required(),
 
-  DATABASE_URL: Joi.string().uri({ scheme: ['postgres', 'postgresql'] }).required(),
+  DATABASE_URL: Joi.string()
+    .uri({ scheme: ['postgres', 'postgresql'] })
+    .required(),
+  // Unpooled connection, read directly by the Prisma CLI (`schema.prisma`'s
+  // `directUrl`) for schema-changing commands (`migrate`, `db push`) — never read by
+  // the running app itself, so it isn't in `configuration.ts`. Against a plain
+  // Postgres instance with no pooler in front of it (e.g. local Docker), this is the
+  // same value as DATABASE_URL.
+  DATABASE_DIRECT_URL: Joi.string()
+    .uri({ scheme: ['postgres', 'postgresql'] })
+    .allow('')
+    .default(''),
 
   JWT_ACCESS_SECRET: Joi.string().min(16).required(),
   JWT_ACCESS_TTL: Joi.string().default('15m'),
@@ -28,6 +39,21 @@ export const envValidationSchema = Joi.object({
   RESEND_API_KEY: Joi.string().allow('').default(''),
   EMAIL_FROM: Joi.string().required(),
 
+  // Required in production (real Cloudinary account); local/test run against the
+  // Fake media storage service and never need real credentials.
+  CLOUDINARY_CLOUD_NAME: Joi.string()
+    .allow('')
+    .default('')
+    .when('NODE_ENV', { is: 'production', then: Joi.string().required() }),
+  CLOUDINARY_API_KEY: Joi.string()
+    .allow('')
+    .default('')
+    .when('NODE_ENV', { is: 'production', then: Joi.string().required() }),
+  CLOUDINARY_API_SECRET: Joi.string()
+    .allow('')
+    .default('')
+    .when('NODE_ENV', { is: 'production', then: Joi.string().required() }),
+
   THROTTLE_TTL_SEC: Joi.number().integer().positive().default(60),
   THROTTLE_LIMIT: Joi.number().integer().positive().default(100),
 
@@ -38,10 +64,7 @@ export const envValidationSchema = Joi.object({
 
   // Seed-only — not required for the app to boot. `tlds: false` so dev-only
   // addresses like `admin@neuronest.local` (no IANA TLD) are accepted.
-  ADMIN_EMAIL: Joi.string()
-    .email({ tlds: false })
-    .allow('')
-    .default(''),
+  ADMIN_EMAIL: Joi.string().email({ tlds: false }).allow('').default(''),
   ADMIN_PASSWORD: Joi.string().allow('').default(''),
   ADMIN_NAME: Joi.string().allow('').default('NeuroNest Admin'),
 });

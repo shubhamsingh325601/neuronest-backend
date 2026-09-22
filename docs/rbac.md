@@ -24,6 +24,8 @@ export const PERMISSIONS = [
   'child:create:self',             // POST /v1/children — PARENT only
   'child:read',                    // GET  /v1/children/:id — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
   'clinician-child:manage',        // POST /v1/children/:id/clinicians — ADMIN only
+  'media:create:self',             // POST /v1/children/:id/media/upload-tickets, /v1/media/:id/confirm — PARENT only
+  'media:read',                    // GET  /v1/children/:id/media — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -31,8 +33,8 @@ export type Permission = (typeof PERMISSIONS)[number];
 const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  PARENT:    [...SELF_PERMISSIONS, 'child:create:self', 'child:read'],
-  CLINICIAN: [...SELF_PERMISSIONS, 'child:read'],
+  PARENT:    [...SELF_PERMISSIONS, 'child:create:self', 'child:read', 'media:create:self', 'media:read'],
+  CLINICIAN: [...SELF_PERMISSIONS, 'child:read', 'media:read'],
   ADMIN:     [...PERMISSIONS],
 };
 
@@ -161,6 +163,20 @@ This is a single existence/equality check per role — the same shape as the exi
 instead of a direct FK. It does **not** trigger the `@casl/ability` migration note in
 §7: that trigger is for genuinely compound/attribute conditions (e.g. "only if the
 assignment is still active AND made within the last year"), not a single row lookup.
+
+### `media:read` (Phase 5) — `child:read`-shaped, one hop further
+
+Same precedent as `child:read` above, just walked from a `Media` row's `childId`
+instead of a `Child` row's own `id`:
+- `PARENT` → the media's child's `parentId === currentUser.id`, else `403 FORBIDDEN`.
+- `CLINICIAN` → a live `ClinicianChildAssignment` row for `(currentUser.id, media.childId)`
+  exists, else `403 FORBIDDEN`.
+- `ADMIN` → no check.
+
+`media:create:self` is narrower than `media:read` — only `PARENT` holds it (§2 of
+[plan 0005](plans/0005-phase-5-media-upload.md)), and the service still checks the
+caller is specifically *this child's* parent, not just any parent. Clinician/admin
+media write access is explicitly deferred, not silently added here.
 
 ## 7. Future Migration Path to `@casl/ability`
 

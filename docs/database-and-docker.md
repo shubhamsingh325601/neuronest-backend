@@ -183,7 +183,26 @@ npm run db:seed
 
 > [!CAUTION]
 > **Never run `prisma migrate dev` against pooled connections**:
-> Connection poolers (like Neon `-pooler` or PgBouncer in transaction pooling mode) do not support the session-level advisory locks and shadow databases required by `prisma migrate dev`. Always point to a direct connection or local Docker instance when authoring migrations.
+> Connection poolers (like Neon `-pooler` or PgBouncer in transaction pooling mode) do not support the session-level advisory locks and shadow databases required by `prisma migrate dev`. Always point to a direct connection or local Docker instance when authoring migrations. `prisma migrate deploy` doesn't create a shadow DB and has been observed working against Neon's pooled connection, but it's still undocumented/unsupported behavior on Neon's side — prefer the direct connection for it too now that `DATABASE_DIRECT_URL` is wired in (see below), rather than relying on it continuing to work.
+
+### `DATABASE_DIRECT_URL` (Neon pooled/unpooled split)
+
+`schema.prisma`'s `datasource` block declares both `url` (`DATABASE_URL`) and
+`directUrl` (`DATABASE_DIRECT_URL`). The Prisma **Client** (used by the running app,
+via `PrismaService`) only ever uses `url`. The Prisma **CLI**'s schema-changing
+commands (`migrate dev`, `migrate deploy`, `db push`) use `directUrl` automatically
+when it's present — no manual `DATABASE_URL` override needed anymore.
+
+- **Local Docker Postgres**: no pooler in front of it, so `DATABASE_DIRECT_URL` is
+  just the same value as `DATABASE_URL` (see `.env.example`).
+- **Neon**: `DATABASE_URL` is the pooled connection string (hostname has `-pooler`);
+  `DATABASE_DIRECT_URL` is the same database's unpooled connection string (same
+  hostname, no `-pooler`) — copy it from the Neon console's connection details.
+
+Once `directUrl` is declared in the schema, it must resolve to a real connection
+string whenever a schema-changing command runs — an empty `DATABASE_DIRECT_URL` will
+make `migrate`/`db push` fail, even if `DATABASE_URL` itself is fine. `.env.example`'s
+default keeps both vars equal for local Docker for exactly this reason.
 
 > [!WARNING]
 > **Never modify migration files that have been merged**:

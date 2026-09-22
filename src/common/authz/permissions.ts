@@ -18,6 +18,10 @@ export const PERMISSIONS = [
   'child:create:self',
   'child:read',
   'clinician-child:manage',
+  // Media upload (Phase 5). `media:read` scoping (parent-own / clinician-assigned /
+  // admin-any) is the same shape as `child:read` — enforced in the service.
+  'media:create:self',
+  'media:read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -25,8 +29,14 @@ export type Permission = (typeof PERMISSIONS)[number];
 const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  [Role.PARENT]: [...SELF_PERMISSIONS, 'child:create:self', 'child:read'],
-  [Role.CLINICIAN]: [...SELF_PERMISSIONS, 'child:read'],
+  [Role.PARENT]: [
+    ...SELF_PERMISSIONS,
+    'child:create:self',
+    'child:read',
+    'media:create:self',
+    'media:read',
+  ],
+  [Role.CLINICIAN]: [...SELF_PERMISSIONS, 'child:read', 'media:read'],
   [Role.ADMIN]: [...PERMISSIONS],
 };
 

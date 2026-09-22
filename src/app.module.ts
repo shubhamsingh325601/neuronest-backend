@@ -11,11 +11,13 @@ import { PermissionsGuard } from '@common/authz/permissions.guard';
 import { CryptoModule } from '@common/crypto/crypto.module';
 import { EmailModule } from '@common/email/email.module';
 import { LoggingModule } from '@common/logging/logging.module';
+import { MediaStorageModule } from '@common/media-storage/media-storage.module';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { ChildrenModule } from '@modules/children/children.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
 import { HealthModule } from '@modules/health/health.module';
+import { MediaModule } from '@modules/media/media.module';
 import { UsersModule } from '@modules/users/users.module';
 
 @Module({
@@ -42,12 +44,14 @@ import { UsersModule } from '@modules/users/users.module';
     PrismaModule,
     CryptoModule,
     EmailModule,
+    MediaStorageModule,
     AuthzModule,
 
     AuthModule,
     UsersModule,
     CliniciansModule,
     ChildrenModule,
+    MediaModule,
     HealthModule,
   ],
   providers: [

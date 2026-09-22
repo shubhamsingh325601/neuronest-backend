@@ -55,6 +55,21 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     path: '/v1/children/{id}/clinicians',
     operationId: 'childAssignClinician',
   },
+  {
+    method: 'post',
+    path: '/v1/children/{childId}/media/upload-tickets',
+    operationId: 'mediaCreateUploadTicket',
+  },
+  {
+    method: 'post',
+    path: '/v1/media/{id}/confirm',
+    operationId: 'mediaConfirmUpload',
+  },
+  {
+    method: 'get',
+    path: '/v1/children/{childId}/media',
+    operationId: 'mediaList',
+  },
 ];
 
 describe('OpenAPI spec (e2e)', () => {

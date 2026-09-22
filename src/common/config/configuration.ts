@@ -30,6 +30,11 @@ export interface AppConfig {
     resendApiKey: string;
     from: string;
   };
+  cloudinary: {
+    cloudName: string;
+    apiKey: string;
+    apiSecret: string;
+  };
   throttle: {
     ttlSec: number;
     limit: number;
@@ -71,6 +76,11 @@ export const configuration = (): AppConfig => ({
   email: {
     resendApiKey: process.env.RESEND_API_KEY ?? '',
     from: process.env.EMAIL_FROM as string,
+  },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? '',
+    apiKey: process.env.CLOUDINARY_API_KEY ?? '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
   },
   throttle: {
     ttlSec: parseInt(process.env.THROTTLE_TTL_SEC ?? '60', 10),

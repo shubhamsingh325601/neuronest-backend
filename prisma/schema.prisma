@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_DIRECT_URL")
 }
 
 enum Role {
@@ -40,6 +41,21 @@ enum VerificationChannel {
   EMAIL
 }
 
+enum MediaType {
+  PHOTO
+  VIDEO
+}
+
+enum MediaStatus {
+  PENDING
+  UPLOADED
+  FAILED
+}
+
+enum MediaProvider {
+  CLOUDINARY
+}
+
 model User {
   id              String     @id @default(uuid()) @db.Uuid
   email           String     @unique
@@ -58,6 +74,7 @@ model User {
   child                  Child?                     @relation("ChildParent")
   clinicianAssignments   ClinicianChildAssignment[] @relation("ClinicianAssignments")
   assignmentsMadeAsAdmin ClinicianChildAssignment[] @relation("AssignmentsMadeByAdmin")
+  uploadedMedia          Media[]                    @relation("UploadedMedia")
 
   @@map("users")
 }
@@ -116,6 +133,7 @@ model Child {
   updatedAt   DateTime @updatedAt
 
   clinicianAssignments ClinicianChildAssignment[]
+  media                Media[]
 
   @@map("children")
 }
@@ -133,4 +151,25 @@ model ClinicianChildAssignment {
   @@unique([clinicianId, childId])
   @@index([childId])
   @@map("clinician_child_assignments")
+}
+
+model Media {
+  id              String        @id @default(uuid()) @db.Uuid
+  childId         String        @db.Uuid
+  child           Child         @relation(fields: [childId], references: [id], onDelete: Cascade)
+  uploadedById    String        @db.Uuid
+  uploadedBy      User          @relation("UploadedMedia", fields: [uploadedById], references: [id], onDelete: Restrict)
+  type            MediaType
+  provider        MediaProvider @default(CLOUDINARY)
+  storageKey      String
+  status          MediaStatus   @default(PENDING)
+  mimeType        String?
+  durationSeconds Int?
+  sizeBytes       Int?
+  context         String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([childId])
+  @@map("media")
 }

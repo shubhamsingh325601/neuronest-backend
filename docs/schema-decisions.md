@@ -18,6 +18,9 @@ This document serves as the **Architecture Decision Record (ADR)** explaining th
 | `ClinicianApplicationStatus` | `PENDING`, `REVIEWED`, `APPROVED`, `REJECTED` | Lead lifecycle for the clinician-interest form. `PENDING`/`REVIEWED` are open; `APPROVED`/`REJECTED` are terminal — the admin review flow (Phase 3) moves rows to the terminal states. |
 | `VerificationTokenType` | `EMAIL_VERIFICATION`, `PASSWORD_RESET`, `ACCOUNT_SETUP` | Discriminator on the single verification-token table. `ACCOUNT_SETUP` shares the `PASSWORD_RESET` shape (opaque 32-byte token, link-delivered). |
 | `VerificationChannel` | `EMAIL` | Present now so adding `SMS` / `AUTHENTICATOR` later is a value, not a migration of shape. |
+| `MediaType` | `PHOTO`, `VIDEO` | What kind of asset a `Media` row is. |
+| `MediaStatus` | `PENDING`, `UPLOADED`, `FAILED` | `PENDING` on ticket creation; `confirm` moves it to a terminal state — see `Media` below. |
+| `MediaProvider` | `CLOUDINARY` | Single value today — the column exists so a second storage backend (e.g. S3) is a value, not a migration, per the provider-agnostic `MediaStorageService` abstraction (`src/common/media-storage/`). |
 
 ## `User` (`users`)
 
@@ -136,11 +139,38 @@ assigned to the same child twice (re-assigning is a `409 CLINICIAN_ALREADY_ASSIG
 not a silent no-op). `@@index([childId])` — every "who is assigned to this child"
 lookup (ownership checks, future assignment listings) is by `childId`.
 
-**Intentionally not modeled yet:** no `Media`, `PlanTemplate`/`Plan`/`PlanNote`, or
-`MonthlyCallLog` tables — those are Phases 5–7 of the Core Care Domain rollout, each
+**Intentionally not modeled yet:** no `PlanTemplate`/`Plan`/`PlanNote`, or
+`MonthlyCallLog` tables — those are Phases 6–7 of the Core Care Domain rollout, each
 gets its own migration once its own plan doc is authored. No unassign/removal support
 on the join (no MVP screen needs it yet). No partial-unique-index enforcement beyond
 what's stated above.
+
+## `Media` (`media`) — Phase 5
+
+A photo/video a parent captures of their child. The backend never touches the binary —
+the client uploads directly to the storage provider (Cloudinary today) using a signed
+ticket this backend mints; this row is the durable record of that upload's lifecycle.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | uuid PK | Also used as the Cloudinary `public_id` — minted before the upload ticket, so the client's direct-to-provider upload and this row share an id from the start. |
+| `childId` | uuid FK → `Child` | `onDelete: Cascade`. |
+| `uploadedById` | uuid FK → `User` | The parent who created the upload ticket. `onDelete: Restrict` — same audit-trail reasoning as `ClinicianChildAssignment.assignedByAdminId` (Phase 4): no user-deletion flow exists yet. |
+| `type` | `MediaType` | `PHOTO` or `VIDEO`, set at ticket creation — determines the Cloudinary `resource_type` used for both the signed upload and the later `verifyUpload` lookup. |
+| `provider` | `MediaProvider` default `CLOUDINARY` | See enum note above. |
+| `storageKey` | string | Opaque provider-shaped key (`MediaStorageService.createUploadTicket`'s return value) — the **only** storage detail this table ever stores. No Cloudinary-specific columns (no `publicId`/`folder`/`version` fields) — swapping providers later changes what's packed into this one string, not the schema. |
+| `status` | `MediaStatus` default `PENDING` | `PENDING` → `UPLOADED`/`FAILED` via `POST /v1/media/{id}/confirm`, which is a terminal transition (re-confirming the same terminal status is a no-op; a conflicting one is `409`). |
+| `mimeType` / `durationSeconds` / `sizeBytes` | string? / int? / int? | Client-self-reported at `confirm` time, only trusted once `MediaStorageService.verifyUpload` confirms the asset actually landed. Null while `PENDING` or on a `FAILED` confirm. |
+| `context` | string? | Optional free-text caller-supplied note (e.g. what the clip is of) — not interpreted by this backend. |
+| `createdAt` / `updatedAt` | DateTime | |
+
+Index: `@@index([childId])` — every "this child's media gallery" list query
+(`GET /v1/children/{childId}/media`) is by `childId`.
+
+**Intentionally not modeled yet:** no thumbnail/transformation metadata beyond what
+Cloudinary does by default, no soft-delete/deletion support (no MVP screen needs it
+yet), no document/file-type registry beyond photo/video, no AI-pipeline persistence
+(`AIModelRun`/`Embedding`/etc — that's a later, not-yet-scoped phase).
 
 ## Migrations
 
