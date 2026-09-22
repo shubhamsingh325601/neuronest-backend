@@ -1,6 +1,6 @@
 # Plan 0007 — Phase 7: Monthly Call Log
 
-Status: **Active**
+Status: **Done**
 Owner: backend
 Last updated: 2026-09-22
 
@@ -110,24 +110,27 @@ createdAt`) in `src/modules/call-logs/shared/`.
 
 ## 7. Build order (ordered checklist — nothing started yet)
 
-- [ ] **0. Confirm §4/§5/§6 drafts** — re-read them against current
+- [x] **0. Confirm §4/§5/§6 drafts** — re-read them against current
   `src/modules/plans/` (the closest precedent — same assignment-existence-check
   shape, same "withheld from PARENT" scoping) and `docs/rbac.md` before writing any
-  code; adjust this doc if reality has drifted since 2026-09-22.
-- [ ] **1. Schema + migration** — `MonthlyCallLog` model; `Child`/`User` relation
+  code; adjust this doc if reality has drifted since 2026-09-22. No drift found — the
+  drafts matched current code exactly (`list-media`'s childId-direct existence-check
+  shape was the one actually mirrored, since `MonthlyCallLog` hangs off `Child`
+  directly like `Media`, not through `Plan` like `PlanNote`).
+- [x] **1. Schema + migration** — `MonthlyCallLog` model; `Child`/`User` relation
   fields; `truncateAll()` updated; `schema-decisions.md` entry.
-- [ ] **2. Permissions** — `monthly-call:create`, `monthly-call:read`; `rbac.md`
+- [x] **2. Permissions** — `monthly-call:create`, `monthly-call:read`; `rbac.md`
   decision note (§3 row 3 above).
-- [ ] **3. `POST /v1/children/{childId}/call-logs`** — `CallLogsModule`,
+- [x] **3. `POST /v1/children/{childId}/call-logs`** — `CallLogsModule`,
   `shared/monthly-call-log.dto.ts`, feature folder (dto, controller, service, spec);
   registered in `app.module.ts`; `docs.e2e-spec.ts` row.
-- [ ] **4. `GET /v1/children/{childId}/call-logs`** — feature folder, cursor
+- [x] **4. `GET /v1/children/{childId}/call-logs`** — feature folder, cursor
   pagination; `docs.e2e-spec.ts` row.
-- [ ] **5. e2e suite** — `test/monthly-call-log.e2e-spec.ts`: assigned clinician logs
+- [x] **5. e2e suite** — `test/monthly-call-log.e2e-spec.ts`: assigned clinician logs
   a call and lists it; a non-assigned clinician gets `403` on both; a parent gets
   `403` on both (even for their own child); admin can do both unconditionally for any
   child; unknown `childId` is `404`.
-- [ ] **6. Verify** — `npm run lint && npm test && npm run build && npm run test:e2e`
+- [x] **6. Verify** — `npm run lint && npm test && npm run build && npm run test:e2e`
   green; flip this plan and the `docs/plans/README.md` row to **Done**.
 
 ## 8. How to resume

@@ -12,7 +12,9 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0004 | Phase 4 — Child + Clinician↔Child Foundation | Done | [0004-phase-4-child-clinician-foundation.md](0004-phase-4-child-clinician-foundation.md) |
 | 0005 | Phase 5 — Media Upload (Cloudinary, abstracted) | Done | [0005-phase-5-media-upload.md](0005-phase-5-media-upload.md) |
 | 0006 | Phase 6 — Plan Domain (Templates, Assignment, Clinician Notes) | Done | [0006-phase-6-plan-domain.md](0006-phase-6-plan-domain.md) |
-| 0007 | Phase 7 — Monthly Call Log | Active | [0007-phase-7-monthly-call-log.md](0007-phase-7-monthly-call-log.md) |
+| 0007 | Phase 7 — Monthly Call Log | Done | [0007-phase-7-monthly-call-log.md](0007-phase-7-monthly-call-log.md) |
 
 Status values: **Active** (in progress) · **Done** · **Superseded** · **Parked**. The
-newest **Active** row is what's being worked on now.
+newest **Active** row is what's being worked on now. As of Phase 7, the Core Care
+Domain build-out from the original Milestone A scoping round is complete — no further
+phase is scoped; do not start one without a fresh scoping conversation.

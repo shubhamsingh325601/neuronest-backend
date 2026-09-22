@@ -106,6 +106,32 @@ framing); no notification/email when a note is left.
 
 Index: `@@index([planId])` — every "this plan's notes" list query is by `planId`.
 
+## `MonthlyCallLog` (`monthly_call_logs`) — Phase 7
+
+Records that a clinician made their monthly check-in call with a child's parent — the
+fact that a call happened, not a scheduling/reminder system for when the next one is
+due (out of scope this phase, see [plan 0007](plans/0007-phase-7-monthly-call-log.md)
+§2). Append-only, same "working paper" framing as `PlanNote` — no edit/delete. Readable
+by an assigned `CLINICIAN` and `ADMIN` only, **not** `PARENT` — same non-obvious
+scoping shape as `PlanNote`, see `docs/rbac.md`'s decision notes.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | uuid PK | |
+| `childId` | uuid FK → `Child` | `onDelete: Cascade`. |
+| `clinicianId` | uuid FK → `User` | The clinician who logged the call. `onDelete: Restrict`, same audit-trail reasoning as every other "who did this" FK in this domain (`Media.uploadedById`, `Plan.createdById`, `PlanNote.authorId`). |
+| `calledAt` | `DateTime` (full timestamp, not `@db.Date`) | Unlike `Child.dateOfBirth` / `Plan.startDate`, a phone call happens at a specific moment — the time component is worth keeping. No validation that it isn't in the future — a deliberate simplification. |
+| `notes` | string? | Optional free-text caller-supplied note about the call. |
+| `createdAt` | DateTime | |
+
+Index: `@@index([childId])` — the list-call-history query is by `childId`, sorted
+`(calledAt desc, id desc)` — newest-first, matching every other list in this codebase
+except `PlanNote`'s (see above).
+
+**Intentionally not modeled yet:** no single-log-by-id `GET` (only the child's full
+call history list is an MVP screen), no edit/delete, no reminder/scheduling table for
+when the next call is due.
+
 ## `User` (`users`)
 
 | Field | Type | Notes |

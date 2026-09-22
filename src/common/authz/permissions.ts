@@ -32,6 +32,11 @@ export const PERMISSIONS = [
   'plan:read',
   'plan-note:create',
   'plan-note:read',
+  // Monthly call log (Phase 7). Scoping is the same clinician-assignment
+  // existence-check shape as `plan:manage` — enforced in the service, not here. Not
+  // granted to PARENT — see docs/rbac.md decision notes.
+  'monthly-call:create',
+  'monthly-call:read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -56,6 +61,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'plan:read',
     'plan-note:create',
     'plan-note:read',
+    'monthly-call:create',
+    'monthly-call:read',
   ],
   [Role.ADMIN]: [...PERMISSIONS],
 };

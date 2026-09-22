@@ -120,6 +120,16 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     path: '/v1/plans/{id}/notes',
     operationId: 'planNoteList',
   },
+  {
+    method: 'post',
+    path: '/v1/children/{childId}/call-logs',
+    operationId: 'monthlyCallLogCreate',
+  },
+  {
+    method: 'get',
+    path: '/v1/children/{childId}/call-logs',
+    operationId: 'monthlyCallLogList',
+  },
 ];
 
 describe('OpenAPI spec (e2e)', () => {
@@ -148,8 +158,6 @@ describe('OpenAPI spec (e2e)', () => {
     const documented = Object.entries(spec.paths).flatMap(([path, methods]) =>
       Object.keys(methods).map((method) => `${method} ${path}`),
     );
-    expect(documented.sort()).toEqual(
-      EXPECTED.map((e) => `${e.method} ${e.path}`).sort(),
-    );
+    expect(documented.sort()).toEqual(EXPECTED.map((e) => `${e.method} ${e.path}`).sort());
   });
 });

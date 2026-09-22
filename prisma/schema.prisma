@@ -95,6 +95,7 @@ model User {
   planTemplatesCreated   PlanTemplate[]              @relation("PlanTemplatesCreated")
   plansCreated           Plan[]                      @relation("PlansCreated")
   planNotesAuthored      PlanNote[]                   @relation("PlanNotesAuthored")
+  monthlyCallLogsLogged  MonthlyCallLog[]             @relation("MonthlyCallLogsLogged")
 
   @@map("users")
 }
@@ -155,6 +156,7 @@ model Child {
   clinicianAssignments ClinicianChildAssignment[]
   media                Media[]
   plans                Plan[]
+  monthlyCallLogs      MonthlyCallLog[]
 
   @@map("children")
 }
@@ -254,4 +256,18 @@ model PlanNote {
 
   @@index([planId])
   @@map("plan_notes")
+}
+
+model MonthlyCallLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  childId     String   @db.Uuid
+  child       Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  clinicianId String   @db.Uuid
+  clinician   User     @relation("MonthlyCallLogsLogged", fields: [clinicianId], references: [id], onDelete: Restrict)
+  calledAt    DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([childId])
+  @@map("monthly_call_logs")
 }

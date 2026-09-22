@@ -14,6 +14,7 @@ import { LoggingModule } from '@common/logging/logging.module';
 import { MediaStorageModule } from '@common/media-storage/media-storage.module';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { AuthModule } from '@modules/auth/auth.module';
+import { CallLogsModule } from '@modules/call-logs/call-logs.module';
 import { ChildrenModule } from '@modules/children/children.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
 import { HealthModule } from '@modules/health/health.module';
@@ -35,9 +36,7 @@ import { UsersModule } from '@modules/users/users.module';
       useFactory: (config: ConfigService<AppConfig, true>) => {
         const throttle = config.get('throttle', { infer: true });
         return {
-          throttlers: [
-            { name: 'default', ttl: throttle.ttlSec * 1000, limit: throttle.limit },
-          ],
+          throttlers: [{ name: 'default', ttl: throttle.ttlSec * 1000, limit: throttle.limit }],
         };
       },
     }),
@@ -54,6 +53,7 @@ import { UsersModule } from '@modules/users/users.module';
     ChildrenModule,
     MediaModule,
     PlansModule,
+    CallLogsModule,
     HealthModule,
   ],
   providers: [

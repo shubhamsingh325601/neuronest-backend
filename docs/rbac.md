@@ -32,6 +32,8 @@ export const PERMISSIONS = [
   'plan:read',                     // GET  /v1/children/:id/plans/today — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
   'plan-note:create',              // POST /v1/plans/:id/notes — CLINICIAN(assigned)/ADMIN
   'plan-note:read',                // GET  /v1/plans/:id/notes — CLINICIAN(assigned)/ADMIN — not PARENT
+  'monthly-call:create',           // POST /v1/children/:childId/call-logs — CLINICIAN(assigned)/ADMIN
+  'monthly-call:read',             // GET  /v1/children/:childId/call-logs — CLINICIAN(assigned)/ADMIN — not PARENT
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -40,7 +42,7 @@ const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   PARENT:    [...SELF_PERMISSIONS, 'child:create:self', 'child:read', 'media:create:self', 'media:read', 'plan:read'],
-  CLINICIAN: [...SELF_PERMISSIONS, 'child:read', 'media:read', 'plan-template:read', 'plan:manage', 'plan:read', 'plan-note:create', 'plan-note:read'],
+  CLINICIAN: [...SELF_PERMISSIONS, 'child:read', 'media:read', 'plan-template:read', 'plan:manage', 'plan:read', 'plan-note:create', 'plan-note:read', 'monthly-call:create', 'monthly-call:read'],
   ADMIN:     [...PERMISSIONS],
 };
 
@@ -225,6 +227,24 @@ access to a related sub-resource; noted here so it isn't "fixed" as an oversight
 Scoping for `CLINICIAN`/`ADMIN` on both `plan-note:create` and `plan-note:read` is the
 same existence-check shape as `plan:manage` above, walked from `PlanNote.planId` →
 `Plan.childId`.
+
+### `monthly-call:create` / `monthly-call:read` (Phase 7) — withheld from `PARENT`, same shape as `plan-note`
+
+Same non-obvious withholding as `plan-note:read` above: `MonthlyCallLog` records a
+clinician's monthly check-in call with a child's parent, but the *log* itself is not a
+parent-facing feature — it belongs to the same "clinician coordination" framing as
+`PlanNote` (§3 row 3 of [plan 0007](plans/0007-phase-7-monthly-call-log.md)). `PARENT`
+holds `child:read`/`media:read`/`plan:read` on the same child but neither
+`monthly-call:create` nor `monthly-call:read` — noted here for the same reason as
+`plan-note:read`, so it isn't "fixed" as an oversight later.
+
+Scoping for `CLINICIAN`/`ADMIN` on both permissions is the same existence-check shape
+as `media:read`, walked directly from `MonthlyCallLog.childId` (not through an
+intermediate resource, since `MonthlyCallLog` hangs directly off `Child` like `Media`
+does, not off `Plan` like `PlanNote` does):
+- `CLINICIAN` → a live `ClinicianChildAssignment` row for
+  `(currentUser.id, monthlyCallLog.childId)` exists, else `403 FORBIDDEN`.
+- `ADMIN` → no check.
 
 ## 7. Future Migration Path to `@casl/ability`
 
