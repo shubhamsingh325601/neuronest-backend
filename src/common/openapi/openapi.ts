@@ -38,6 +38,21 @@ export function setupOpenApi(app: INestApplication): OpenAPIObject {
     apiReference({
       content: document,
       pageTitle: 'NeuroNest API Reference',
+      // Hide Scalar's own client-generator / dev-tools panel — this is an API
+      // reference for this backend, not a place to advertise Scalar's tooling.
+      showDeveloperTools: 'never',
+      // Every `@Auth(...)` route documents the `bearer` scheme (see auth.decorator.ts
+      // + DocumentBuilder.addBearerAuth above); without a preferred scheme Scalar's
+      // "Authentication" selector defaults to "No Authentication" even though bearer
+      // is the only scheme in the spec, which reads as if auth weren't wired up at
+      // all. Preselect it and persist whatever token is pasted in across reloads.
+      authentication: {
+        preferredSecurityScheme: 'bearer',
+        securitySchemes: {
+          bearer: { token: '' },
+        },
+      },
+      persistAuth: true,
     }),
   );
 

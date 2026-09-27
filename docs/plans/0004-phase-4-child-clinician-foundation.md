@@ -174,7 +174,7 @@ assignedByAdminId, createdAt`) in `src/modules/children/shared/`.
 > model added here; author its own `docs/plans/0005-*.md` before writing code. Do not
 > scaffold `Media`, `Plan`, or `MonthlyCallLog` in this plan's module.
 >
-> Runtime smoke (optional, `npm run start:dev`): seed a `PARENT` (signup+verify+login),
+> Runtime smoke (optional, `npm run dev`): seed a `PARENT` (signup+verify+login),
 > `POST /v1/children`, `GET /v1/children/{id}` as that same parent → `200`; seed an
 > `ADMIN` and a `CLINICIAN` directly via Prisma, `POST /v1/children/{id}/clinicians`
 > as admin, then `GET /v1/children/{id}` as that clinician → `200`.

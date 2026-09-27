@@ -21,8 +21,9 @@ export const PERMISSIONS = [
   'user:deactivate:self',
   'clinician-application:list',    // GET  /v1/clinician-applications(/:id) — ADMIN only
   'clinician-application:review',  // POST /v1/clinician-applications/:id/(approve|reject)
+  'clinician:list',                // GET  /v1/clinicians — ADMIN only (provisioned CLINICIAN directory)
   'child:create:self',             // POST /v1/children — PARENT only
-  'child:read',                    // GET  /v1/children/:id — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
+  'child:read',                    // GET  /v1/children(/:id) — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
   'clinician-child:manage',        // POST /v1/children/:id/clinicians — ADMIN only
   'media:create:self',             // POST /v1/children/:id/media/upload-tickets, /v1/media/:id/confirm — PARENT only
   'media:read',                    // GET  /v1/children/:id/media — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
@@ -245,6 +246,27 @@ does, not off `Plan` like `PlanNote` does):
 - `CLINICIAN` → a live `ClinicianChildAssignment` row for
   `(currentUser.id, monthlyCallLog.childId)` exists, else `403 FORBIDDEN`.
 - `ADMIN` → no check.
+
+### `GET /v1/children` (`child:read`) — query-filter scoping, not an existence check
+
+Added after Phase 7, closing a gap every prior phase individually deferred: nothing
+let a `PARENT` discover its own child's id or a `CLINICIAN` discover its caseload
+without already holding an id out-of-band. Reuses `child:read` (no new permission) —
+same `plan-template:read`-shaped scoping (§6 above) as a `WHERE` filter rather than a
+per-row check:
+- `PARENT` → `where: { parentId: currentUser.id }`.
+- `CLINICIAN` → `where: { clinicianAssignments: { some: { clinicianId: currentUser.id } } }`.
+- `ADMIN` → unfiltered.
+
+### `clinician:list` (new) — admin-only directory, distinct from `clinician-application:list`
+
+`GET /v1/clinicians` lists provisioned `CLINICIAN` `User` rows (role-filtered, no
+status filter — `AssignClinicianService` doesn't restrict by status either, so the
+list matches exactly what's assignable). This feeds the `POST
+/v1/children/{id}/clinicians` picker, which previously required the admin to already
+have a `clinicianId` in hand. Not the same resource as `clinician-application:list`
+(the pre-approval lead queue) — an application is reviewed once and produces a `User`;
+this lists those resulting `User` rows directly.
 
 ## 7. Future Migration Path to `@casl/ability`
 

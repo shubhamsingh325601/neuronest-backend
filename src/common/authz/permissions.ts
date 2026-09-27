@@ -13,6 +13,9 @@ export const PERMISSIONS = [
   // Enforced by the admin clinician-application review routes (Phase 3).
   'clinician-application:list',
   'clinician-application:review',
+  // Admin-only directory of provisioned CLINICIAN users, for the assign-clinician
+  // picker. Distinct from `clinician-application:list` (the pre-approval lead queue).
+  'clinician:list',
   // Core Care Domain (Phase 4). Ownership/assignment scoping for `child:read` is
   // enforced in the service, not here — see docs/rbac.md.
   'child:create:self',

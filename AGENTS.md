@@ -68,7 +68,7 @@ To maintain a lean context window, **do not read the entire `docs/` directory**.
 
 | Command | Description |
 |---|---|
-| `npm run start:dev` | Launch watch-mode development server (`http://localhost:3000`, docs at `/docs`) |
+| `npm run dev` | Launch watch-mode development server (`http://localhost:3000`, docs at `/docs`) |
 | `npm run build` | Compile the NestJS application to `dist/` via `nest build` |
 | `npm test` | Run all unit tests (in-memory, mocked Prisma/Email, fast) |
 | `npm run test:e2e` | Run E2E test suite (requires Docker Postgres running) |

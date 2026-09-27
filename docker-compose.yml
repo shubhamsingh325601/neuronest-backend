@@ -1,5 +1,5 @@
 # Local Postgres for development and e2e tests.
-# The app itself is not containerised in this phase — run it with `npm run start:dev`.
+# The app itself is not containerised in this phase — run it with `npm run dev`.
 services:
   postgres:
     image: postgres:16-alpine
@@ -13,6 +13,9 @@ services:
       - '5432:5432'
     volumes:
       - neuronest-pgdata:/var/lib/postgresql/data
+      # Runs once against a fresh volume only — provisions the separate
+      # `neuronest_test` database TEST_DATABASE_URL points at. See docker/initdb/.
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U neuronest -d neuronest']
       interval: 5s

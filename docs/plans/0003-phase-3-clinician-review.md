@@ -220,7 +220,7 @@ status: ACTIVE, emailVerifiedAt: now() }`. Return `{ complete: true }`.
 > `permissions.ts` has been corrected — they are actively enforced. Do not scaffold
 > document upload, `Child`, or a job queue here (Phase 4+).
 >
-> Runtime smoke (optional, `npm run start:dev`): seed an ADMIN, `POST
+> Runtime smoke (optional, `npm run dev`): seed an ADMIN, `POST
 > /v1/clinician-applications`, `GET /v1/clinician-applications?limit=1` (follow
 > `nextCursor`), `POST .../{id}/approve` → check the `users` row is
 > `CLINICIAN`/`INVITED`/`passwordHash null` and an account-setup email was logged,

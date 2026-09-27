@@ -4,6 +4,8 @@ import { SubmitApplicationController } from './features/submit-application/submi
 import { SubmitApplicationService } from './features/submit-application/submit-application.service';
 import { ListApplicationsController } from './features/list-applications/list-applications.controller';
 import { ListApplicationsService } from './features/list-applications/list-applications.service';
+import { ListCliniciansController } from './features/list-clinicians/list-clinicians.controller';
+import { ListCliniciansService } from './features/list-clinicians/list-clinicians.service';
 import { GetApplicationController } from './features/get-application/get-application.controller';
 import { GetApplicationService } from './features/get-application/get-application.service';
 import { ApproveApplicationController } from './features/approve-application/approve-application.controller';
@@ -21,6 +23,7 @@ import { RejectApplicationService } from './features/reject-application/reject-a
   controllers: [
     SubmitApplicationController,
     ListApplicationsController,
+    ListCliniciansController,
     GetApplicationController,
     ApproveApplicationController,
     RejectApplicationController,
@@ -28,6 +31,7 @@ import { RejectApplicationService } from './features/reject-application/reject-a
   providers: [
     SubmitApplicationService,
     ListApplicationsService,
+    ListCliniciansService,
     GetApplicationService,
     ApproveApplicationService,
     RejectApplicationService,

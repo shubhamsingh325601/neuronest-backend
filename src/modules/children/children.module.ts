@@ -3,6 +3,8 @@ import { CreateChildController } from './features/create-child/create-child.cont
 import { CreateChildService } from './features/create-child/create-child.service';
 import { GetChildController } from './features/get-child/get-child.controller';
 import { GetChildService } from './features/get-child/get-child.service';
+import { ListChildrenController } from './features/list-children/list-children.controller';
+import { ListChildrenService } from './features/list-children/list-children.service';
 import { AssignClinicianController } from './features/assign-clinician/assign-clinician.controller';
 import { AssignClinicianService } from './features/assign-clinician/assign-clinician.service';
 
@@ -12,7 +14,12 @@ import { AssignClinicianService } from './features/assign-clinician/assign-clini
  * top of this module's `Child` model without touching it.
  */
 @Module({
-  controllers: [CreateChildController, GetChildController, AssignClinicianController],
-  providers: [CreateChildService, GetChildService, AssignClinicianService],
+  controllers: [
+    CreateChildController,
+    GetChildController,
+    ListChildrenController,
+    AssignClinicianController,
+  ],
+  providers: [CreateChildService, GetChildService, ListChildrenService, AssignClinicianService],
 })
 export class ChildrenModule {}

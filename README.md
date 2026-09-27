@@ -76,7 +76,7 @@ npm run db:seed                     # Seed initial ADMIN account (from ADMIN_EMA
 
 ### Step 5: Start Development Server
 ```bash
-npm run start:dev
+npm run dev
 ```
 - API server runs at: `http://localhost:3000`
 - Interactive API Documentation (Scalar): `http://localhost:3000/docs`
@@ -125,7 +125,7 @@ npm run docker:up && npm run test:e2e # Run end-to-end tests
 
 | Script | Purpose |
 |---|---|
-| `npm run start:dev` | Launch development server with file watch and auto-reload |
+| `npm run dev` | Launch development server with file watch and auto-reload |
 | `npm run build` | Compile production TypeScript build into `dist/` |
 | `npm run start:prod` | Execute production build (`node dist/main.js`) |
 | `npm test` | Run Jest unit tests (isolated, no DB) |

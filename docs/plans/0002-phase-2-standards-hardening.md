@@ -88,7 +88,7 @@ for 400s). Success responses are untouched. Full `code` list + example payload i
   pointers. Verify: sanity-check the test fails when a decorator is removed, then
   `npm run lint && npm test && npm run test:e2e`.
 - [x] **B. RFC 9457** — filter + DTO + OpenAPI + `Auth()` + docs + tests. Verify:
-  full suite, plus `start:dev` smoke — `curl` a 401 and a 400, confirm
+  full suite, plus `dev` smoke — `curl` a 401 and a 400, confirm
   `application/problem+json` and the body fields; confirm `ProblemDetailsDto` renders in
   Scalar at `/docs`.
 - [x] **C. API conventions doc** — `docs/api-conventions.md` + README row. Verify: full

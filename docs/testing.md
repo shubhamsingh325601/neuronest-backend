@@ -90,9 +90,16 @@ describe('SignupService', () => {
 
 E2E tests execute HTTP requests against a fully booted NestJS application.
 
+> [!IMPORTANT]
+> **Local Docker Postgres must already be running (`npm run docker:up`) before
+> `npm run test:e2e`.** `global-setup.ts` runs `prisma migrate deploy` as the very
+> first thing Jest does, with no retry — if the container isn't up (or `neuronest_test`
+> doesn't exist yet, see `docs/database-and-docker.md` §4), the whole suite fails
+> before a single spec runs, surfacing as `Error: connection refused` / `P1001`.
+
 ### Infrastructure & Lifecycle
-- **Database Isolation**: E2E tests run against the ephemeral test database defined by `TEST_DATABASE_URL` (typically `postgresql://neuronest:neuronest@localhost:5432/neuronest?schema=public`).
-- **Pre-flight Migration (`test/helpers/global-setup.ts`)**: Jest executes `global-setup.ts` before any test suite runs, deploying all migrations via `prisma migrate deploy`.
+- **Database Isolation**: E2E tests run against the ephemeral test database defined by `TEST_DATABASE_URL` (`postgresql://neuronest:neuronest@localhost:5432/neuronest_test?schema=public` — a database distinct from the dev `neuronest` database, auto-provisioned by `docker/initdb/01-create-test-db.sql`).
+- **Pre-flight Migration (`test/helpers/global-setup.ts`)**: Jest executes `global-setup.ts` before any test suite runs, deploying all migrations via `prisma migrate deploy` against `TEST_DATABASE_URL` — overriding both `DATABASE_URL` *and* `DATABASE_DIRECT_URL` to that same value, since Prisma's CLI prefers `directUrl` for schema-changing commands whenever it's set (see `docs/database-and-docker.md` §7). Overriding only `DATABASE_URL` here previously let migrations leak to whatever `DATABASE_DIRECT_URL` pointed at in `.env` (a real Neon database) — fixed, but worth knowing if you ever touch this file again.
 - **Per-Suite Truncation**: Between test suites, database tables are truncated to guarantee total test isolation.
 - **App Factory (`test/helpers/test-app.ts`)**: The `createTestApp()` helper boots NestJS with the exact same middleware, pipes, exception filters, and security configurations used in production, replacing only `EmailService` with `FakeEmailService` (which records outgoing emails in memory for assertions).
 
@@ -156,5 +163,8 @@ npx jest --config ./test/jest-e2e.config.ts test/auth.e2e-spec.ts
 - **E2E Connection Refused**:
   - *Symptom*: `Error: connection refused` or `database unreachable`.
   - *Fix*: Local Docker Postgres is not running. Run `npm run docker:up` and verify with `docker compose ps`.
+- **`database "neuronest_test" does not exist`**:
+  - *Symptom*: `global-setup.ts`'s `prisma migrate deploy` fails immediately with `P1003`.
+  - *Fix*: `docker/initdb/01-create-test-db.sql` only runs against a *fresh* volume. If you ran `docker compose down -v` and the init script didn't fire for some reason, check `docker compose logs postgres`; as a last resort, `docker exec -it neuronest-postgres psql -U neuronest -d neuronest -c "CREATE DATABASE neuronest_test;"`.
 - **Database Locking / Pool Exhaustion in E2E**:
   - E2E tests run sequentially using `--runInBand` (configured in `package.json`). Do not remove `--runInBand` from `test:e2e`, as parallel suites sharing `TEST_DATABASE_URL` will cause data collisions during table truncation.

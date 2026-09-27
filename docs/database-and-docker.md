@@ -70,13 +70,16 @@ Two independent databases operate across local and CI environments:
 
 | Database | Used By | Connection Variable | Target Engine | Persistence |
 |---|---|---|---|---|
-| **Development Database** | `npm run start:dev`, `npm run prisma:*`, `npm run db:seed` | `DATABASE_URL` | Cloud (Neon branch) or Local Docker Postgres | Persistent |
-| **Test Database** | `npm run test:e2e` only | `TEST_DATABASE_URL` | Local Docker Postgres container (`neuronest-postgres`) | Ephemeral (truncated between suites) |
+| **Development Database** | `npm run dev`, `npm run prisma:*`, `npm run db:seed` | `DATABASE_URL` | Cloud (Neon branch) or Local Docker Postgres | Persistent |
+| **Test Database** | `npm run test:e2e` only | `TEST_DATABASE_URL` | Local Docker Postgres container (`neuronest-postgres`), database `neuronest_test` | Ephemeral (truncated between suites) |
 
 ### Why This Separation Matters
 1. **Zero Contamination**: Running e2e tests will **never** truncate, overwrite, or corrupt your local development or seed data.
 2. **Speed**: E2E tests run on local Postgres without network latency from cloud providers.
-3. **Reproducibility**: E2E tests run migrations from scratch on a clean database before running the suite (`test/helpers/global-setup.ts`).
+3. **Reproducibility**: E2E tests run migrations from scratch on a clean database before running the suite (`test/helpers/global-setup.ts`). `npm run docker:up` must be running first — `global-setup.ts` runs `prisma migrate deploy` immediately and has no fallback if the container isn't reachable.
+
+> [!IMPORTANT]
+> **`neuronest_test` must actually exist before `global-setup.ts` can migrate it.** `POSTGRES_DB` in `docker-compose.yml` only provisions the default `neuronest` database. The separate `neuronest_test` database `TEST_DATABASE_URL` points at is provisioned by `docker/initdb/01-create-test-db.sql` — the official postgres image runs everything in `/docker-entrypoint-initdb.d` once, only against a fresh (empty) volume. If you've ever run `docker compose down -v` and don't see `neuronest_test` afterward, check that script ran (`docker compose logs postgres | grep -i initdb`) rather than manually `CREATE DATABASE`-ing it — the point of the script is that nobody has to.
 
 ---
 
@@ -98,6 +101,7 @@ services:
       - '5432:5432'
     volumes:
       - neuronest-pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U neuronest -d neuronest']
       interval: 5s
@@ -203,6 +207,16 @@ Once `directUrl` is declared in the schema, it must resolve to a real connection
 string whenever a schema-changing command runs — an empty `DATABASE_DIRECT_URL` will
 make `migrate`/`db push` fail, even if `DATABASE_URL` itself is fine. `.env.example`'s
 default keeps both vars equal for local Docker for exactly this reason.
+
+> [!CAUTION]
+> **Anywhere you override `DATABASE_URL` to redirect a Prisma CLI command, override
+> `DATABASE_DIRECT_URL` to the same value too.** `directUrl` wins for schema-changing
+> commands whenever it's set, silently ignoring an overridden `url`. `test/helpers/
+> global-setup.ts` hit exactly this: it overrode only `DATABASE_URL` to
+> `TEST_DATABASE_URL` before running `prisma migrate deploy`, so the migration engine
+> used `DATABASE_DIRECT_URL` from `.env` instead — a real Neon database in local dev —
+> while the running app (Prisma Client, via `PrismaService`) correctly used the
+> overridden `DATABASE_URL`. Fixed by overriding both to the same `TEST_DATABASE_URL`.
 
 > [!WARNING]
 > **Never modify migration files that have been merged**:

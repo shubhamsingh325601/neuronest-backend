@@ -37,6 +37,7 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     path: '/v1/clinician-applications/{id}',
     operationId: 'clinicianApplicationGet',
   },
+  { method: 'get', path: '/v1/clinicians', operationId: 'clinicianList' },
   {
     method: 'post',
     path: '/v1/clinician-applications/{id}/approve',
@@ -49,6 +50,7 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
   },
   { method: 'get', path: '/v1/health', operationId: 'healthCheck' },
   { method: 'post', path: '/v1/children', operationId: 'childCreate' },
+  { method: 'get', path: '/v1/children', operationId: 'childList' },
   { method: 'get', path: '/v1/children/{id}', operationId: 'childGet' },
   {
     method: 'post',

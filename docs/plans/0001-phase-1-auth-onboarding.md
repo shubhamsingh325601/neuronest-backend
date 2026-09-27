@@ -49,7 +49,7 @@ controller/service/repository layers. No DDD ceremony.
 | D14 | **Email** behind an abstract `EmailService` (DI token); real `ResendEmailService` implemented (`resend` SDK). When `RESEND_API_KEY` is unset it logs the message instead of sending, so flows stay testable locally. Tests override with an in-memory fake. | done |
 | D15 | **OpenAPI**: `@nestjs/swagger` CLI plugin enabled in `nest-cli.json` (`introspectComments`, `classValidatorShim`). Document built once at boot from live code (no committed spec file). Served raw at `/openapi.json` and via **Scalar** (`@scalar/nestjs-api-reference`) at `/docs`. Explicit `operationId` on every route via `@ApiOperation`. | done |
 | D16 | **Doc-drift test**: `test/docs.e2e-spec.ts` fetches `/openapi.json` and asserts the exact set of `(method, path, operationId)` tuples. Renaming/removing a route without updating the list fails the build. | done |
-| D17 | **Docker Compose** for local Postgres only (app runs with `npm run start:dev`). | done — `docker-compose.yml` |
+| D17 | **Docker Compose** for local Postgres only (app runs with `npm run dev`). | done — `docker-compose.yml` |
 | D18 | **Seed script** (not an endpoint): `prisma/seed.ts`, `npm run db:seed`, idempotent `upsert` of the first ADMIN from `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME`. | done |
 | D19 | **Tests**: unit spec next to each service (Prisma + Email mocked); e2e for signup→verify→login→refresh→logout, for the deactivate flow, for clinician application submission, and the docs test. | unit done (25 passing); e2e written, not yet run (needs Docker Postgres) |
 | D20 | **Plans** live in `docs/plans/NNNN-*.md` with `docs/plans/README.md` index + `TEMPLATE.md`. Root `plan.md` is a one-line pointer. | this file exists; index/template/pointer pending |
@@ -180,7 +180,7 @@ throttler/pino/sentry happy. Revisit later.)
 ### Step A — docs & scaffolding first (D23)
 - [x] `README.md` (root): what NeuroNest is, stack, prerequisites, quickstart
       (`npm install` → `docker compose up -d` → copy `.env.example` → `npm run prisma:migrate`
-      → `npm run db:seed` → `npm run start:dev`), where docs live (`/docs` API, `docs/` design),
+      → `npm run db:seed` → `npm run dev`), where docs live (`/docs` API, `docs/` design),
       script list, license placeholder.
 - [x] `docs/README.md` — index linking architecture / schema-decisions / auth-flows / rbac / plans.
 - [x] `docs/architecture.md` — modular monolith, feature-folder rationale, URI versioning,
@@ -239,7 +239,7 @@ throttler/pino/sentry happy. Revisit later.)
 - [x] `npx prisma migrate dev --name init` → commit `prisma/migrations/**`.
 - [x] `npm run db:seed` with `ADMIN_EMAIL` / `ADMIN_PASSWORD` set → admin row created.
 - [x] `npx nest build` → clean.
-- [x] `npm run start:dev` → boots, structured logs, no missing-config error.
+- [x] `npm run dev` → boots, structured logs, no missing-config error.
 
 ### Step E — verify at runtime
 - [x] `GET http://localhost:3000/health` → `{ status: 'ok', db: 'up' }`.
