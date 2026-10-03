@@ -1,3 +1,5 @@
+import { parseCorsOrigins } from './cors';
+
 /**
  * Typed configuration factory. Registered via `ConfigModule.forRoot({ load: [configuration] })`.
  * Inject with `ConfigService<AppConfig, true>` and read namespaced slices, e.g.
@@ -7,6 +9,9 @@ export interface AppConfig {
   env: 'development' | 'test' | 'production';
   port: number;
   appWebUrl: string;
+  cors: {
+    origins: string[];
+  };
   database: {
     url: string;
   };
@@ -54,6 +59,9 @@ export const configuration = (): AppConfig => ({
   env: (process.env.NODE_ENV as AppConfig['env']) ?? 'development',
   port: parseInt(process.env.PORT ?? '3000', 10),
   appWebUrl: process.env.APP_WEB_URL as string,
+  cors: {
+    origins: parseCorsOrigins(process.env.CORS_ORIGINS),
+  },
   database: {
     url: process.env.DATABASE_URL as string,
   },

@@ -64,6 +64,10 @@ Every incoming HTTP request passes through an explicit, ordered pipeline:
 ```
 Incoming Request
   │
+  ├─ 0. CORS middleware (app.enableCors, src/common/config/cors.ts)
+  │     Exact-match allow-list from CORS_ORIGINS. Answers OPTIONS preflights itself, so
+  │     preflights are never throttled or auth-checked. No Origin header = untouched.
+  │
   ├─ 1. ThrottlerGuard (APP_GUARD)
   │     Evaluates IP-based rate limits. @AuthThrottle() tightens auth routes to 5 req/60s.
   │

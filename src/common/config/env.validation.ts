@@ -1,4 +1,5 @@
 import * as Joi from 'joi';
+import { parseCorsOrigins } from './cors';
 
 /**
  * Joi schema for process environment. Applied by `ConfigModule.forRoot({ validationSchema })`
@@ -9,6 +10,21 @@ export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
   PORT: Joi.number().port().default(3000),
   APP_WEB_URL: Joi.string().uri().required(),
+  // Comma-separated browser origins allowed to call the API (see common/config/cors.ts).
+  // Empty = no cross-origin browser access; required (non-empty) in production so a
+  // deploy can't silently ship with the front end blocked.
+  CORS_ORIGINS: Joi.string()
+    .allow('')
+    .default('')
+    .custom((value: string, helpers) => {
+      try {
+        parseCorsOrigins(value);
+        return value;
+      } catch (err) {
+        return helpers.message({ custom: (err as Error).message });
+      }
+    })
+    .when('NODE_ENV', { is: 'production', then: Joi.string().required().invalid('') }),
 
   DATABASE_URL: Joi.string()
     .uri({ scheme: ['postgres', 'postgresql'] })
