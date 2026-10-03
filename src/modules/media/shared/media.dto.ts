@@ -39,7 +39,20 @@ export class MediaDto {
   @ApiProperty({ type: String, format: 'date-time' })
   updatedAt!: Date;
 
-  static from(row: Media): MediaDto {
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Mediated, per-request playback URL. `null` unless `status` is `UPLOADED`. Never persisted or cached — callers must treat the response as `Cache-Control: no-store`.',
+  })
+  playbackUrl!: string | null;
+
+  /**
+   * `playbackUrl` is computed by the caller (it needs an async `MediaStorageService`
+   * call for `UPLOADED` rows) and passed in explicitly — this mapper stays a pure,
+   * synchronous `row -> DTO` function like every other shared DTO in this codebase.
+   */
+  static from(row: Media, playbackUrl: string | null): MediaDto {
     return {
       id: row.id,
       childId: row.childId,
@@ -53,6 +66,7 @@ export class MediaDto {
       context: row.context,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      playbackUrl,
     };
   }
 }

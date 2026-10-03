@@ -4,7 +4,9 @@ import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { DEFAULT_PAGE_LIMIT } from '@common/pagination/cursor-pagination.query.dto';
 import { decodeCursor, toCursorPage } from '@common/pagination/cursor.util';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { MediaStorageService } from '@common/media-storage/media-storage.service';
 import { MediaDto } from '@modules/media/shared/media.dto';
+import { resolvePlaybackUrl } from '@modules/media/shared/resolve-playback-url';
 import { ListMediaQueryDto } from './dto/list-media.query.dto';
 import { ListMediaResponseDto } from './dto/list-media.response.dto';
 
@@ -18,7 +20,10 @@ import { ListMediaResponseDto } from './dto/list-media.response.dto';
  */
 @Injectable()
 export class ListMediaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mediaStorage: MediaStorageService,
+  ) {}
 
   async list(
     childId: string,
@@ -57,7 +62,10 @@ export class ListMediaService {
     });
 
     const page = toCursorPage(rows, limit, (row) => row.id);
-    return { data: page.data.map(MediaDto.from), nextCursor: page.nextCursor };
+    const data = await Promise.all(
+      page.data.map(async (row) => MediaDto.from(row, await resolvePlaybackUrl(this.mediaStorage, row))),
+    );
+    return { data, nextCursor: page.nextCursor };
   }
 
   private forbidden(): ForbiddenException {

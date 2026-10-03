@@ -17,6 +17,8 @@ import { ResetPasswordController } from './features/reset-password/reset-passwor
 import { ResetPasswordService } from './features/reset-password/reset-password.service';
 import { CompleteAccountSetupController } from './features/complete-account-setup/complete-account-setup.controller';
 import { CompleteAccountSetupService } from './features/complete-account-setup/complete-account-setup.service';
+import { ChangePasswordController } from './features/change-password/change-password.controller';
+import { ChangePasswordService } from './features/change-password/change-password.service';
 
 @Module({
   controllers: [
@@ -28,6 +30,7 @@ import { CompleteAccountSetupService } from './features/complete-account-setup/c
     ForgotPasswordController,
     ResetPasswordController,
     CompleteAccountSetupController,
+    ChangePasswordController,
   ],
   providers: [
     // shared within the auth module
@@ -42,6 +45,7 @@ import { CompleteAccountSetupService } from './features/complete-account-setup/c
     ForgotPasswordService,
     ResetPasswordService,
     CompleteAccountSetupService,
+    ChangePasswordService,
   ],
   exports: [RefreshTokenService, VerificationTokenService],
 })

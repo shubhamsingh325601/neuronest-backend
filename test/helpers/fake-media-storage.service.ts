@@ -2,6 +2,7 @@ import {
   MediaStorageService,
   type CreateUploadTicketInput,
   type CreateUploadTicketResult,
+  type PlaybackUrlResult,
 } from '@common/media-storage/media-storage.service';
 import type { MediaType } from '@prisma/client';
 
@@ -26,6 +27,10 @@ export class FakeMediaStorageService extends MediaStorageService {
 
   async verifyUpload(storageKey: string, _type: MediaType): Promise<boolean> {
     return !this.missing.has(storageKey);
+  }
+
+  async createPlaybackUrl(storageKey: string, _type: MediaType): Promise<PlaybackUrlResult> {
+    return { url: `https://fake-cdn.example.com/${storageKey}`, expiresAt: null };
   }
 
   simulateMissing(storageKey: string): void {

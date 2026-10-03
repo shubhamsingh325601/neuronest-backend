@@ -156,4 +156,117 @@ describe('Core Care Domain: Child + Clinician↔Child isolation (e2e)', () => {
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
   });
+
+  describe('A1: care-team listing', () => {
+    it('the owning parent sees the full care team', async () => {
+      const res = await asToken(parentOwner.token)(http().get(`/v1/children/${childId}/clinicians`));
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0]).toMatchObject({ clinicianId: clinicianAssigned.id, childId });
+    });
+
+    it('an assigned clinician sees the full care team, not just their own row', async () => {
+      const res = await asToken(clinicianAssigned.token)(
+        http().get(`/v1/children/${childId}/clinicians`),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.map((row: { clinicianId: string }) => row.clinicianId)).toEqual([
+        clinicianAssigned.id,
+      ]);
+    });
+
+    it('a different parent is forbidden', async () => {
+      const res = await asToken(parentOther.token)(
+        http().get(`/v1/children/${childId}/clinicians`),
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN');
+    });
+
+    it('a non-assigned clinician is forbidden', async () => {
+      const res = await asToken(clinicianOther.token)(
+        http().get(`/v1/children/${childId}/clinicians`),
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN');
+    });
+
+    it('admin sees it unconditionally', async () => {
+      const res = await asToken(admin.token)(http().get(`/v1/children/${childId}/clinicians`));
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+    });
+
+    it('a non-existent child id is a 404', async () => {
+      const res = await asToken(admin.token)(
+        http().get('/v1/children/11111111-1111-1111-1111-111111111111/clinicians'),
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('CHILD_NOT_FOUND');
+    });
+  });
+
+  describe('A2: care-team revocation', () => {
+    it('non-admin roles cannot revoke an assignment', async () => {
+      const res = await asToken(parentOwner.token)(
+        http().delete(`/v1/children/${childId}/clinicians/${clinicianAssigned.id}`),
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
+    });
+
+    it('revoking on a non-existent child id is a 404', async () => {
+      const res = await asToken(admin.token)(
+        http().delete(
+          `/v1/children/11111111-1111-1111-1111-111111111111/clinicians/${clinicianAssigned.id}`,
+        ),
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('CHILD_NOT_FOUND');
+    });
+
+    it('admin revokes the assignment, and the clinician immediately loses every scoped permission', async () => {
+      const revoke = await asToken(admin.token)(
+        http().delete(`/v1/children/${childId}/clinicians/${clinicianAssigned.id}`),
+      );
+      expect(revoke.status).toBe(204);
+
+      const childRead = await asToken(clinicianAssigned.token)(
+        http().get(`/v1/children/${childId}`),
+      );
+      expect(childRead.status).toBe(403);
+      expect(childRead.body.code).toBe('FORBIDDEN');
+
+      const mediaRead = await asToken(clinicianAssigned.token)(
+        http().get(`/v1/children/${childId}/media`),
+      );
+      expect(mediaRead.status).toBe(403);
+      expect(mediaRead.body.code).toBe('FORBIDDEN');
+
+      const planRead = await asToken(clinicianAssigned.token)(
+        http().get(`/v1/children/${childId}/plans/today`),
+      );
+      expect(planRead.status).toBe(403);
+      expect(planRead.body.code).toBe('FORBIDDEN');
+
+      const callLogRead = await asToken(clinicianAssigned.token)(
+        http().get(`/v1/children/${childId}/call-logs`),
+      );
+      expect(callLogRead.status).toBe(403);
+      expect(callLogRead.body.code).toBe('FORBIDDEN');
+    });
+
+    it('revoking an already-revoked assignment is idempotent (204)', async () => {
+      const res = await asToken(admin.token)(
+        http().delete(`/v1/children/${childId}/clinicians/${clinicianAssigned.id}`),
+      );
+      expect(res.status).toBe(204);
+    });
+
+    it('the care team no longer lists the revoked clinician', async () => {
+      const res = await asToken(admin.token)(http().get(`/v1/children/${childId}/clinicians`));
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+  });
 });

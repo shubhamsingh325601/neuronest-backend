@@ -13,8 +13,11 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0005 | Phase 5 — Media Upload (Cloudinary, abstracted) | Done | [0005-phase-5-media-upload.md](0005-phase-5-media-upload.md) |
 | 0006 | Phase 6 — Plan Domain (Templates, Assignment, Clinician Notes) | Done | [0006-phase-6-plan-domain.md](0006-phase-6-plan-domain.md) |
 | 0007 | Phase 7 — Monthly Call Log | Done | [0007-phase-7-monthly-call-log.md](0007-phase-7-monthly-call-log.md) |
+| 0008 | Phase 8 — Backend API Completion | Done | [0008-phase-8-backend-api-completion.md](0008-phase-8-backend-api-completion.md) |
 
-Status values: **Active** (in progress) · **Done** · **Superseded** · **Parked**. The
-newest **Active** row is what's being worked on now. As of Phase 7, the Core Care
-Domain build-out from the original Milestone A scoping round is complete — no further
-phase is scoped; do not start one without a fresh scoping conversation.
+Status values: **Active** (in progress) · **Done** · **Superseded** · **Parked**. Phase
+8 closed the API-surface gaps found by a post-Phase-7 audit — access-lifecycle
+(revoke/suspend), plan history, a secure media playback contract, an admin user
+directory, authenticated change-password, and a fixed-shape admin summary. D2
+(ETag/conditional-GET) was deliberately left deferred, per the plan's own
+conditional-scope note — see the plan doc's closing summary.

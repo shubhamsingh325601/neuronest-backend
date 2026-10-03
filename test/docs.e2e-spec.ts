@@ -22,6 +22,8 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
   },
   { method: 'get', path: '/v1/users/me', operationId: 'usersGetMe' },
   { method: 'post', path: '/v1/users/me/deactivate', operationId: 'usersDeactivateMe' },
+  { method: 'get', path: '/v1/users', operationId: 'userList' },
+  { method: 'get', path: '/v1/users/{id}', operationId: 'userGet' },
   {
     method: 'post',
     path: '/v1/clinician-applications',
@@ -58,6 +60,26 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     operationId: 'childAssignClinician',
   },
   {
+    method: 'get',
+    path: '/v1/children/{id}/clinicians',
+    operationId: 'childClinicianList',
+  },
+  {
+    method: 'delete',
+    path: '/v1/children/{id}/clinicians/{clinicianId}',
+    operationId: 'childClinicianRevoke',
+  },
+  {
+    method: 'post',
+    path: '/v1/users/{id}/suspend',
+    operationId: 'userSuspend',
+  },
+  {
+    method: 'post',
+    path: '/v1/users/{id}/reactivate',
+    operationId: 'userReactivate',
+  },
+  {
     method: 'post',
     path: '/v1/children/{childId}/media/upload-tickets',
     operationId: 'mediaCreateUploadTicket',
@@ -71,6 +93,21 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     method: 'get',
     path: '/v1/children/{childId}/media',
     operationId: 'mediaList',
+  },
+  {
+    method: 'get',
+    path: '/v1/children/{childId}/plans',
+    operationId: 'planList',
+  },
+  {
+    method: 'get',
+    path: '/v1/plans/{id}',
+    operationId: 'planGet',
+  },
+  {
+    method: 'post',
+    path: '/v1/auth/change-password',
+    operationId: 'authChangePassword',
   },
   {
     method: 'post',
@@ -91,6 +128,11 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     method: 'post',
     path: '/v1/plan-templates/{id}/publish',
     operationId: 'planTemplatePublish',
+  },
+  {
+    method: 'post',
+    path: '/v1/plan-templates/{id}/archive',
+    operationId: 'planTemplateArchive',
   },
   {
     method: 'post',
@@ -131,6 +173,11 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     method: 'get',
     path: '/v1/children/{childId}/call-logs',
     operationId: 'monthlyCallLogList',
+  },
+  {
+    method: 'get',
+    path: '/v1/admin/summary',
+    operationId: 'adminSummaryGet',
   },
 ];
 

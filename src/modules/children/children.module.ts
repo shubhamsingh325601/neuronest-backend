@@ -7,6 +7,10 @@ import { ListChildrenController } from './features/list-children/list-children.c
 import { ListChildrenService } from './features/list-children/list-children.service';
 import { AssignClinicianController } from './features/assign-clinician/assign-clinician.controller';
 import { AssignClinicianService } from './features/assign-clinician/assign-clinician.service';
+import { ListClinicianAssignmentsController } from './features/list-clinician-assignments/list-clinician-assignments.controller';
+import { ListClinicianAssignmentsService } from './features/list-clinician-assignments/list-clinician-assignments.service';
+import { RevokeClinicianAssignmentController } from './features/revoke-clinician-assignment/revoke-clinician-assignment.controller';
+import { RevokeClinicianAssignmentService } from './features/revoke-clinician-assignment/revoke-clinician-assignment.service';
 
 /**
  * Core Care Domain foundation (Phase 4): the `Child` record and the
@@ -19,7 +23,16 @@ import { AssignClinicianService } from './features/assign-clinician/assign-clini
     GetChildController,
     ListChildrenController,
     AssignClinicianController,
+    ListClinicianAssignmentsController,
+    RevokeClinicianAssignmentController,
   ],
-  providers: [CreateChildService, GetChildService, ListChildrenService, AssignClinicianService],
+  providers: [
+    CreateChildService,
+    GetChildService,
+    ListChildrenService,
+    AssignClinicianService,
+    ListClinicianAssignmentsService,
+    RevokeClinicianAssignmentService,
+  ],
 })
 export class ChildrenModule {}

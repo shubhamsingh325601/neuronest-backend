@@ -55,6 +55,7 @@ export class CreateUploadTicketService {
       },
     });
 
-    return { media: MediaDto.from(media), uploadParams };
+    // Freshly created rows are always PENDING — no playback URL yet.
+    return { media: MediaDto.from(media, null), uploadParams };
   }
 }

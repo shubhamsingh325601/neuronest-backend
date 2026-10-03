@@ -19,6 +19,12 @@ import { CreatePlanNoteController } from './features/create-plan-note/create-pla
 import { CreatePlanNoteService } from './features/create-plan-note/create-plan-note.service';
 import { ListPlanNotesController } from './features/list-plan-notes/list-plan-notes.controller';
 import { ListPlanNotesService } from './features/list-plan-notes/list-plan-notes.service';
+import { ListPlansController } from './features/list-plans/list-plans.controller';
+import { ListPlansService } from './features/list-plans/list-plans.service';
+import { GetPlanController } from './features/get-plan/get-plan.controller';
+import { GetPlanService } from './features/get-plan/get-plan.service';
+import { ArchivePlanTemplateController } from './features/archive-plan-template/archive-plan-template.controller';
+import { ArchivePlanTemplateService } from './features/archive-plan-template/archive-plan-template.service';
 
 /**
  * Plan domain (Phase 6): admin-owned reusable template library (`PlanTemplate` +
@@ -39,6 +45,9 @@ import { ListPlanNotesService } from './features/list-plan-notes/list-plan-notes
     TodayFocusController,
     CreatePlanNoteController,
     ListPlanNotesController,
+    ListPlansController,
+    GetPlanController,
+    ArchivePlanTemplateController,
   ],
   providers: [
     CreatePlanTemplateService,
@@ -51,6 +60,9 @@ import { ListPlanNotesService } from './features/list-plan-notes/list-plan-notes
     TodayFocusService,
     CreatePlanNoteService,
     ListPlanNotesService,
+    ListPlansService,
+    GetPlanService,
+    ArchivePlanTemplateService,
   ],
 })
 export class PlansModule {}

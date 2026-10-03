@@ -9,6 +9,7 @@ import { MediaStatus } from '@prisma/client';
 import { MediaStorageService } from '@common/media-storage/media-storage.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { MediaDto } from '@modules/media/shared/media.dto';
+import { resolvePlaybackUrl } from '@modules/media/shared/resolve-playback-url';
 import { ConfirmUploadDto } from './dto/confirm-upload.dto';
 
 /**
@@ -45,7 +46,7 @@ export class ConfirmUploadService {
 
     if (media.status !== MediaStatus.PENDING) {
       if (media.status === dto.status) {
-        return MediaDto.from(media);
+        return MediaDto.from(media, await resolvePlaybackUrl(this.mediaStorage, media));
       }
       throw new ConflictException({
         code: 'MEDIA_ALREADY_CONFIRMED',
@@ -72,6 +73,6 @@ export class ConfirmUploadService {
         durationSeconds: dto.status === MediaStatus.UPLOADED ? (dto.durationSeconds ?? null) : null,
       },
     });
-    return MediaDto.from(updated);
+    return MediaDto.from(updated, await resolvePlaybackUrl(this.mediaStorage, updated));
   }
 }

@@ -35,11 +35,16 @@ export const PERMISSIONS = [
   'plan-note:read',                // GET  /v1/plans/:id/notes — CLINICIAN(assigned)/ADMIN — not PARENT
   'monthly-call:create',           // POST /v1/children/:childId/call-logs — CLINICIAN(assigned)/ADMIN
   'monthly-call:read',             // GET  /v1/children/:childId/call-logs — CLINICIAN(assigned)/ADMIN — not PARENT
+  // Backend API completion (Phase 8):
+  'user:manage-status',            // POST /v1/users/:id/(suspend|reactivate) — ADMIN only
+  'user:list',                     // GET  /v1/users(/:id) — ADMIN only (general directory, all roles)
+  'admin-summary:read',            // GET  /v1/admin/summary — ADMIN only
+  'user:change-password:self',     // POST /v1/auth/change-password — PARENT/CLINICIAN/ADMIN (self)
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'];
+const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self', 'user:change-password:self'];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   PARENT:    [...SELF_PERMISSIONS, 'child:create:self', 'child:read', 'media:create:self', 'media:read', 'plan:read'],
@@ -267,6 +272,88 @@ list matches exactly what's assignable). This feeds the `POST
 have a `clinicianId` in hand. Not the same resource as `clinician-application:list`
 (the pre-approval lead queue) — an application is reviewed once and produces a `User`;
 this lists those resulting `User` rows directly.
+
+### `GET /v1/children/{childId}/clinicians` / `DELETE .../clinicians/{clinicianId}` (Phase 8) — reused permissions, no new grant
+
+A1 reuses `child:read` — same ownership shape as `GetChildService` above, with one
+addition: once a `CLINICIAN` is admitted (a live assignment for this child), they see
+the child's **full** care team, not just their own row — same
+"clinician-to-clinician coordination" framing as `plan-note:read`, just granting
+visibility instead of withholding it. A2 reuses `clinician-child:manage` (the same
+permission `POST /v1/children/{id}/clinicians` already uses) — ADMIN-only, no
+ownership branch needed since the guard alone restricts it.
+
+### `user:manage-status` (Phase 8) — new ADMIN-only permission, one grant covers two state transitions
+
+Same precedent as `clinician-application:review` (one permission, two actions:
+approve/reject) and `plan-template:manage` (create+publish): `user:manage-status`
+covers both `POST /v1/users/{id}/suspend` and `POST /v1/users/{id}/reactivate` rather
+than minting one permission per transition. Granted only to `ADMIN` (not spread into
+`SELF_PERMISSIONS`). Ownership/self-protection is enforced in
+`SuspendUserService`, not the guard: suspending your own account is
+`409 CANNOT_SUSPEND_SELF`, checked before the target row is even loaded, to prevent an
+admin from locking themselves out. Suspend is valid from `ACTIVE`/`INVITED`;
+reactivate is valid from `SUSPENDED`/`DEACTIVATED` — an invalid source status is
+`409 INVALID_STATUS_TRANSITION`. Both are idempotent when the target is already in
+the destination status (`200` + current state, not an error). Suspend calls
+`RefreshTokenService.revokeAllForUser`, the same call `DeactivateService` already
+makes — combined with `JwtAuthGuard` re-reading status on every request (§3 above),
+this cuts off a suspended user's *existing* access token on its very next use, not
+just future logins/refreshes.
+
+### `GET /v1/children/{childId}/plans` / `GET /v1/plans/{id}` (Phase 8) — reused `plan:read`, closes the plan-history gap
+
+Both reuse `plan:read` — no new permission. B2 is the same ownership shape as
+`plan:manage`/`plan:read` above, walked straight from `Child` (every row in the
+response already shares the requested `childId`, so there's no per-row check). B3
+loads the `Plan` first (`404 PLAN_NOT_FOUND` if missing), then applies the identical
+check against its `childId` — same precedent as `plan-note:read`'s two-hop walk, just
+one hop. Before this phase, `today-focus` only ever returned the currently-`ACTIVE`
+plan; a `COMPLETED`/`ARCHIVED` plan could never be retrieved again. These two routes
+close that gap without changing who can see what — a `PARENT` who could already read
+today's focus can now read the full history for the same reason.
+
+### `POST /v1/auth/change-password` (Phase 8) — new self-scope permission, lives in `auth` not `users`
+
+`user:change-password:self` joins `SELF_PERMISSIONS` (granted equally to
+`PARENT`/`CLINICIAN`/`ADMIN`, same as `user:deactivate:self`). The route itself lives
+in the `auth` module alongside `forgot-password`/`reset-password` — the same module
+already owns every other password-mutation code path — even though every other `auth`
+route is `@Public()`; this is the first authenticated route in that module. It reuses
+`reset-password.service.ts`'s exact shape (verify → hash → persist →
+`refreshTokens.revokeAllForUser`) and the existing `401 INVALID_CREDENTIALS` code
+(same vocabulary as `login.service.ts`), not a new one. Covered by the existing
+`/v1/auth/*` 5 req/60s throttle automatically — no new config.
+
+### `user:list` (Phase 8) — new ADMIN-only permission, general directory across every role
+
+Distinct from `clinician:list` (§6 above): `clinician:list` stays the narrow,
+CLINICIAN-only feed that powers the assign-clinician picker. `user:list` is the
+general admin directory across `PARENT`/`CLINICIAN`/`ADMIN` alike, covering both
+`GET /v1/users` and `GET /v1/users/{id}` (same one-permission-two-routes precedent as
+`clinician-application:review`/`user:manage-status` above). `UserSummaryDto`/
+`UserDetailDto` are new DTOs, not a reuse of `UserProfileDto` (the self-service
+`get-me` shape) — deliberately, to avoid over-exposing self-only fields to a response
+shape not designed for admin oversight. `UserDetailDto` embeds relations (§3 row 11 of
+plan 0008): a `PARENT`'s one child if any, or a `CLINICIAN`'s live
+`ClinicianChildAssignment` rows — the "identity resolution gap" the phase-8 audit
+flagged. No ownership branch needed; the guard alone restricts both routes to `ADMIN`.
+
+### `POST /v1/plan-templates/{id}/archive` (Phase 8) — reused `plan-template:manage`
+
+Same precedent as `PublishPlanTemplateService`: one permission already covers create +
+publish; archive joins it rather than minting a new one. Valid from `DRAFT` or
+`PUBLISHED`; idempotent if already `ARCHIVED`. No un-archive route — this is a
+terminal state, same as `PlanStatus.ARCHIVED`/`COMPLETED`.
+
+### `admin-summary:read` (Phase 8) — new ADMIN-only permission, the one genuinely new module
+
+`GET /v1/admin/summary` returns a fixed flat shape (§3 row 12 of plan 0008) — six
+independent `COUNT` queries against already-indexed columns, not a generic analytics
+endpoint. `src/modules/admin/` is the one genuinely new module this phase adds; it
+owns no domain's writes, only reads across domains via `PrismaService` directly, same
+"no repository layer" convention as every other feature module. No ownership branch
+needed; the guard alone restricts it to `ADMIN`.
 
 ## 7. Future Migration Path to `@casl/ability`
 

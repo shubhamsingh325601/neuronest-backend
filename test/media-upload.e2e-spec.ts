@@ -103,6 +103,8 @@ describe('Media upload: ticket → confirm → list (e2e)', () => {
       context: 'first steps',
     });
     expect(ticket.body.uploadParams).toBeDefined();
+    expect(ticket.body.media.storageKey).toBeUndefined();
+    expect(ticket.body.media.playbackUrl).toBeNull();
     const mediaId = ticket.body.media.id as string;
 
     const confirm = await asToken(parentOwner.token)(
@@ -117,6 +119,9 @@ describe('Media upload: ticket → confirm → list (e2e)', () => {
       mimeType: 'image/jpeg',
       sizeBytes: 2048,
     });
+    expect(confirm.body.storageKey).toBeUndefined();
+    expect(typeof confirm.body.playbackUrl).toBe('string');
+    expect(confirm.headers['cache-control']).toBe('no-store');
 
     const reconfirmSame = await asToken(parentOwner.token)(
       http()
@@ -186,12 +191,23 @@ describe('Media upload: ticket → confirm → list (e2e)', () => {
     expect(res.body.code).toBe('FORBIDDEN');
   });
 
-  it("the owning parent lists the child's media", async () => {
+  it("the owning parent lists the child's media — no storageKey, playbackUrl only when UPLOADED", async () => {
     const res = await asToken(parentOwner.token)(http().get(`/v1/children/${childId}/media`));
     expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
     expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.data.length).toBeGreaterThan(0);
     expect(res.body.data.every((m: { childId: string }) => m.childId === childId)).toBe(true);
+    expect(res.body.data.every((m: { storageKey?: string }) => m.storageKey === undefined)).toBe(
+      true,
+    );
+    for (const row of res.body.data as Array<{ status: string; playbackUrl: string | null }>) {
+      if (row.status === 'UPLOADED') {
+        expect(typeof row.playbackUrl).toBe('string');
+      } else {
+        expect(row.playbackUrl).toBeNull();
+      }
+    }
   });
 
   it('an assigned clinician can list but not create', async () => {

@@ -12,7 +12,11 @@ import { ConfirmUploadService } from './confirm-upload.service';
 
 describe('ConfirmUploadService', () => {
   const prisma = { media: { findUnique: jest.fn(), update: jest.fn() } };
-  const mediaStorage = { createUploadTicket: jest.fn(), verifyUpload: jest.fn() };
+  const mediaStorage = {
+    createUploadTicket: jest.fn(),
+    verifyUpload: jest.fn(),
+    createPlaybackUrl: jest.fn(),
+  };
   let service: ConfirmUploadService;
 
   const pendingMedia = {
@@ -61,6 +65,10 @@ describe('ConfirmUploadService', () => {
   it('verifies with the storage provider and marks UPLOADED', async () => {
     prisma.media.findUnique.mockResolvedValue(pendingMedia);
     mediaStorage.verifyUpload.mockResolvedValue(true);
+    mediaStorage.createPlaybackUrl.mockResolvedValue({
+      url: 'https://cdn.example.com/media-1',
+      expiresAt: null,
+    });
     prisma.media.update.mockResolvedValue({
       ...pendingMedia,
       status: MediaStatus.UPLOADED,
@@ -76,6 +84,7 @@ describe('ConfirmUploadService', () => {
 
     expect(mediaStorage.verifyUpload).toHaveBeenCalledWith('fake/child-1/media-1', MediaType.PHOTO);
     expect(result.status).toBe(MediaStatus.UPLOADED);
+    expect(result.playbackUrl).toBe('https://cdn.example.com/media-1');
   });
 
   it('rejects UPLOADED when the provider has no asset at that key', async () => {
@@ -101,12 +110,17 @@ describe('ConfirmUploadService', () => {
   it('re-confirming the same terminal status is an idempotent no-op', async () => {
     const uploaded = { ...pendingMedia, status: MediaStatus.UPLOADED };
     prisma.media.findUnique.mockResolvedValue(uploaded);
+    mediaStorage.createPlaybackUrl.mockResolvedValue({
+      url: 'https://cdn.example.com/media-1',
+      expiresAt: null,
+    });
 
     const result = await service.confirm('media-1', 'parent-1', { status: MediaStatus.UPLOADED });
 
     expect(prisma.media.update).not.toHaveBeenCalled();
     expect(mediaStorage.verifyUpload).not.toHaveBeenCalled();
     expect(result.status).toBe(MediaStatus.UPLOADED);
+    expect(result.playbackUrl).toBe('https://cdn.example.com/media-1');
   });
 
   it('re-confirming a conflicting terminal status is a 409', async () => {

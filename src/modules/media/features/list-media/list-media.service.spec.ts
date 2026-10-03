@@ -2,6 +2,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Role, UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
+import { MediaStorageService } from '@common/media-storage/media-storage.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ListMediaService } from './list-media.service';
 
@@ -11,6 +12,7 @@ describe('ListMediaService', () => {
     clinicianChildAssignment: { findUnique: jest.fn() },
     media: { findMany: jest.fn() },
   };
+  const mediaStorage = { createPlaybackUrl: jest.fn() };
   let service: ListMediaService;
 
   const asUser = (id: string, role: Role): AuthenticatedUser => ({
@@ -38,8 +40,16 @@ describe('ListMediaService', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    mediaStorage.createPlaybackUrl.mockResolvedValue({
+      url: 'https://cdn.example.com/media-1',
+      expiresAt: null,
+    });
     const moduleRef = await Test.createTestingModule({
-      providers: [ListMediaService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        ListMediaService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: MediaStorageService, useValue: mediaStorage },
+      ],
     }).compile();
     service = moduleRef.get(ListMediaService);
   });
@@ -59,6 +69,17 @@ describe('ListMediaService', () => {
 
     expect(result.data).toHaveLength(1);
     expect(result.nextCursor).toBeNull();
+    expect(result.data[0].playbackUrl).toBe('https://cdn.example.com/media-1');
+  });
+
+  it('omits playbackUrl for a row that has not finished uploading', async () => {
+    prisma.child.findUnique.mockResolvedValue({ id: 'child-1', parentId: 'parent-1' });
+    prisma.media.findMany.mockResolvedValue([{ ...mediaRow, status: 'PENDING' }]);
+
+    const result = await service.list('child-1', asUser('parent-1', Role.PARENT), {});
+
+    expect(result.data[0].playbackUrl).toBeNull();
+    expect(mediaStorage.createPlaybackUrl).not.toHaveBeenCalled();
   });
 
   it('forbids a different parent', async () => {

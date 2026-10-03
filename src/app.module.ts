@@ -13,6 +13,7 @@ import { EmailModule } from '@common/email/email.module';
 import { LoggingModule } from '@common/logging/logging.module';
 import { MediaStorageModule } from '@common/media-storage/media-storage.module';
 import { PrismaModule } from '@common/prisma/prisma.module';
+import { AdminModule } from '@modules/admin/admin.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { CallLogsModule } from '@modules/call-logs/call-logs.module';
 import { ChildrenModule } from '@modules/children/children.module';
@@ -55,6 +56,7 @@ import { UsersModule } from '@modules/users/users.module';
     PlansModule,
     CallLogsModule,
     HealthModule,
+    AdminModule,
   ],
   providers: [
     // Guard order: rate limit -> authenticate -> authorize.

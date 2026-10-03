@@ -1,4 +1,13 @@
-import { Body, Controller, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Header,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Auth } from '@common/authz/auth.decorator';
 import { CurrentUser } from '@common/authz/current-user.decorator';
@@ -14,6 +23,7 @@ export class ConfirmUploadController {
   @Post(':id/confirm')
   @HttpCode(HttpStatus.OK)
   @Auth('media:create:self')
+  @Header('Cache-Control', 'no-store')
   @ApiOkResponse({ type: MediaDto })
   @ApiOperation({
     operationId: 'mediaConfirmUpload',

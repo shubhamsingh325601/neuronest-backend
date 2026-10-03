@@ -26,3 +26,5 @@ npm-debug.log*
 
 # prisma
 /prisma/*.db
+docs/NeuroNest_PRD_and_Phase_Plan.docx
+docs/NeuroNest_V1_Scope_SignOff.pdf

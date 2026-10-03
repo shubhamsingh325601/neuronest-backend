@@ -172,6 +172,62 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
     });
   });
 
+  describe('plan template archive (C2)', () => {
+    it('a clinician cannot archive a template (role lacks the permission)', async () => {
+      const created = await asToken(admin.token)(
+        http().post('/v1/plan-templates').send({ title: 'Archive target A', days: templateDays }),
+      );
+      const res = await asToken(clinicianAssigned.token)(
+        http().post(`/v1/plan-templates/${created.body.id}/archive`),
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
+    });
+
+    it('admin archives a DRAFT template directly', async () => {
+      const created = await asToken(admin.token)(
+        http().post('/v1/plan-templates').send({ title: 'Archive target B', days: templateDays }),
+      );
+      const res = await asToken(admin.token)(
+        http().post(`/v1/plan-templates/${created.body.id}/archive`),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ARCHIVED');
+    });
+
+    it('admin archives a PUBLISHED template', async () => {
+      const templateId = await createPublishedTemplate('Archive target C');
+      const res = await asToken(admin.token)(
+        http().post(`/v1/plan-templates/${templateId}/archive`),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ARCHIVED');
+    });
+
+    it('archiving is idempotent', async () => {
+      const created = await asToken(admin.token)(
+        http().post('/v1/plan-templates').send({ title: 'Archive target D', days: templateDays }),
+      );
+      const first = await asToken(admin.token)(
+        http().post(`/v1/plan-templates/${created.body.id}/archive`),
+      );
+      expect(first.status).toBe(200);
+      const second = await asToken(admin.token)(
+        http().post(`/v1/plan-templates/${created.body.id}/archive`),
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.status).toBe('ARCHIVED');
+    });
+
+    it('archiving a non-existent template is a 404', async () => {
+      const res = await asToken(admin.token)(
+        http().post('/v1/plan-templates/11111111-1111-1111-1111-111111111111/archive'),
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('PLAN_TEMPLATE_NOT_FOUND');
+    });
+  });
+
   describe('plan assignment + lifecycle', () => {
     it('assigning a DRAFT template is 409', async () => {
       const draft = await asToken(admin.token)(
@@ -320,6 +376,75 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
       );
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('FORBIDDEN');
+    });
+  });
+
+  describe('plan history (B2/B3)', () => {
+    let historyPlanId: string;
+
+    beforeAll(async () => {
+      const templateId = await createPublishedTemplate('History program');
+      const assigned = await asToken(admin.token)(
+        http()
+          .post(`/v1/children/${childId}/plans`)
+          .send({ planTemplateId: templateId, startDate: '2026-09-22' }),
+      );
+      historyPlanId = assigned.body.id as string;
+      const archived = await asToken(admin.token)(
+        http().post(`/v1/plans/${historyPlanId}/archive`),
+      );
+      expect(archived.status).toBe(200);
+    });
+
+    it('GET /v1/plans/{id} retrieves an ARCHIVED plan — today-focus never could', async () => {
+      const res = await asToken(parentOwner.token)(http().get(`/v1/plans/${historyPlanId}`));
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ id: historyPlanId, status: 'ARCHIVED' });
+    });
+
+    it('a non-existent plan id is a 404', async () => {
+      const res = await asToken(admin.token)(
+        http().get('/v1/plans/11111111-1111-1111-1111-111111111111'),
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('PLAN_NOT_FOUND');
+    });
+
+    it('a different parent cannot read the plan by id', async () => {
+      const res = await asToken(parentOther.token)(http().get(`/v1/plans/${historyPlanId}`));
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN');
+    });
+
+    it('the owning parent lists the plan history, including the ARCHIVED plan', async () => {
+      const res = await asToken(parentOwner.token)(http().get(`/v1/children/${childId}/plans`));
+      expect(res.status).toBe(200);
+      expect(res.body.data.some((p: { id: string }) => p.id === historyPlanId)).toBe(true);
+    });
+
+    it('?status= filters the plan history', async () => {
+      const res = await asToken(parentOwner.token)(
+        http().get(`/v1/children/${childId}/plans`).query({ status: 'ARCHIVED' }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.every((p: { status: string }) => p.status === 'ARCHIVED')).toBe(true);
+      expect(res.body.data.some((p: { id: string }) => p.id === historyPlanId)).toBe(true);
+    });
+
+    it('a non-assigned clinician cannot list the plan history', async () => {
+      const res = await asToken(clinicianOther.token)(
+        http().get(`/v1/children/${childId}/plans`),
+      );
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN');
+    });
+
+    it('listing history for a non-existent child is a 404', async () => {
+      const res = await asToken(admin.token)(
+        http().get('/v1/children/11111111-1111-1111-1111-111111111111/plans'),
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('CHILD_NOT_FOUND');
     });
   });
 

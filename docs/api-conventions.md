@@ -94,12 +94,39 @@ over the last row's id; a malformed one is `400 INVALID_CURSOR`. Implementation:
 `toCursorPage`). First consumer: `GET /v1/clinician-applications`, sorted
 `(createdAt desc, id desc)`.
 
+**Exception — bounded, non-paginated lists.** A collection whose size is bounded by a
+business rule (not an unbounded-over-time log) may return a plain array instead of the
+`{ data, nextCursor }` envelope. Current example: `GET /v1/children/{id}/clinicians` —
+a child's care team is a handful of clinicians, not a list that grows without bound
+like plan history or media. Document this in the route's `@ApiOperation` summary;
+default to cursor pagination unless a route has this kind of hard bound.
+
 **Why cursors, not `?page=&pageSize=`:** the first list endpoint is the admin review
 queue, whose contents change *while it is being paged* — every review removes an item.
 Offset pagination on a shifting list silently skips or double-shows rows as earlier
 items disappear. A cursor anchored to a stable sort key (e.g. `createdAt, id`) is
 unaffected. Deciding this now so it isn't relitigated per-endpoint later; offset
 pagination is not used anywhere.
+
+## Media playback URLs
+
+`GET /v1/children/{id}/media` (and any other endpoint returning a `MediaDto`) never
+exposes Cloudinary's `storageKey`. Instead, each `UPLOADED` row carries a
+`playbackUrl: string | null` — a mediated, per-request Cloudinary delivery URL, `null`
+for anything not yet `UPLOADED`. It is minted fresh on every call, never persisted or
+cached on the `Media` row, and the response is sent with `Cache-Control: no-store`.
+
+**Current mechanism (implemented, confirmed against the live account):** assets are
+uploaded and read as Cloudinary `type: 'authenticated'` delivery (not the public
+default, which never required a signature at all) and the playback URL is
+`sign_url: true`-signed. This account is on Cloudinary's **Free** plan
+(`cloudinary.api.usage().plan === 'Free'`, checked at implementation time), which has
+no token-based-authentication add-on — so the signed URL is signature-valid but does
+**not** self-expire (`expiresAt` in `MediaStorageService.createPlaybackUrl`'s result is
+honestly `null`). If the account is ever upgraded to a tier with that add-on,
+`CloudinaryMediaStorageService.createPlaybackUrl` is the only place that needs to
+change to add genuine time-boxed expiry — the `MediaDto`/controller contract already
+supports a non-null `expiresAt`.
 
 ## Versioning
 

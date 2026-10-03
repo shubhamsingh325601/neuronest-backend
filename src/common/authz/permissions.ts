@@ -40,11 +40,21 @@ export const PERMISSIONS = [
   // granted to PARENT — see docs/rbac.md decision notes.
   'monthly-call:create',
   'monthly-call:read',
+  // Backend API completion (Phase 8). Admin-only lifecycle/discovery permissions, plus
+  // one new self-scope permission — see docs/rbac.md decision notes.
+  'user:manage-status',
+  'user:list',
+  'admin-summary:read',
+  'user:change-password:self',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-const SELF_PERMISSIONS: Permission[] = ['user:read:self', 'user:deactivate:self'];
+const SELF_PERMISSIONS: Permission[] = [
+  'user:read:self',
+  'user:deactivate:self',
+  'user:change-password:self',
+];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   [Role.PARENT]: [

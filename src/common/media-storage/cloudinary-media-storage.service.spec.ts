@@ -78,4 +78,42 @@ describe('CloudinaryMediaStorageService — createUploadTicket (signing)', () =>
     expect(photo.uploadParams.resourceType).toBe('image');
     expect(video.uploadParams.resourceType).toBe('video');
   });
+
+  it('signs uploads as authenticated delivery, not the public default', async () => {
+    const service = new CloudinaryMediaStorageService(configFor() as never);
+    const result = await service.createUploadTicket({
+      mediaId: 'a',
+      childId: 'child',
+      type: MediaType.PHOTO,
+    });
+    expect(result.uploadParams.type).toBe('authenticated');
+  });
+});
+
+describe('CloudinaryMediaStorageService — createPlaybackUrl', () => {
+  const configFor = () => ({
+    get: jest.fn().mockReturnValue({
+      cloudName: 'demo-cloud',
+      apiKey: 'demo-key',
+      apiSecret: 'demo-secret',
+    }),
+  });
+
+  it('mints a signed, authenticated-delivery URL with no self-expiring token (Free plan has no add-on)', async () => {
+    const service = new CloudinaryMediaStorageService(configFor() as never);
+    const { url, expiresAt } = await service.createPlaybackUrl(
+      'neuronest/child-1/media-1',
+      MediaType.PHOTO,
+    );
+    expect(url).toContain('demo-cloud');
+    expect(url).toContain('/image/authenticated/');
+    expect(url).toContain('neuronest/child-1/media-1');
+    expect(expiresAt).toBeNull();
+  });
+
+  it('maps VIDEO to the video resource path', async () => {
+    const service = new CloudinaryMediaStorageService(configFor() as never);
+    const { url } = await service.createPlaybackUrl('neuronest/child-1/media-1', MediaType.VIDEO);
+    expect(url).toContain('/video/authenticated/');
+  });
 });
