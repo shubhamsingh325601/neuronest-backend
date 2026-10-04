@@ -11,16 +11,21 @@ export interface SentEmail {
 /** In-memory EmailService used by e2e tests to read back what would have been sent. */
 export class FakeEmailService extends EmailService {
   readonly sent: SentEmail[] = [];
+  /** When true, every send rejects — simulates a provider outage. */
+  failSends = false;
 
   async sendEmailVerificationCode(to: string, code: string): Promise<void> {
+    this.guard();
     this.sent.push({ kind: 'verification-code', to, code });
   }
 
   async sendPasswordResetLink(to: string, resetUrl: string): Promise<void> {
+    this.guard();
     this.sent.push({ kind: 'password-reset', to, resetUrl });
   }
 
   async sendAccountSetupLink(to: string, setupUrl: string): Promise<void> {
+    this.guard();
     this.sent.push({ kind: 'account-setup', to, setupUrl });
   }
 
@@ -38,5 +43,11 @@ export class FakeEmailService extends EmailService {
 
   clear(): void {
     this.sent.length = 0;
+  }
+
+  private guard(): void {
+    if (this.failSends) {
+      throw new Error('Simulated email provider outage');
+    }
   }
 }

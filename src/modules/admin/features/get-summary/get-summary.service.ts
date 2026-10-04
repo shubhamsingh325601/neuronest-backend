@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ClinicianApplicationStatus, PlanStatus, Role, UserStatus } from '@prisma/client';
+import { PlanStatus, Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { AdminSummaryResponseDto } from './dto/admin-summary.response.dto';
 
@@ -15,16 +15,14 @@ export class GetSummaryService {
 
   async get(): Promise<AdminSummaryResponseDto> {
     const [
-      pendingClinicianApplications,
+      invitedClinicians,
       activeClinicians,
       activeParents,
       activePlans,
       childrenWithAssignedClinician,
       childrenWithoutClinician,
     ] = await Promise.all([
-      this.prisma.clinicianApplication.count({
-        where: { status: ClinicianApplicationStatus.PENDING },
-      }),
+      this.prisma.user.count({ where: { role: Role.CLINICIAN, status: UserStatus.INVITED } }),
       this.prisma.user.count({ where: { role: Role.CLINICIAN, status: UserStatus.ACTIVE } }),
       this.prisma.user.count({ where: { role: Role.PARENT, status: UserStatus.ACTIVE } }),
       this.prisma.plan.count({ where: { status: PlanStatus.ACTIVE } }),
@@ -33,7 +31,7 @@ export class GetSummaryService {
     ]);
 
     return {
-      pendingClinicianApplications,
+      invitedClinicians,
       activeClinicians,
       activeParents,
       activePlans,

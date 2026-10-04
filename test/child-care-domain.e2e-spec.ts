@@ -7,7 +7,7 @@ import { createTestApp, type TestContext } from './helpers/test-app';
  * `/v1/auth/*` is throttled to 5 req/60s per IP (shared across signup/verify/login —
  * see docs/api-conventions.md), and every actor below only needs one `/v1/auth/login`
  * call (users are seeded directly via Prisma, bypassing signup/verify entirely — same
- * technique as the admin seed in clinician-application.e2e-spec.ts). All five actors
+ * technique as the admin seed in user-status.e2e-spec.ts). All five actors
  * are created once in `beforeAll` and reused across every `it`, to stay well under
  * that budget in a single test run.
  */
@@ -145,6 +145,43 @@ describe('Core Care Domain: Child + Clinician↔Child isolation (e2e)', () => {
     );
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('CLINICIAN_NOT_FOUND');
+  });
+
+  it.each([UserStatus.SUSPENDED, UserStatus.DEACTIVATED])(
+    'assigning a %s clinician is a 409 CLINICIAN_NOT_ACTIVE (X-6)',
+    async (status) => {
+      const inactive = await ctx.prisma.user.create({
+        data: {
+          email: `inactive-${status.toLowerCase()}@example.com`,
+          name: 'Inactive',
+          role: Role.CLINICIAN,
+          status,
+        },
+      });
+      const res = await asToken(admin.token)(
+        http().post(`/v1/children/${childId}/clinicians`).send({ clinicianId: inactive.id }),
+      );
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('CLINICIAN_NOT_ACTIVE');
+    },
+  );
+
+  it('assigning an INVITED clinician is allowed (pre-assignment)', async () => {
+    const invited = await ctx.prisma.user.create({
+      data: {
+        email: 'invited-preassign@example.com',
+        name: 'Invited',
+        role: Role.CLINICIAN,
+        status: UserStatus.INVITED,
+      },
+    });
+    const res = await asToken(admin.token)(
+      http().post(`/v1/children/${childId}/clinicians`).send({ clinicianId: invited.id }),
+    );
+    expect(res.status).toBe(201);
+
+    // Later care-team tests assume a single assignment — remove this one.
+    await ctx.prisma.clinicianChildAssignment.delete({ where: { id: res.body.id } });
   });
 
   it('non-admin roles cannot assign a clinician', async () => {

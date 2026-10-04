@@ -22,7 +22,7 @@ export class ResendEmailService extends EmailService {
   private readonly from: string;
   private readonly verificationTtlMin: number;
   private readonly passwordResetTtlMin: number;
-  private readonly accountSetupTtlMin: number;
+  private readonly accountSetupTtlHours: number;
 
   constructor(config: ConfigService<AppConfig, true>) {
     super();
@@ -31,7 +31,7 @@ export class ResendEmailService extends EmailService {
     this.from = email.from;
     this.verificationTtlMin = verification.emailTtlMin;
     this.passwordResetTtlMin = verification.passwordResetTtlMin;
-    this.accountSetupTtlMin = verification.accountSetupTtlMin;
+    this.accountSetupTtlHours = verification.accountSetupTtlHours;
     this.client = email.resendApiKey ? new Resend(email.resendApiKey) : null;
     if (!this.client) {
       this.logger.warn('RESEND_API_KEY is unset — emails will be logged, not sent.');
@@ -47,7 +47,7 @@ export class ResendEmailService extends EmailService {
   }
 
   async sendAccountSetupLink(to: string, setupUrl: string): Promise<void> {
-    await this.dispatch(to, accountSetupEmail(setupUrl, this.accountSetupTtlMin));
+    await this.dispatch(to, accountSetupEmail(setupUrl, this.accountSetupTtlHours));
   }
 
   private async dispatch(to: string, message: RenderedEmail): Promise<void> {

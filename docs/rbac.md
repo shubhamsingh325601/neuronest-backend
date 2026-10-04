@@ -19,9 +19,8 @@ There are deliberately no dynamic RBAC database tables (`roles`, `permissions`, 
 export const PERMISSIONS = [
   'user:read:self',
   'user:deactivate:self',
-  'clinician-application:list',    // GET  /v1/clinician-applications(/:id) — ADMIN only
-  'clinician-application:review',  // POST /v1/clinician-applications/:id/(approve|reject)
   'clinician:list',                // GET  /v1/clinicians — ADMIN only (provisioned CLINICIAN directory)
+  'clinician:manage',              // POST/PATCH /v1/clinicians, POST /v1/clinicians/:id/resend-invitation — ADMIN only
   'child:create:self',             // POST /v1/children — PARENT only
   'child:read',                    // GET  /v1/children(/:id) — PARENT(own)/CLINICIAN(assigned)/ADMIN(any)
   'clinician-child:manage',        // POST /v1/children/:id/clinicians — ADMIN only
@@ -104,7 +103,7 @@ Whenever a new protected endpoint or use-case is introduced, follow this 4-step 
 
 ### Step 1: Naming Convention
 Permissions follow the format: `resource:action[:scope]`, all lowercase, colon-separated:
-- `resource`: Domain entity in kebab-case (e.g. `clinician-application`, `child-profile`, `user`).
+- `resource`: Domain entity in kebab-case (e.g. `clinician`, `child-profile`, `user`).
 - `action`: Verb describing the operation (e.g. `list`, `read`, `review`, `create`, `deactivate`).
 - `scope` *(optional)*: Use `:self` only when the same action exists at both a self-service scope and an administrative/broad scope (e.g. `user:read:self` vs future `user:read:any`).
 
@@ -263,15 +262,14 @@ per-row check:
 - `CLINICIAN` → `where: { clinicianAssignments: { some: { clinicianId: currentUser.id } } }`.
 - `ADMIN` → unfiltered.
 
-### `clinician:list` (new) — admin-only directory, distinct from `clinician-application:list`
+### `clinician:list` — admin-only directory + detail
 
-`GET /v1/clinicians` lists provisioned `CLINICIAN` `User` rows (role-filtered, no
-status filter — `AssignClinicianService` doesn't restrict by status either, so the
-list matches exactly what's assignable). This feeds the `POST
-/v1/children/{id}/clinicians` picker, which previously required the admin to already
-have a `clinicianId` in hand. Not the same resource as `clinician-application:list`
-(the pre-approval lead queue) — an application is reviewed once and produces a `User`;
-this lists those resulting `User` rows directly.
+`GET /v1/clinicians` lists `CLINICIAN` `User` rows (optional `?status=` / `?q=` filters) and
+`GET /v1/clinicians/{id}` returns one with its profile and caseload. This feeds the
+`POST /v1/children/{id}/clinicians` picker and the clinician management screen. The
+`clinician-application:list` / `clinician-application:review` permissions were **removed in
+Phase 10** together with the public application flow; clinicians are now created by an
+admin (`clinician:manage`, below).
 
 ### `GET /v1/children/{childId}/clinicians` / `DELETE .../clinicians/{clinicianId}` (Phase 8) — reused permissions, no new grant
 
@@ -285,8 +283,8 @@ ownership branch needed since the guard alone restricts it.
 
 ### `user:manage-status` (Phase 8) — new ADMIN-only permission, one grant covers two state transitions
 
-Same precedent as `clinician-application:review` (one permission, two actions:
-approve/reject) and `plan-template:manage` (create+publish): `user:manage-status`
+Same precedent as `clinician:manage` (one permission, three routes) and
+`plan-template:manage` (create+publish): `user:manage-status`
 covers both `POST /v1/users/{id}/suspend` and `POST /v1/users/{id}/reactivate` rather
 than minting one permission per transition. Granted only to `ADMIN` (not spread into
 `SELF_PERMISSIONS`). Ownership/self-protection is enforced in
@@ -331,7 +329,7 @@ Distinct from `clinician:list` (§6 above): `clinician:list` stays the narrow,
 CLINICIAN-only feed that powers the assign-clinician picker. `user:list` is the
 general admin directory across `PARENT`/`CLINICIAN`/`ADMIN` alike, covering both
 `GET /v1/users` and `GET /v1/users/{id}` (same one-permission-two-routes precedent as
-`clinician-application:review`/`user:manage-status` above). `UserSummaryDto`/
+`user:manage-status` above). `UserSummaryDto`/
 `UserDetailDto` are new DTOs, not a reuse of `UserProfileDto` (the self-service
 `get-me` shape) — deliberately, to avoid over-exposing self-only fields to a response
 shape not designed for admin oversight. `UserDetailDto` embeds relations (§3 row 11 of
@@ -354,6 +352,28 @@ endpoint. `src/modules/admin/` is the one genuinely new module this phase adds; 
 owns no domain's writes, only reads across domains via `PrismaService` directly, same
 "no repository layer" convention as every other feature module. No ownership branch
 needed; the guard alone restricts it to `ADMIN`.
+
+### `clinician:manage` (Phase 10) — new ADMIN-only permission, one grant covers create + update + resend
+
+Same precedent as `user:manage-status` and `plan-template:manage`: one permission
+covers `POST /v1/clinicians`, `PATCH /v1/clinicians/{id}` and
+`POST /v1/clinicians/{id}/resend-invitation`. Granted only to `ADMIN` (never spread
+into a non-admin role). `GET /v1/clinicians/{id}` reuses `clinician:list` — it is a read
+of the same directory, not a new capability. No ownership branch: the guard alone
+restricts it, and clinician profile data is admin-only (parents never see it).
+Activate/deactivate deliberately reuses `user:manage-status` (`/users/{id}/suspend`,
+`/reactivate`) instead of adding clinician-specific routes.
+
+**Lifecycle rules enforced in services, not the guard:**
+
+- Suspending or self-deactivating a user consumes their outstanding `ACCOUNT_SETUP`
+  tokens, and `complete-account-setup` requires `status = INVITED` — a suspended invitee
+  cannot re-activate themselves with an old link.
+- Reactivating a user with no password (suspended while `INVITED`) restores `INVITED`,
+  not `ACTIVE`; the admin then resends the invitation.
+- `POST /v1/children/{id}/clinicians` only accepts an `INVITED` or `ACTIVE` clinician
+  (`409 CLINICIAN_NOT_ACTIVE` otherwise) — `INVITED` so an admin can pre-assign.
+- A clinician's email can change only while `INVITED` (`409 CLINICIAN_EMAIL_LOCKED`).
 
 ## 7. Future Migration Path to `@casl/ability`
 

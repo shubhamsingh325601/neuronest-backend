@@ -10,12 +10,12 @@ import { Role } from '@prisma/client';
 export const PERMISSIONS = [
   'user:read:self',
   'user:deactivate:self',
-  // Enforced by the admin clinician-application review routes (Phase 3).
-  'clinician-application:list',
-  'clinician-application:review',
-  // Admin-only directory of provisioned CLINICIAN users, for the assign-clinician
-  // picker. Distinct from `clinician-application:list` (the pre-approval lead queue).
+  // Admin-only directory of CLINICIAN users (picker + management screen). The
+  // clinician-application permissions were removed in Phase 10.
   'clinician:list',
+  // Admin-created clinician lifecycle (Phase 10): create / update / resend invitation.
+  // ADMIN only — `clinician:list` (read) also covers the detail route.
+  'clinician:manage',
   // Core Care Domain (Phase 4). Ownership/assignment scoping for `child:read` is
   // enforced in the service, not here — see docs/rbac.md.
   'child:create:self',

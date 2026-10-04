@@ -28,7 +28,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       'media',
       'verification_tokens',
       'refresh_tokens',
-      'clinician_applications',
+      'clinician_profiles',
       'clinician_child_assignments',
       'children',
       'users',

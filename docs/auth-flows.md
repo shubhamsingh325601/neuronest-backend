@@ -12,7 +12,7 @@ an account (see [rbac.md](rbac.md) and each flow's "enumeration" note).
 | Refresh token | Opaque 32-byte random, SHA-256 at rest | `REFRESH_TOKEN_TTL_DAYS` (default `30`) | rotated every refresh; reuse ⇒ family revoked | `REFRESH_TOKEN_TTL_DAYS` |
 | Email verification code | 6-digit numeric, SHA-256 at rest | `EMAIL_VERIFICATION_TTL_MIN` (default `10`) | `EMAIL_VERIFICATION_MAX_ATTEMPTS` (default `5`), then consumed | `EMAIL_VERIFICATION_*` |
 | Password reset token | Opaque 32-byte random, SHA-256 at rest | `PASSWORD_RESET_TTL_MIN` (default `60`) | single-use | `PASSWORD_RESET_TTL_MIN` |
-| Account-setup token | Opaque 32-byte random, SHA-256 at rest | `ACCOUNT_SETUP_TTL_MIN` (default `60`) | single-use | `ACCOUNT_SETUP_TTL_MIN` |
+| Account-setup token | Opaque 32-byte random, SHA-256 at rest | `ACCOUNT_SETUP_TTL_HOURS` (default `72`) | single-use | `ACCOUNT_SETUP_TTL_HOURS` |
 
 Issuing a new verification / reset / account-setup token for a user+type first
 **consumes any outstanding one** of that type. Every `/v1/auth/*` route is additionally rate-limited to 5 req / 60 s
@@ -102,14 +102,14 @@ every existing session, so a stolen-then-reset account logs the attacker out eve
 
 ## Account setup (invited clinician)
 
-When an admin approves a `ClinicianApplication`, a `User` is provisioned with
+When an admin creates a clinician (`POST /v1/clinicians`), a `User` is provisioned with
 `role=CLINICIAN`, `status=INVITED`, `passwordHash=null`, `emailVerifiedAt=null` (see
-[rbac.md](rbac.md) and the Phase 3 plan). `INVITED` is not `ACTIVE`, so the account
+[rbac.md](rbac.md) and the Phase 10 plan). `INVITED` is not `ACTIVE`, so the account
 cannot log in or refresh until setup completes.
 
 ```
 CLIENT                          API                                   DB / EMAIL
-  │  (admin approves application)│  create User INVITED, passwordHash=null│
+  │  (admin creates clinician)   │  create User INVITED, passwordHash=null│
   │                              │  issue opaque ACCOUNT_SETUP token,     │
   │                              │  consume prior, build link:            │
   │                              │  ${APP_WEB_URL}/complete-account-setup?token=  │──> email (or dev log)
@@ -125,7 +125,17 @@ CLIENT                          API                                   DB / EMAIL
 ```
 
 No sessions are revoked — an `INVITED` account has never authenticated. The setup link
-is sent to the application's email, so completing it doubles as email verification.
+is sent to the clinician's email, so completing it doubles as email verification. The
+invitation is emailed *after* the create commits and is best-effort: a mail failure never
+rolls the clinician back, and the admin can `POST /v1/clinicians/{id}/resend-invitation`
+(issuing a new token consumes earlier ones, so old links die).
+
+**Lifecycle guards (Phase 10):** `complete-account-setup` only accepts a user whose
+status is `INVITED` (else the same opaque `400 INVALID_SETUP_TOKEN`); suspending or
+self-deactivating a user consumes their outstanding setup tokens; and reactivating a user
+who never set a password restores `INVITED` (not `ACTIVE`) so the admin resends the
+invitation. The link lives `ACCOUNT_SETUP_TTL_HOURS` (default 72); an expired link is
+recovered by an admin resend — there is deliberately no public self-service re-request.
 
 ## Deactivate (self-exclusion)
 

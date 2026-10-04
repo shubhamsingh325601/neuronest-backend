@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { Role, UserStatus } from '@prisma/client';
 import { PasswordService } from '@common/crypto/password.service';
+import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
 import { createTestApp, type TestContext } from './helpers/test-app';
 
 /**
@@ -130,5 +131,46 @@ describe('Admin user suspend/reactivate (e2e)', () => {
     );
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('USER_NOT_FOUND');
+  });
+
+  describe('INVITED users (plan 0010 X-1 / X-2)', () => {
+    const newPassword = 'chosen-strong-passphrase';
+
+    const createInvitee = async (email: string) => {
+      const user = await ctx.prisma.user.create({
+        data: { email, name: 'Invitee', role: Role.CLINICIAN, status: UserStatus.INVITED },
+      });
+      const token = await ctx.app.get(VerificationTokenService).issueAccountSetupToken(user.id);
+      return { id: user.id, token };
+    };
+
+    it('a suspended invitee cannot complete setup with the old link (X-1)', async () => {
+      const invitee = await createInvitee('x1-invitee@example.com');
+      const suspend = await asToken(admin.token)(http().post(`/v1/users/${invitee.id}/suspend`));
+      expect(suspend.status).toBe(200);
+
+      const setup = await http()
+        .post('/v1/auth/complete-account-setup')
+        .send({ token: invitee.token, password: newPassword });
+      expect(setup.status).toBe(400);
+      expect(setup.body.code).toBe('INVALID_SETUP_TOKEN');
+
+      const row = await ctx.prisma.user.findUnique({ where: { id: invitee.id } });
+      expect(row).toMatchObject({ status: 'SUSPENDED', passwordHash: null });
+    });
+
+    it('reactivating a suspended invitee restores INVITED, never ACTIVE (X-2)', async () => {
+      const invitee = await createInvitee('x2-invitee@example.com');
+      await asToken(admin.token)(http().post(`/v1/users/${invitee.id}/suspend`));
+
+      const reactivate = await asToken(admin.token)(
+        http().post(`/v1/users/${invitee.id}/reactivate`),
+      );
+      expect(reactivate.status).toBe(200);
+      expect(reactivate.body).toMatchObject({ id: invitee.id, status: 'INVITED' });
+
+      const row = await ctx.prisma.user.findUnique({ where: { id: invitee.id } });
+      expect(row).toMatchObject({ status: 'INVITED', passwordHash: null, emailVerifiedAt: null });
+    });
   });
 });

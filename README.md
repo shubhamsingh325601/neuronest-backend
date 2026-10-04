@@ -11,7 +11,7 @@ This repository hosts the **NeuroNest Backend API**, built as a modular monolith
 The backend currently delivers the following production-grade capabilities:
 - **Authentication & Account Security**: Email/password signup with argon2id, email verification, login with opaque rotating refresh tokens and automatic family reuse revocation, and password reset.
 - **User Profile Management**: Authenticated user profiles (`GET /v1/users/me`) and self-deactivation with immediate session invalidation.
-- **Clinician Onboarding & Review**: Public clinician application intake and an administrative review workflow (listing, inspecting, approving, and rejecting applicants).
+- **Clinician Onboarding**: Admin-created clinicians with an emailed account-setup invitation (create, list, update, resend), plus activate/deactivate via user status.
 - **Authorization Engine**: Static Role-Based Access Control (RBAC) with compile-time type safety and automated route security guardrails.
 
 > [!TIP]

@@ -1,12 +1,12 @@
 # Plan 0010 — Phase 10: Clinician Lifecycle (Admin-Created)
 
-Status: **Proposed**
+Status: **Done**
 Owner: backend
-Last updated: 2026-10-04
+Last updated: 2026-10-04 (implemented)
 
 > This file is the single source of truth for this phase. It carries every decision,
 > convention, and the exact remaining checklist so work can resume cold. Read it top to
-> bottom before touching code. **Nothing in this phase has been implemented yet.**
+> bottom before touching code. **This phase is implemented — see §9 for the summary.**
 > Depends on nothing in 0009 except the single-use token fix (X-4); it can ship before
 > 0011 because the invitation sender is designed as a seam (§3 row 3).
 
@@ -130,38 +130,38 @@ Shared DTOs: `ClinicianDetailDto`, `ClinicianProfileDto`, `CreateClinicianDto`, 
 - **OpenAPI** — `docs.e2e-spec.ts` `EXPECTED`: remove 5 application rows; add `clinicianCreate`, `clinicianGet`, `clinicianUpdate`, `clinicianResendInvitation` (the `clinicianList` row stays).
 - **`rbac-route-coverage`** — every new handler has `@Auth('…')`; nothing here is `@Public()`.
 
-## 7. Build order (ordered checklist — nothing started yet)
+## 7. Build order (ordered checklist — all done)
 
 ### Batch A — Lifecycle bug fixes (no new routes)
 
-- [ ] **A.0** Failing tests first: suspended invitee completes setup with an old token (X-1); suspend INVITED → reactivate → ACTIVE with null password (X-2).
-- [ ] **A.1** `SuspendUserService` + `DeactivateService` consume ACCOUNT_SETUP tokens (add a `VerificationTokenService.revokeAccountSetup(userId)` helper).
-- [ ] **A.2** `CompleteAccountSetupService` status guard (`INVITED` only).
-- [ ] **A.3** `ReactivateUserService` restores `INVITED` for null-password users.
-- [ ] **A.4** `AssignClinicianService` status check (X-6) — only after the Open Q is answered.
-- [ ] **A.5** Update `test/user-status.e2e-spec.ts`, `test/clinician-application.e2e-spec.ts` (setup flow assertions move to the new clinician spec in Batch B), unit specs.
-- [ ] **A.6** Verify: `npm run lint && npm test && npm run build && npm run test:e2e`.
+- [x] **A.0** Failing tests first: suspended invitee completes setup with an old token (X-1); suspend INVITED → reactivate → ACTIVE with null password (X-2).
+- [x] **A.1** `SuspendUserService` + `DeactivateService` consume ACCOUNT_SETUP tokens (add a `VerificationTokenService.revokeAccountSetup(userId)` helper).
+- [x] **A.2** `CompleteAccountSetupService` status guard (`INVITED` only).
+- [x] **A.3** `ReactivateUserService` restores `INVITED` for null-password users.
+- [x] **A.4** `AssignClinicianService` status check (X-6) — only after the Open Q is answered.
+- [x] **A.5** Update `test/user-status.e2e-spec.ts`, `test/clinician-application.e2e-spec.ts` (setup flow assertions move to the new clinician spec in Batch B), unit specs.
+- [x] **A.6** Verify: `npm run lint && npm test && npm run build && npm run test:e2e`.
 
 ### Batch B — Clinician CRUD + invitation
 
-- [ ] **B.1** Migration 1 (`ClinicianProfile`), `truncateAll()` update, `prisma generate`.
-- [ ] **B.2** Config: `ACCOUNT_SETUP_TTL_HOURS`; update template (hours + invitation copy); `buildWebLink` helper.
-- [ ] **B.3** `clinician:manage` permission + `rbac.md` note.
-- [ ] **B.4** `InvitationService.issueAndSend`; `create-clinician`, `get-clinician`, `update-clinician`, `resend-invitation` feature folders; extend `list-clinicians` (filters + fields); DTOs.
-- [ ] **B.5** e2e: new `test/clinician-lifecycle.e2e-spec.ts` — create → mail captured → complete setup → login; duplicate email 409; resend (old token 400, new token 200, **no second user**); resend on ACTIVE → 409; email PATCH while INVITED re-invites, after ACTIVE 409; email provider throws → clinician still created (use a failing `FakeEmailService` mode); suspend/reactivate flows; non-admin 403 on every route.
-- [ ] **B.6** `docs.e2e-spec.ts` rows; verify full suite.
+- [x] **B.1** Migration 1 (`ClinicianProfile`), `truncateAll()` update, `prisma generate`.
+- [x] **B.2** Config: `ACCOUNT_SETUP_TTL_HOURS`; update template (hours + invitation copy); `buildWebLink` helper.
+- [x] **B.3** `clinician:manage` permission + `rbac.md` note.
+- [x] **B.4** `InvitationService.issueAndSend`; `create-clinician`, `get-clinician`, `update-clinician`, `resend-invitation` feature folders; extend `list-clinicians` (filters + fields); DTOs.
+- [x] **B.5** e2e: new `test/clinician-lifecycle.e2e-spec.ts` — create → mail captured → complete setup → login; duplicate email 409; resend (old token 400, new token 200, **no second user**); resend on ACTIVE → 409; email PATCH while INVITED re-invites, after ACTIVE 409; email provider throws → clinician still created (use a failing `FakeEmailService` mode); suspend/reactivate flows; non-admin 403 on every route.
+- [x] **B.6** `docs.e2e-spec.ts` rows; verify full suite.
 
 ### Batch C — Remove the application slice
 
-- [ ] **C.1** Delete the five routes/services/DTOs/specs, `clinician-application:*` permissions, update `clinicians.module.ts`, `test/clinician-application.e2e-spec.ts` (delete), `docs.e2e-spec.ts` (remove rows).
-- [ ] **C.2** Admin summary: remove `pendingClinicianApplications`, add `invitedClinicians`; update unit + e2e.
-- [ ] **C.3** Docs: `rbac.md`, `testing.md` (suite table), `auth-flows.md` (clinician onboarding), `architecture.md` if it names the flow, `schema-decisions.md`.
-- [ ] **C.4** Verify full suite. Confirm removed routes return `404`.
-- [ ] **C.5** Migration 2 (drop table + enum), remove `clinician_applications` from `truncateAll()` and `ClinicianApplication` from `schema.prisma`; run `prisma generate`; verify full suite.
+- [x] **C.1** Delete the five routes/services/DTOs/specs, `clinician-application:*` permissions, update `clinicians.module.ts`, `test/clinician-application.e2e-spec.ts` (delete), `docs.e2e-spec.ts` (remove rows).
+- [x] **C.2** Admin summary: remove `pendingClinicianApplications`, add `invitedClinicians`; update unit + e2e.
+- [x] **C.3** Docs: `rbac.md`, `testing.md` (suite table), `auth-flows.md` (clinician onboarding), `architecture.md` if it names the flow, `schema-decisions.md`.
+- [x] **C.4** Verify full suite. Confirm removed routes return `404`.
+- [x] **C.5** Migration 2 (drop table + enum), remove `clinician_applications` from `truncateAll()` and `ClinicianApplication` from `schema.prisma`; run `prisma generate`; verify full suite.
 
 ### Batch D — Close
 
-- [ ] **D.1** Flip Status to **Done**, update `docs/plans/README.md`, write the implementation summary (files, env change, migrations, contract breaks to flag to the frontend).
+- [x] **D.1** Flip Status to **Done**, update `docs/plans/README.md`, write the implementation summary (files, env change, migrations, contract breaks to flag to the frontend).
 
 ## Testing
 
@@ -179,11 +179,63 @@ Shared DTOs: `ClinicianDetailDto`, `ClinicianProfileDto`, `CreateClinicianDto`, 
 
 ## 8. How to resume
 
-> Nothing is implemented yet. Start at Batch A, step A.0. Closest precedents:
-> `approve-application.service.ts` (provision + invite — being replaced),
-> `suspend-user.service.ts` / `reactivate-user.service.ts` (status shape),
-> `list-clinicians.service.ts` (admin directory), `reset-password.service.ts` (token flow).
->
-> Paste-ready prompt: *"Implement docs/plans/0010 starting at Batch A. Failing tests
-> first for X-1/X-2. Follow AGENTS.md cardinal rules and the feature-slice and
-> add-permission skills. Verify after every batch and stop to report."*
+> Phase complete. Nothing to resume. Closest precedents for follow-on work:
+> `create-clinician.service.ts` / `invitation.service.ts` (provision + invite),
+> `list-clinicians.service.ts` (admin directory with filters), `suspend-user.service.ts` /
+> `reactivate-user.service.ts` (status shape).
+
+## 9. Implementation summary
+
+Implemented 2026-10-04 in four batches (A lifecycle fixes → B clinician CRUD + invitation
+→ C application-slice removal → D close). Every bug (X-1, X-2, X-6, summary shape) had a
+failing test written first. Final verification: `npm run lint && npm test && npm run
+build && npm run test:e2e` green — 279 unit tests / 54 suites, 188 e2e tests / 14 suites.
+
+**Batch A — lifecycle fixes**
+- X-1: `VerificationTokenService.revokeAccountSetup(userId)`; `SuspendUserService` and
+  `DeactivateService` call it; `CompleteAccountSetupService` requires `INVITED`.
+- X-2: `ReactivateUserService` restores `INVITED` for `passwordHash === null`.
+- X-6: `AssignClinicianService` → `409 CLINICIAN_NOT_ACTIVE` for `SUSPENDED`/`DEACTIVATED`.
+
+**Batch B — clinician CRUD + invitation**
+- New routes (all `clinician:manage`, ADMIN only, except get which reuses `clinician:list`):
+  `POST /v1/clinicians` (`clinicianCreate`), `GET /v1/clinicians/{id}` (`clinicianGet`),
+  `PATCH /v1/clinicians/{id}` (`clinicianUpdate`), `POST /v1/clinicians/{id}/resend-invitation`
+  (`clinicianResendInvitation`, 202). `GET /v1/clinicians` gained `?status=`, `?q=` and
+  invitation fields.
+- `InvitationService` (`src/modules/clinicians/shared/`): `issueAndSend` (throws) and
+  `sendBestEffort` (create/update; logs + Sentry, never the link). Resend uses
+  `issueAndSend` so an explicit admin action surfaces a mail failure instead of hiding it.
+- `ClinicianProfile` model; `buildWebLink` helper (`src/common/email/web-link.util.ts`,
+  now used by forgot-password and the invitation); invitation email copy in hours.
+- `FakeEmailService.failSends` test switch for provider-outage coverage.
+
+**Batch C — removal**
+- Deleted the five `clinician-applications` routes, services, DTOs, specs, e2e spec, the
+  `clinician-application:list|review` permissions, and the table + enum.
+- Admin summary: `pendingClinicianApplications` → `invitedClinicians`.
+- Docs updated: `rbac.md`, `testing.md`, `auth-flows.md`, `architecture.md`,
+  `schema-decisions.md`, `api-conventions.md`, `database-and-docker.md`, `README.md`.
+
+**Migrations** (apply with `npm run prisma:deploy`)
+1. `20261004104121_add_clinician_profile` — additive.
+2. `20261004105730_drop_clinician_applications` — **destructive** (drops the table + enum;
+   staging only, per §3 row 13).
+
+**Env change:** `ACCOUNT_SETUP_TTL_MIN` is removed; use `ACCOUNT_SETUP_TTL_HOURS`
+(default 72). A stale `ACCOUNT_SETUP_TTL_MIN` in a deployed env is ignored, so the
+default of 72 h applies unless the new variable is set.
+
+**Contract breaks to flag to the frontend before release**
+- `GET /v1/admin/summary`: `pendingClinicianApplications` removed, `invitedClinicians` added.
+- All five `/v1/clinician-applications*` routes are gone (confirmed unused).
+- `POST /v1/children/{id}/clinicians` can now return `409 CLINICIAN_NOT_ACTIVE`.
+- `POST /v1/users/{id}/reactivate` can now return `status: "INVITED"`.
+- `ClinicianDto` gained `invitationSentAt` / `invitationExpiresAt` (additive).
+
+**Notes**
+- Migrations were authored with `prisma migrate dev` against the local throwaway test
+  database (not the Neon dev DB from `.env`); they have not been applied to any shared DB.
+- `test/clinician-lifecycle.e2e-spec.ts` gives each `/v1/auth` call its own
+  `X-Forwarded-For` address (suite boots with one trusted proxy hop) because the auth
+  surface is limited to 5 requests/min per IP.

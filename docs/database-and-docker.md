@@ -26,7 +26,7 @@ All schema definitions live in `prisma/schema.prisma`. Adhere to the following c
 ### Naming Conventions
 - **Database Tables**: Plural `snake_case` mapped via `@@map("table_name")` (e.g. `@@map("users")`, `@@map("refresh_tokens")`).
 - **Database Columns**: `snake_case` mapped via `@map("column_name")` where column names diverge from TypeScript defaults (e.g. `passwordHash String? @map("password_hash")`).
-- **Prisma Models**: Singular `PascalCase` (e.g. `User`, `RefreshToken`, `ClinicianApplication`).
+- **Prisma Models**: Singular `PascalCase` (e.g. `User`, `RefreshToken`, `ClinicianProfile`).
 - **Prisma Fields**: `camelCase` (e.g. `emailVerifiedAt`, `passwordHash`).
 - **Enums**: `PascalCase` names with `UPPER_SNAKE_CASE` values (e.g. `enum UserStatus { ACTIVE, SUSPENDED, DEACTIVATED, INVITED }`).
 

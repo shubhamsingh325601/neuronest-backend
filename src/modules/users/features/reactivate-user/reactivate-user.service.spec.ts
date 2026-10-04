@@ -25,6 +25,7 @@ describe('ReactivateUserService', () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'u1',
       status: UserStatus.SUSPENDED,
+      passwordHash: 'hash',
       updatedAt: new Date(),
     });
     const updated = { id: 'u1', status: UserStatus.ACTIVE, updatedAt: new Date() };
@@ -44,6 +45,7 @@ describe('ReactivateUserService', () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'u1',
       status: UserStatus.DEACTIVATED,
+      passwordHash: 'hash',
       updatedAt: new Date(),
     });
     prisma.user.update.mockResolvedValue({
@@ -55,6 +57,29 @@ describe('ReactivateUserService', () => {
     await service.reactivate('u1');
     expect(prisma.user.update).toHaveBeenCalled();
   });
+
+  it.each([UserStatus.SUSPENDED, UserStatus.DEACTIVATED])(
+    'restores INVITED, not ACTIVE, for a %s user with no password (X-2)',
+    async (status) => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        status,
+        passwordHash: null,
+        updatedAt: new Date(),
+      });
+      const updated = { id: 'u1', status: UserStatus.INVITED, updatedAt: new Date() };
+      prisma.user.update.mockResolvedValue(updated);
+
+      const result = await service.reactivate('u1');
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { status: UserStatus.INVITED },
+        select: { id: true, status: true, updatedAt: true },
+      });
+      expect(result).toEqual(updated);
+    },
+  );
 
   it('is idempotent when the user is already ACTIVE', async () => {
     const current = { id: 'u1', status: UserStatus.ACTIVE, updatedAt: new Date() };

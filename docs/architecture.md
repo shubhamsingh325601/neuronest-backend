@@ -15,7 +15,7 @@ There is deliberately no microservice mesh, event bus, or distributed database a
 |---|---|
 | `auth` | Signup, email verification, login, refresh rotation, logout, password reset |
 | `users` | Current user profile (`GET /users/me`), self-deactivation |
-| `clinicians` | Public clinician application intake and admin review workflow |
+| `clinicians` | Admin-created clinician lifecycle: create, invite (emailed setup link), list/get/update, resend invitation |
 | `children` | Core Care Domain foundation: the `Child` record and clinician↔child assignment |
 | `health` | Liveness and database connectivity probes |
 

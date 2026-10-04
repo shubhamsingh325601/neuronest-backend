@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { RefreshTokenService } from '@modules/auth/shared/refresh-token.service';
+import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
 import { UserStatusResponseDto } from '@modules/users/shared/user-status.dto';
 
 /**
@@ -10,13 +11,15 @@ import { UserStatusResponseDto } from '@modules/users/shared/user-status.dto';
  * an error). Self-suspend is blocked (`409 CANNOT_SUSPEND_SELF`) to prevent lockout —
  * checked before the row is even loaded. Revokes every refresh token, same call
  * `DeactivateService` already makes, so the suspension takes effect immediately
- * instead of lagging until the access token expires.
+ * instead of lagging until the access token expires. Also consumes outstanding
+ * account-setup links so a suspended invitee cannot activate themselves with an old one.
  */
 @Injectable()
 export class SuspendUserService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly refreshTokens: RefreshTokenService,
+    private readonly verificationTokens: VerificationTokenService,
   ) {}
 
   async suspend(id: string, callerId: string): Promise<UserStatusResponseDto> {
@@ -51,6 +54,7 @@ export class SuspendUserService {
       select: { id: true, status: true, updatedAt: true },
     });
     await this.refreshTokens.revokeAllForUser(id);
+    await this.verificationTokens.revokeAccountSetup(id);
     return updated;
   }
 }

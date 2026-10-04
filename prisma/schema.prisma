@@ -24,13 +24,6 @@ enum UserStatus {
   INVITED
 }
 
-enum ClinicianApplicationStatus {
-  PENDING
-  REVIEWED
-  APPROVED
-  REJECTED
-}
-
 enum VerificationTokenType {
   EMAIL_VERIFICATION
   PASSWORD_RESET
@@ -96,6 +89,7 @@ model User {
   plansCreated           Plan[]                      @relation("PlansCreated")
   planNotesAuthored      PlanNote[]                   @relation("PlanNotesAuthored")
   monthlyCallLogsLogged  MonthlyCallLog[]             @relation("MonthlyCallLogsLogged")
+  clinicianProfile       ClinicianProfile?            @relation("ClinicianProfileUser")
 
   @@map("users")
 }
@@ -130,18 +124,21 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-model ClinicianApplication {
-  id         String                     @id @default(uuid()) @db.Uuid
-  name       String
-  email      String
-  context    String
-  status     ClinicianApplicationStatus @default(PENDING)
-  reviewNote String?
-  createdAt  DateTime                   @default(now())
-  updatedAt  DateTime                   @updatedAt
+/// Admin-visible profile for a CLINICIAN user (plan 0010). 1:1, optional: legacy
+/// clinicians created via the old approve flow have no row.
+model ClinicianProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  user           User     @relation("ClinicianProfileUser", fields: [userId], references: [id], onDelete: Cascade)
+  phone          String?
+  specialisation String?
+  qualifications String?
+  licenseNumber  String?
+  bio            String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  @@index([status])
-  @@map("clinician_applications")
+  @@map("clinician_profiles")
 }
 
 model Child {

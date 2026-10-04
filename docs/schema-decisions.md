@@ -14,8 +14,7 @@ This document serves as the **Architecture Decision Record (ADR)** explaining th
 | Enum | Values | Notes |
 |------|--------|-------|
 | `Role` | `PARENT`, `CLINICIAN`, `ADMIN` | New users are always `PARENT`. `CLINICIAN` / `ADMIN` are assigned out-of-band (seed, later admin tooling). |
-| `UserStatus` | `ACTIVE`, `SUSPENDED`, `DEACTIVATED`, `INVITED` | Only `ACTIVE` may authenticate. `SUSPENDED` is admin-driven (later phase); `DEACTIVATED` is user-driven self-exclusion; `INVITED` is a provisioned account (clinician approved by an admin) that cannot log in until its owner completes account setup. |
-| `ClinicianApplicationStatus` | `PENDING`, `REVIEWED`, `APPROVED`, `REJECTED` | Lead lifecycle for the clinician-interest form. `PENDING`/`REVIEWED` are open; `APPROVED`/`REJECTED` are terminal — the admin review flow (Phase 3) moves rows to the terminal states. |
+| `UserStatus` | `ACTIVE`, `SUSPENDED`, `DEACTIVATED`, `INVITED` | Only `ACTIVE` may authenticate. `SUSPENDED` is admin-driven (later phase); `DEACTIVATED` is user-driven self-exclusion; `INVITED` is a provisioned account (clinician created by an admin) that cannot log in until its owner completes account setup. |
 | `VerificationTokenType` | `EMAIL_VERIFICATION`, `PASSWORD_RESET`, `ACCOUNT_SETUP` | Discriminator on the single verification-token table. `ACCOUNT_SETUP` shares the `PASSWORD_RESET` shape (opaque 32-byte token, link-delivered). |
 | `VerificationChannel` | `EMAIL` | Present now so adding `SMS` / `AUTHENTICATOR` later is a value, not a migration of shape. |
 | `MediaType` | `PHOTO`, `VIDEO` | What kind of asset a `Media` row is. |
@@ -180,7 +179,7 @@ One table backs **both** email verification (D4) and password reset (D5).
 | `channel` | `VerificationChannel` default `EMAIL` | |
 | `tokenHash` | string | SHA-256 hex. For `EMAIL_VERIFICATION` it hashes a 6-digit numeric code; for `PASSWORD_RESET` / `ACCOUNT_SETUP` an opaque 32-byte token. |
 | `attempts` | int default `0` | Incremented on each wrong `EMAIL_VERIFICATION` guess; the token is consumed once `EMAIL_VERIFICATION_MAX_ATTEMPTS` is hit. |
-| `expiresAt` | DateTime | 10 min for email codes, 60 min for reset tokens, 60 min for account-setup tokens (all env-configurable — `EMAIL_VERIFICATION_TTL_MIN`, `PASSWORD_RESET_TTL_MIN`, `ACCOUNT_SETUP_TTL_MIN`). |
+| `expiresAt` | DateTime | 10 min for email codes, 60 min for reset tokens, 72 h for account-setup tokens (all env-configurable — `EMAIL_VERIFICATION_TTL_MIN`, `PASSWORD_RESET_TTL_MIN`, `ACCOUNT_SETUP_TTL_HOURS`). |
 | `consumedAt` | DateTime? | Single-use. Issuing a new token of a type first consumes any outstanding ones for that user+type. |
 | `createdAt` | DateTime | `verifyEmailCode` picks the newest unconsumed, unexpired row. |
 
@@ -194,27 +193,28 @@ channel. Modelling them separately would duplicate the TTL/consume/attempt logic
 exactly the extensibility this shape was built for. The `type` + `channel` columns make
 the table extensible to MFA enrolment or login step-up later with **no schema rewrite**.
 
-## `ClinicianApplication` (`clinician_applications`)
+## `ClinicianProfile` (`clinician_profiles`) — Phase 10
+
+Admin-visible profile for a `CLINICIAN` user, 1:1 with `User`.
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `id` | uuid PK | |
-| `name` | string | |
-| `email` | string | Normalised, but **not** unique — a lead is not an account. On approve, a `User` with this email is provisioned (or the approve 409s if one already exists). |
-| `context` | string (text) | Free-text background / reason for applying. |
-| `status` | `ClinicianApplicationStatus` default `PENDING` | |
-| `reviewNote` | string? | Optional free-text reason captured on **reject** (Phase 3). Null on approve and while pending. |
+| `userId` | uuid, **unique**, FK → `users` | `onDelete: Cascade`. One profile per user. |
+| `phone` / `specialisation` / `qualifications` / `licenseNumber` / `bio` | string? | All optional; the final field list is expected to grow. Admin-only visibility — parents never see profile data. |
 | `createdAt` / `updatedAt` | DateTime | |
 
-Index: `@@index([status])` — the (later) admin review queue filters by status.
+The row is optional: clinicians created before Phase 10 (via the old approve flow) have
+none, `ClinicianDetailDto` returns nulls for them, and `PATCH /v1/clinicians/{id}`
+upserts. Invitation timestamps are *derived* from the latest `ACCOUNT_SETUP`
+`VerificationToken` — no column on `User`.
 
-**Naming note (D22):** the Nest module was renamed `clinician-applications` →
-`clinicians`, its first feature slice is `features/submit-application/`
-(`SubmitApplicationController` / `SubmitApplicationService`), and the route's
-operationId is `clinicianApplicationSubmit`. The **Prisma model name stays
-`ClinicianApplication`** — it is the lead record, and "application" is the right word
-for the row. The HTTP route path also stays `POST /v1/clinician-applications` (public
-landing-page contract). No deviation from the plan's default was taken.
+### Removed: `ClinicianApplication` / `ClinicianApplicationStatus`
+
+Dropped in Phase 10 (migration `drop_clinician_applications`). The public
+unauthenticated application flow had no consumer and a second clinician-creation path
+would have drifted; clinician interest is lead data kept outside this backend. The
+code remains in git history. Staging only — no data was preserved.
 
 ## `Child` (`children`) — Phase 4
 

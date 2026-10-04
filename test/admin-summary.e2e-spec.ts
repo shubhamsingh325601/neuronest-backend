@@ -63,13 +63,14 @@ describe('Admin summary (e2e)', () => {
     const res = await asToken(admin.token)(http().get('/v1/admin/summary'));
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
-      pendingClinicianApplications: expect.any(Number),
+      invitedClinicians: expect.any(Number),
       activeClinicians: expect.any(Number),
       activeParents: expect.any(Number),
       activePlans: expect.any(Number),
       childrenWithAssignedClinician: expect.any(Number),
       childrenWithoutClinician: expect.any(Number),
     });
+    expect(res.body).not.toHaveProperty('pendingClinicianApplications');
     expect(res.body.activeClinicians).toBeGreaterThanOrEqual(1);
     expect(res.body.activeParents).toBeGreaterThanOrEqual(1);
     expect(res.body.childrenWithAssignedClinician).toBeGreaterThanOrEqual(1);

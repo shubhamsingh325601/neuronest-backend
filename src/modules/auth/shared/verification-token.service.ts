@@ -17,7 +17,7 @@ import { PrismaService } from '@common/prisma/prisma.service';
  *   - EMAIL_VERIFICATION: 6-digit code the user types, attempt-limited.
  *   - PASSWORD_RESET: opaque high-entropy token delivered as a link.
  *   - ACCOUNT_SETUP: opaque high-entropy token delivered as a link — same shape as
- *     PASSWORD_RESET, issued when an admin approves a clinician application.
+ *     PASSWORD_RESET, issued when an admin invites a clinician.
  */
 @Injectable()
 export class VerificationTokenService {
@@ -34,7 +34,7 @@ export class VerificationTokenService {
     this.emailTtlMs = v.emailTtlMin * 60_000;
     this.emailMaxAttempts = v.emailMaxAttempts;
     this.resetTtlMs = v.passwordResetTtlMin * 60_000;
-    this.accountSetupTtlMs = v.accountSetupTtlMin * 60_000;
+    this.accountSetupTtlMs = v.accountSetupTtlHours * 3_600_000;
   }
 
   /**
@@ -151,6 +151,14 @@ export class VerificationTokenService {
       },
     });
     return token;
+  }
+
+  /**
+   * Kill every outstanding account-setup link for a user — called when an invitee is
+   * suspended or deactivated so an old link cannot re-activate them.
+   */
+  async revokeAccountSetup(userId: string): Promise<void> {
+    await this.consumeOutstanding(userId, VerificationTokenType.ACCOUNT_SETUP);
   }
 
   /** Resolve an account-setup token to its user id, consuming it. Null if invalid. */

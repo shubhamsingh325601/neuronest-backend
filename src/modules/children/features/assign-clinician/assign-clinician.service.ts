@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ClinicianChildAssignmentDto } from '@modules/children/shared/clinician-child-assignment.dto';
 import { AssignClinicianDto } from './dto/assign-clinician.dto';
@@ -21,12 +21,21 @@ export class AssignClinicianService {
 
     const clinician = await this.prisma.user.findUnique({
       where: { id: dto.clinicianId },
-      select: { id: true, role: true },
+      select: { id: true, role: true, status: true },
     });
     if (!clinician || clinician.role !== Role.CLINICIAN) {
       throw new NotFoundException({
         code: 'CLINICIAN_NOT_FOUND',
         message: 'No clinician with that id.',
+      });
+    }
+
+    // A suspended/deactivated clinician would be a care-team member who cannot act. INVITED
+    // is allowed so an admin can pre-assign before the clinician finishes setup.
+    if (clinician.status !== UserStatus.INVITED && clinician.status !== UserStatus.ACTIVE) {
+      throw new ConflictException({
+        code: 'CLINICIAN_NOT_ACTIVE',
+        message: 'This clinician is suspended or deactivated and cannot be assigned.',
       });
     }
 

@@ -1,6 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { Role } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { AssignClinicianService } from './assign-clinician.service';
 
@@ -22,7 +22,11 @@ describe('AssignClinicianService', () => {
 
   it('creates the assignment', async () => {
     prisma.child.findUnique.mockResolvedValue({ id: 'child-1' });
-    prisma.user.findUnique.mockResolvedValue({ id: 'clinician-1', role: Role.CLINICIAN });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'clinician-1',
+      role: Role.CLINICIAN,
+      status: UserStatus.ACTIVE,
+    });
     prisma.clinicianChildAssignment.findUnique.mockResolvedValue(null);
     prisma.clinicianChildAssignment.create.mockResolvedValue({
       id: 'assign-1',
@@ -65,11 +69,52 @@ describe('AssignClinicianService', () => {
 
   it('409s when already assigned', async () => {
     prisma.child.findUnique.mockResolvedValue({ id: 'child-1' });
-    prisma.user.findUnique.mockResolvedValue({ id: 'clinician-1', role: Role.CLINICIAN });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'clinician-1',
+      role: Role.CLINICIAN,
+      status: UserStatus.ACTIVE,
+    });
     prisma.clinicianChildAssignment.findUnique.mockResolvedValue({ id: 'existing' });
     await expect(
       service.assign('child-1', 'admin-1', { clinicianId: 'clinician-1' }),
     ).rejects.toThrow(ConflictException);
     expect(prisma.clinicianChildAssignment.create).not.toHaveBeenCalled();
   });
+
+  it('allows assigning an INVITED clinician (pre-assignment)', async () => {
+    prisma.child.findUnique.mockResolvedValue({ id: 'child-1' });
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'clinician-1',
+      role: Role.CLINICIAN,
+      status: UserStatus.INVITED,
+    });
+    prisma.clinicianChildAssignment.findUnique.mockResolvedValue(null);
+    prisma.clinicianChildAssignment.create.mockResolvedValue({
+      id: 'assign-1',
+      clinicianId: 'clinician-1',
+      childId: 'child-1',
+      assignedByAdminId: 'admin-1',
+      createdAt: new Date(),
+    });
+
+    await expect(
+      service.assign('child-1', 'admin-1', { clinicianId: 'clinician-1' }),
+    ).resolves.toBeDefined();
+  });
+
+  it.each([UserStatus.SUSPENDED, UserStatus.DEACTIVATED])(
+    '409s CLINICIAN_NOT_ACTIVE when the clinician is %s (X-6)',
+    async (status) => {
+      prisma.child.findUnique.mockResolvedValue({ id: 'child-1' });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'clinician-1',
+        role: Role.CLINICIAN,
+        status,
+      });
+      await expect(
+        service.assign('child-1', 'admin-1', { clinicianId: 'clinician-1' }),
+      ).rejects.toMatchObject({ response: { code: 'CLINICIAN_NOT_ACTIVE' } });
+      expect(prisma.clinicianChildAssignment.create).not.toHaveBeenCalled();
+    },
+  );
 });

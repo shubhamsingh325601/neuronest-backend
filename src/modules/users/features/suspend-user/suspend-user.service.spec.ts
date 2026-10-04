@@ -3,11 +3,13 @@ import { Test } from '@nestjs/testing';
 import { UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { RefreshTokenService } from '@modules/auth/shared/refresh-token.service';
+import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
 import { SuspendUserService } from './suspend-user.service';
 
 describe('SuspendUserService', () => {
   const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } };
   const refreshTokens = { revokeAllForUser: jest.fn() };
+  const verificationTokens = { revokeAccountSetup: jest.fn() };
   let service: SuspendUserService;
 
   beforeEach(async () => {
@@ -17,6 +19,7 @@ describe('SuspendUserService', () => {
         SuspendUserService,
         { provide: PrismaService, useValue: prisma },
         { provide: RefreshTokenService, useValue: refreshTokens },
+        { provide: VerificationTokenService, useValue: verificationTokens },
       ],
     }).compile();
     service = moduleRef.get(SuspendUserService);
@@ -66,6 +69,22 @@ describe('SuspendUserService', () => {
 
     await service.suspend('u1', 'admin-1');
     expect(prisma.user.update).toHaveBeenCalled();
+  });
+
+  it('consumes outstanding account-setup tokens on suspend (X-1)', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      status: UserStatus.INVITED,
+      updatedAt: new Date(),
+    });
+    prisma.user.update.mockResolvedValue({
+      id: 'u1',
+      status: UserStatus.SUSPENDED,
+      updatedAt: new Date(),
+    });
+
+    await service.suspend('u1', 'admin-1');
+    expect(verificationTokens.revokeAccountSetup).toHaveBeenCalledWith('u1');
   });
 
   it('is idempotent when the user is already SUSPENDED', async () => {

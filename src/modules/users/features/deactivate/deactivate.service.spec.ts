@@ -1,11 +1,13 @@
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { RefreshTokenService } from '@modules/auth/shared/refresh-token.service';
+import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
 import { DeactivateService } from './deactivate.service';
 
 describe('DeactivateService', () => {
   const prisma = { user: { update: jest.fn() } };
   const refreshTokens = { revokeAllForUser: jest.fn() };
+  const verificationTokens = { revokeAccountSetup: jest.fn() };
   let service: DeactivateService;
 
   beforeEach(async () => {
@@ -15,6 +17,7 @@ describe('DeactivateService', () => {
         DeactivateService,
         { provide: PrismaService, useValue: prisma },
         { provide: RefreshTokenService, useValue: refreshTokens },
+        { provide: VerificationTokenService, useValue: verificationTokens },
       ],
     }).compile();
     service = moduleRef.get(DeactivateService);
@@ -32,6 +35,7 @@ describe('DeactivateService', () => {
       select: { status: true, selfExcludedAt: true },
     });
     expect(refreshTokens.revokeAllForUser).toHaveBeenCalledWith('u1');
+    expect(verificationTokens.revokeAccountSetup).toHaveBeenCalledWith('u1');
     expect(result).toEqual({ status: 'DEACTIVATED', selfExcludedAt });
   });
 });

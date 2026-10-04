@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { RefreshTokenService } from '@modules/auth/shared/refresh-token.service';
+import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
 import { DeactivateResponseDto } from './dto/deactivate.dto';
 
 /**
@@ -14,6 +15,7 @@ export class DeactivateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly refreshTokens: RefreshTokenService,
+    private readonly verificationTokens: VerificationTokenService,
   ) {}
 
   async deactivate(userId: string): Promise<DeactivateResponseDto> {
@@ -24,6 +26,7 @@ export class DeactivateService {
       select: { status: true, selfExcludedAt: true },
     });
     await this.refreshTokens.revokeAllForUser(userId);
+    await this.verificationTokens.revokeAccountSetup(userId);
     return { status: user.status, selfExcludedAt: user.selfExcludedAt as Date };
   }
 }

@@ -1,40 +1,39 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '@modules/auth/auth.module';
-import { SubmitApplicationController } from './features/submit-application/submit-application.controller';
-import { SubmitApplicationService } from './features/submit-application/submit-application.service';
-import { ListApplicationsController } from './features/list-applications/list-applications.controller';
-import { ListApplicationsService } from './features/list-applications/list-applications.service';
 import { ListCliniciansController } from './features/list-clinicians/list-clinicians.controller';
 import { ListCliniciansService } from './features/list-clinicians/list-clinicians.service';
-import { GetApplicationController } from './features/get-application/get-application.controller';
-import { GetApplicationService } from './features/get-application/get-application.service';
-import { ApproveApplicationController } from './features/approve-application/approve-application.controller';
-import { ApproveApplicationService } from './features/approve-application/approve-application.service';
-import { RejectApplicationController } from './features/reject-application/reject-application.controller';
-import { RejectApplicationService } from './features/reject-application/reject-application.service';
+import { CreateClinicianController } from './features/create-clinician/create-clinician.controller';
+import { CreateClinicianService } from './features/create-clinician/create-clinician.service';
+import { GetClinicianController } from './features/get-clinician/get-clinician.controller';
+import { GetClinicianService } from './features/get-clinician/get-clinician.service';
+import { UpdateClinicianController } from './features/update-clinician/update-clinician.controller';
+import { UpdateClinicianService } from './features/update-clinician/update-clinician.service';
+import { ResendInvitationController } from './features/resend-invitation/resend-invitation.controller';
+import { ResendInvitationService } from './features/resend-invitation/resend-invitation.service';
+import { InvitationService } from './shared/invitation.service';
 
 /**
- * Clinician domain. Public application submission (Phase 1) plus the admin review
- * queue — list / view / approve / reject (Phase 3). Later phases add clinician-facing
- * functionality gated by the subscription model (insights, reports, caseload).
+ * Clinician domain. Clinicians are created by an admin (Phase 10): create / list / get /
+ * update / resend-invitation. The public application flow of Phases 1 and 3 was removed.
+ * Activate/deactivate reuses the generic `/users/{id}/suspend|reactivate` routes. Later
+ * phases add clinician-facing functionality (insights, reports, caseload).
  */
 @Module({
-  imports: [AuthModule], // for VerificationTokenService (ACCOUNT_SETUP tokens on approve)
+  imports: [AuthModule], // for VerificationTokenService (ACCOUNT_SETUP tokens on invite)
   controllers: [
-    SubmitApplicationController,
-    ListApplicationsController,
     ListCliniciansController,
-    GetApplicationController,
-    ApproveApplicationController,
-    RejectApplicationController,
+    CreateClinicianController,
+    GetClinicianController,
+    UpdateClinicianController,
+    ResendInvitationController,
   ],
   providers: [
-    SubmitApplicationService,
-    ListApplicationsService,
     ListCliniciansService,
-    GetApplicationService,
-    ApproveApplicationService,
-    RejectApplicationService,
+    InvitationService,
+    CreateClinicianService,
+    GetClinicianService,
+    UpdateClinicianService,
+    ResendInvitationService,
   ],
 })
 export class CliniciansModule {}

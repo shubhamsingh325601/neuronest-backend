@@ -6,7 +6,7 @@ import { VerificationTokenService } from '@modules/auth/shared/verification-toke
 import { CompleteAccountSetupService } from './complete-account-setup.service';
 
 describe('CompleteAccountSetupService', () => {
-  const prisma = { user: { update: jest.fn() } };
+  const prisma = { user: { findUnique: jest.fn(), update: jest.fn() } };
   const passwords = { hash: jest.fn() };
   const verificationTokens = { consumeAccountSetupToken: jest.fn() };
   let service: CompleteAccountSetupService;
@@ -26,6 +26,7 @@ describe('CompleteAccountSetupService', () => {
 
   it('sets the hash and activates the account on a valid token', async () => {
     verificationTokens.consumeAccountSetupToken.mockResolvedValue('u1');
+    prisma.user.findUnique.mockResolvedValue({ status: 'INVITED' });
     passwords.hash.mockResolvedValue('new-hash');
 
     await expect(
@@ -50,4 +51,17 @@ describe('CompleteAccountSetupService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
+
+  it.each(['SUSPENDED', 'DEACTIVATED', 'ACTIVE'])(
+    'rejects a valid token when the user is %s (X-1)',
+    async (status) => {
+      verificationTokens.consumeAccountSetupToken.mockResolvedValue('u1');
+      prisma.user.findUnique.mockResolvedValue({ status });
+
+      await expect(
+        service.complete({ token: 't'.repeat(43), password: 'brand-new-pass' }),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_SETUP_TOKEN' } });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    },
+  );
 });

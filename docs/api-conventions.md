@@ -6,7 +6,7 @@ The rules every endpoint follows, so new ones don't each re-decide. The referenc
 
 ## Resource naming
 
-- **Collections are plural nouns**: `/clinician-applications`, `/users`. A single
+- **Collections are plural nouns**: `/clinicians`, `/users`. A single
   resource is a child path: `/users/{id}`.
 - **No verbs in the path** for plain CRUD — the HTTP method is the verb.
 - **Action-style endpoints are an allowed, documented exception.** When an operation is
@@ -16,9 +16,9 @@ The rules every endpoint follows, so new ones don't each re-decide. The referenc
   an overloaded `PATCH` that hides a side effect (session revocation, email dispatch).
   If it reads as "do X to this thing", an action path is right; if it reads as "change
   this field", use `PATCH`. Also current:
-  `POST /v1/clinician-applications/{id}/approve` and `.../reject` — each is a state
-  transition with side effects (approve provisions a user and sends an email), not a
-  field edit, and returns **200** + a body.
+  `POST /v1/clinicians/{id}/resend-invitation` and `POST /v1/users/{id}/suspend` —
+  each is an action with side effects (sends an email / revokes sessions), not a field
+  edit. Resend returns **202** with no body; suspend returns **200** + a body.
 
 ## Methods
 
@@ -33,7 +33,7 @@ The rules every endpoint follows, so new ones don't each re-decide. The referenc
 ### POST status codes
 
 - **201 Created** — a resource was created. Return its representation.
-  Example: `POST /v1/clinician-applications` → 201 + `{ id, status: 'PENDING' }`.
+  Example: `POST /v1/clinicians` → 201 + the `ClinicianDetailDto`.
 - **200 OK** — the action completed synchronously and there's a body to return.
   Example: `POST /v1/auth/login` → 200 + tokens; `POST /v1/users/me/deactivate` → 200 +
   `{ status: 'DEACTIVATED', selfExcludedAt }`.
@@ -64,7 +64,7 @@ taken. (Signup for an already-*verified* email is a real conflict → **409**.)
 | 401 | No/!invalid/expired credentials (`UNAUTHORIZED`, `MISSING_TOKEN`, `INVALID_TOKEN`, `INVALID_CREDENTIALS`, `INVALID_REFRESH_TOKEN`). |
 | 403 | Authenticated but not allowed, or account not usable (`FORBIDDEN`, `INSUFFICIENT_PERMISSIONS`, `EMAIL_NOT_VERIFIED`, `ACCOUNT_NOT_ACTIVE`). |
 | 404 | No such resource / route (`NOT_FOUND`). |
-| 409 | Conflict with current state (`EMAIL_ALREADY_REGISTERED`, `UNIQUE_CONSTRAINT`, `APPLICATION_DECISION_FINAL`). |
+| 409 | Conflict with current state (`EMAIL_ALREADY_REGISTERED`, `UNIQUE_CONSTRAINT`, `CLINICIAN_NOT_INVITED`). |
 | 429 | Rate limit exceeded (`RATE_LIMITED`) — `/v1/auth/*` is fixed at 5 req/60 s. |
 | 500 | Unhandled error (`INTERNAL_ERROR`) — reported to Sentry. |
 
@@ -91,7 +91,7 @@ requested via `?cursor=<opaque>&limit=<n>`. A `null` `nextCursor` means the last
 `VALIDATION_ERROR`, not silently clamped). The cursor is an opaque base64url wrapper
 over the last row's id; a malformed one is `400 INVALID_CURSOR`. Implementation:
 `src/common/pagination/` (`CursorPaginationQueryDto`, `encodeCursor` / `decodeCursor` /
-`toCursorPage`). First consumer: `GET /v1/clinician-applications`, sorted
+`toCursorPage`). First consumer: `GET /v1/clinicians`, sorted
 `(createdAt desc, id desc)`.
 
 **Exception — bounded, non-paginated lists.** A collection whose size is bounded by a

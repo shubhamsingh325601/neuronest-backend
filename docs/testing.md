@@ -109,7 +109,7 @@ E2E tests execute HTTP requests against a fully booted NestJS application.
 |---|---|---|
 | **Auth Lifecycle** | `test/auth.e2e-spec.ts` | Complete flow: signup &rarr; email verify &rarr; login &rarr; refresh rotation &rarr; logout |
 | **Account Deactivation** | `test/deactivate.e2e-spec.ts` | User self-deactivation, token revocation, immediate session termination |
-| **Clinician Applications** | `test/clinician-application.e2e-spec.ts` | Public submission, admin list/review/approve/reject, account setup token |
+| **Clinician Lifecycle** | `test/clinician-lifecycle.e2e-spec.ts` | Admin create → invitation mail → account setup → login, resend, email change, mail-provider outage, suspend/reactivate, removed application routes, non-admin 403 |
 | **Error Shape** | `test/error-shape.e2e-spec.ts` | Verification that all errors conform to RFC 9457 `application/problem+json` |
 | **RBAC Route Coverage** | `test/rbac-route-coverage.e2e-spec.ts` | Asserts every route is explicitly protected or explicitly marked `@Public()` |
 | **OpenAPI Contract Drift** | `test/docs.e2e-spec.ts` | Live OpenAPI spec reflection matching expected paths and `operationId`s |

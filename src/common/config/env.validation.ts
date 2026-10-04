@@ -50,7 +50,9 @@ export const envValidationSchema = Joi.object({
   EMAIL_VERIFICATION_TTL_MIN: Joi.number().integer().positive().default(10),
   EMAIL_VERIFICATION_MAX_ATTEMPTS: Joi.number().integer().positive().default(5),
   PASSWORD_RESET_TTL_MIN: Joi.number().integer().positive().default(60),
-  ACCOUNT_SETUP_TTL_MIN: Joi.number().integer().positive().default(60),
+  // Clinician invitation link lifetime. Renamed from ACCOUNT_SETUP_TTL_MIN (plan 0010) so a stale
+  // deployed value is ignored rather than silently shortening the invitation.
+  ACCOUNT_SETUP_TTL_HOURS: Joi.number().integer().positive().default(72),
 
   // Required in production: an empty key makes the email service log instead of send,
   // which would silently break verification and password-reset mail.

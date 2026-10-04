@@ -17,7 +17,7 @@ describe('VerificationTokenService — ACCOUNT_SETUP', () => {
       emailTtlMin: 10,
       emailMaxAttempts: 5,
       passwordResetTtlMin: 60,
-      accountSetupTtlMin: 60,
+      accountSetupTtlHours: 72,
     }),
   };
   let service: VerificationTokenService;
@@ -28,7 +28,7 @@ describe('VerificationTokenService — ACCOUNT_SETUP', () => {
       emailTtlMin: 10,
       emailMaxAttempts: 5,
       passwordResetTtlMin: 60,
-      accountSetupTtlMin: 60,
+      accountSetupTtlHours: 72,
     });
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -38,6 +38,19 @@ describe('VerificationTokenService — ACCOUNT_SETUP', () => {
       ],
     }).compile();
     service = moduleRef.get(VerificationTokenService);
+  });
+
+  describe('revokeAccountSetup', () => {
+    it('consumes every outstanding ACCOUNT_SETUP token for the user', async () => {
+      verificationToken.updateMany.mockResolvedValue({ count: 2 });
+
+      await service.revokeAccountSetup('u1');
+
+      expect(verificationToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'u1', type: 'ACCOUNT_SETUP', consumedAt: null },
+        data: { consumedAt: expect.any(Date) },
+      });
+    });
   });
 
   describe('issueAccountSetupToken', () => {

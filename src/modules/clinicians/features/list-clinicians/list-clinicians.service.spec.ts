@@ -1,7 +1,8 @@
 import { Test } from '@nestjs/testing';
-import { Role } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 import { encodeCursor } from '@common/pagination/cursor.util';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { clinicianInclude } from '@modules/clinicians/shared/clinician.include';
 import { ListCliniciansService } from './list-clinicians.service';
 
 const UUID_A = '11111111-1111-1111-1111-111111111111';
@@ -14,6 +15,7 @@ const row = (id: string) => ({
   role: Role.CLINICIAN,
   status: 'ACTIVE',
   createdAt: new Date('2026-01-01T00:00:00Z'),
+  verificationTokens: [],
 });
 
 describe('ListCliniciansService', () => {
@@ -35,11 +37,45 @@ describe('ListCliniciansService', () => {
 
     expect(prisma.user.findMany).toHaveBeenCalledWith({
       where: { role: Role.CLINICIAN },
+      include: clinicianInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 21,
     });
     expect(res.data).toHaveLength(1);
     expect(res.nextCursor).toBeNull();
+  });
+
+  it('filters by status and a case-insensitive name/email substring', async () => {
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await service.list({ status: UserStatus.INVITED, q: 'sam' });
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          role: Role.CLINICIAN,
+          status: UserStatus.INVITED,
+          OR: [
+            { name: { contains: 'sam', mode: 'insensitive' } },
+            { email: { contains: 'sam', mode: 'insensitive' } },
+          ],
+        },
+      }),
+    );
+  });
+
+  it('derives the invitation timestamps from the latest account-setup token', async () => {
+    const createdAt = new Date('2026-02-01T00:00:00Z');
+    const expiresAt = new Date('2026-02-04T00:00:00Z');
+    prisma.user.findMany.mockResolvedValue([
+      { ...row(UUID_A), verificationTokens: [{ createdAt, expiresAt }] },
+      row(UUID_B),
+    ]);
+
+    const res = await service.list({});
+
+    expect(res.data[0]).toMatchObject({ invitationSentAt: createdAt, invitationExpiresAt: expiresAt });
+    expect(res.data[1]).toMatchObject({ invitationSentAt: null, invitationExpiresAt: null });
   });
 
   it('over-fetches by one and returns a nextCursor when there is another page', async () => {
