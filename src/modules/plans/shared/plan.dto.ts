@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Plan, PlanOrigin, PlanStatus } from '@prisma/client';
+import { Plan, PlanDay, PlanOrigin, PlanSection, PlanStatus } from '@prisma/client';
+import { PlanSectionDto } from './plan-template.dto';
 
 /** Full representation of a plan, as returned to the child's own parent, an assigned clinician, or admin. */
 export class PlanDto {
@@ -44,3 +45,55 @@ export class PlanDto {
     };
   }
 }
+
+/** One day of a plan's own (snapshotted, per-child editable) content. */
+export class PlanDayDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  dayNumber!: number;
+
+  @ApiProperty()
+  title!: string;
+
+  @ApiProperty()
+  instructions!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  sectionId!: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  updatedAt!: Date;
+
+  static from(row: PlanDay): PlanDayDto {
+    return {
+      id: row.id,
+      dayNumber: row.dayNumber,
+      title: row.title,
+      instructions: row.instructions,
+      sectionId: row.sectionId ?? null,
+      updatedAt: row.updatedAt,
+    };
+  }
+}
+
+/** A plan plus its own content: `days[]` ordered by `dayNumber`, `sections[]` by `position`. */
+export class PlanDetailDto extends PlanDto {
+  @ApiProperty({ type: [PlanDayDto] })
+  days!: PlanDayDto[];
+
+  @ApiProperty({ type: [PlanSectionDto] })
+  sections!: PlanSectionDto[];
+
+  static fromWithContent(row: Plan & { days: PlanDay[]; sections: PlanSection[] }): PlanDetailDto {
+    return {
+      ...PlanDto.from(row),
+      days: [...row.days].sort((a, b) => a.dayNumber - b.dayNumber).map(PlanDayDto.from),
+      sections: [...row.sections].sort((a, b) => a.position - b.position).map(PlanSectionDto.from),
+    };
+  }
+}
+
+/** Standard include for a plan's own content. */
+export const PLAN_CONTENT_INCLUDE = { days: true, sections: true } as const;

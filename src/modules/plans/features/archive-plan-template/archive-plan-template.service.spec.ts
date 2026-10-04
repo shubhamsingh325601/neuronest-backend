@@ -44,7 +44,7 @@ describe('ArchivePlanTemplateService', () => {
     expect(prisma.planTemplate.update).toHaveBeenCalledWith({
       where: { id: 't1' },
       data: { status: PlanTemplateStatus.ARCHIVED },
-      include: { days: true },
+      include: { days: true, sections: true },
     });
     expect(result.status).toBe(PlanTemplateStatus.ARCHIVED);
   });

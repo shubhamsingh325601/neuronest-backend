@@ -25,6 +25,16 @@ import { GetPlanController } from './features/get-plan/get-plan.controller';
 import { GetPlanService } from './features/get-plan/get-plan.service';
 import { ArchivePlanTemplateController } from './features/archive-plan-template/archive-plan-template.controller';
 import { ArchivePlanTemplateService } from './features/archive-plan-template/archive-plan-template.service';
+import { ClonePlanTemplateController } from './features/clone-plan-template/clone-plan-template.controller';
+import { ClonePlanTemplateService } from './features/clone-plan-template/clone-plan-template.service';
+import { ReplacePlanTemplateContentController } from './features/replace-plan-template-content/replace-plan-template-content.controller';
+import { ReplacePlanTemplateContentService } from './features/replace-plan-template-content/replace-plan-template-content.service';
+import { UpsertPlanDayController } from './features/upsert-plan-day/upsert-plan-day.controller';
+import { UpsertPlanDayService } from './features/upsert-plan-day/upsert-plan-day.service';
+import { DeletePlanDayController } from './features/delete-plan-day/delete-plan-day.controller';
+import { DeletePlanDayService } from './features/delete-plan-day/delete-plan-day.service';
+import { ReplacePlanSectionsController } from './features/replace-plan-sections/replace-plan-sections.controller';
+import { ReplacePlanSectionsService } from './features/replace-plan-sections/replace-plan-sections.service';
 
 /**
  * Plan domain (Phase 6): admin-owned reusable template library (`PlanTemplate` +
@@ -48,6 +58,11 @@ import { ArchivePlanTemplateService } from './features/archive-plan-template/arc
     ListPlansController,
     GetPlanController,
     ArchivePlanTemplateController,
+    ClonePlanTemplateController,
+    ReplacePlanTemplateContentController,
+    UpsertPlanDayController,
+    DeletePlanDayController,
+    ReplacePlanSectionsController,
   ],
   providers: [
     CreatePlanTemplateService,
@@ -63,6 +78,11 @@ import { ArchivePlanTemplateService } from './features/archive-plan-template/arc
     ListPlansService,
     GetPlanService,
     ArchivePlanTemplateService,
+    ClonePlanTemplateService,
+    ReplacePlanTemplateContentService,
+    UpsertPlanDayService,
+    DeletePlanDayService,
+    ReplacePlanSectionsService,
   ],
 })
 export class PlansModule {}

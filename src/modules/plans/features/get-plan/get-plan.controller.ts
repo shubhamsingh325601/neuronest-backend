@@ -3,7 +3,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Auth } from '@common/authz/auth.decorator';
 import { CurrentUser } from '@common/authz/current-user.decorator';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
-import { PlanDto } from '@modules/plans/shared/plan.dto';
+import { PlanDetailDto } from '@modules/plans/shared/plan.dto';
 import { GetPlanService } from './get-plan.service';
 
 @ApiTags('plans')
@@ -13,7 +13,7 @@ export class GetPlanController {
 
   @Get(':id')
   @Auth('plan:read')
-  @ApiOkResponse({ type: PlanDto })
+  @ApiOkResponse({ type: PlanDetailDto })
   @ApiOperation({
     operationId: 'planGet',
     summary: "Read a single plan by id — the child's own parent, an assigned clinician, or admin.",
@@ -21,7 +21,7 @@ export class GetPlanController {
   getById(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() caller: AuthenticatedUser,
-  ): Promise<PlanDto> {
+  ): Promise<PlanDetailDto> {
     return this.getPlanService.getById(id, caller);
   }
 }

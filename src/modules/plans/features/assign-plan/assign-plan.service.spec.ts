@@ -11,6 +11,11 @@ describe('AssignPlanService', () => {
     clinicianChildAssignment: { findUnique: jest.fn() },
     planTemplate: { findUnique: jest.fn() },
     plan: { findFirst: jest.fn(), create: jest.fn() },
+    planTemplateSection: { findMany: jest.fn() },
+    planTemplateDay: { findMany: jest.fn() },
+    planSection: { create: jest.fn() },
+    planDay: { createMany: jest.fn() },
+    $transaction: jest.fn(),
   };
   let service: AssignPlanService;
 
@@ -38,6 +43,9 @@ describe('AssignPlanService', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    prisma.$transaction.mockImplementation((fn: (t: typeof prisma) => unknown) => fn(prisma));
+    prisma.planTemplateSection.findMany.mockResolvedValue([]);
+    prisma.planTemplateDay.findMany.mockResolvedValue([]);
     const moduleRef = await Test.createTestingModule({
       providers: [AssignPlanService, { provide: PrismaService, useValue: prisma }],
     }).compile();
@@ -95,6 +103,30 @@ describe('AssignPlanService', () => {
         startDate: new Date('2026-09-22'),
         createdById: 'admin-1',
       },
+    });
+  });
+
+  it('snapshots the template sections and days into plan-owned rows', async () => {
+    prisma.planTemplateSection.findMany.mockResolvedValue([
+      { id: 'ts-1', title: 'Morning', position: 1 },
+    ]);
+    prisma.planTemplateDay.findMany.mockResolvedValue([
+      { dayNumber: 1, title: 'Day 1', instructions: 'A', sectionId: 'ts-1' },
+      { dayNumber: 2, title: 'Day 2', instructions: 'B', sectionId: null },
+    ]);
+    prisma.planSection.create.mockResolvedValue({ id: 'ps-1' });
+
+    await service.assign('child-1', asUser('admin-1', Role.ADMIN), dto);
+
+    expect(prisma.planSection.create).toHaveBeenCalledWith({
+      data: { planId: 'plan-1', title: 'Morning', position: 1 },
+      select: { id: true },
+    });
+    expect(prisma.planDay.createMany).toHaveBeenCalledWith({
+      data: [
+        { planId: 'plan-1', sectionId: 'ps-1', dayNumber: 1, title: 'Day 1', instructions: 'A' },
+        { planId: 'plan-1', sectionId: undefined, dayNumber: 2, title: 'Day 2', instructions: 'B' },
+      ],
     });
   });
 });

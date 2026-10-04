@@ -33,6 +33,8 @@ describe('ListPlanTemplatesService', () => {
 
   it('applies no status filter for admin', async () => {
     await service.list(asUser('admin-1', Role.ADMIN), {});
-    expect(prisma.planTemplate.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+    expect(prisma.planTemplate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} }),
+    );
   });
 });

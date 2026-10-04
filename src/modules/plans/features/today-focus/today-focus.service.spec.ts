@@ -35,9 +35,18 @@ describe('TodayFocusService', () => {
       createdById: 'admin-1',
       createdAt: new Date(),
       updatedAt: new Date(),
-      planTemplate: {
-        days: [{ id: 'day-1', planTemplateId: 'template-1', dayNumber, title: 'Day', instructions: 'x' }],
-      },
+      days: [
+        {
+          id: 'day-1',
+          planId: 'plan-1',
+          sectionId: null,
+          dayNumber,
+          title: 'Day',
+          instructions: 'x',
+          updatedById: null,
+          updatedAt: new Date(),
+        },
+      ],
     };
   };
 
@@ -70,7 +79,7 @@ describe('TodayFocusService', () => {
     );
   });
 
-  it("returns day: null when today falls outside the template's range", async () => {
+  it("returns day: null when today falls outside the plan's range", async () => {
     prisma.plan.findFirst.mockResolvedValue(planWithDay(5, 0));
     const result = await service.get('child-1', asUser('parent-1', Role.PARENT));
     expect(result.day).toBeNull();

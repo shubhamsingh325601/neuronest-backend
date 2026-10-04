@@ -49,9 +49,9 @@ describe('CompletePlanService', () => {
   it('forbids a non-assigned clinician', async () => {
     prisma.plan.findUnique.mockResolvedValue(activePlan);
     prisma.clinicianChildAssignment.findUnique.mockResolvedValue(null);
-    await expect(
-      service.complete('plan-1', asUser('clinician-1', Role.CLINICIAN)),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(service.complete('plan-1', asUser('clinician-1', Role.CLINICIAN))).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('completes an ACTIVE plan for admin', async () => {

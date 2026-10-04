@@ -1,5 +1,7 @@
 import 'dotenv/config';
-import { PrismaClient, Role, UserStatus } from '@prisma/client';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { PlanTemplateStatus, PrismaClient, Role, UserStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 /**
@@ -9,8 +11,20 @@ import * as argon2 from 'argon2';
  *   ADMIN_EMAIL, ADMIN_PASSWORD  (required)
  *   ADMIN_NAME                   (optional, defaults to "NeuroNest Admin")
  *
+ * Also seeds the starter plan templates from `prisma/seed-data/plan-templates.json`
+ * (plan 0016), matched by title — an existing template is left untouched so published
+ * templates stay immutable.
+ *
  * Run with:  npm run db:seed
  */
+interface SeedTemplate {
+  title: string;
+  description?: string;
+  status: PlanTemplateStatus;
+  sections?: { title: string }[];
+  days: { dayNumber: number; sectionPosition?: number; title: string; instructions: string }[];
+}
+
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
@@ -51,6 +65,57 @@ async function main(): Promise<void> {
   });
 
   console.log(`Seeded admin account: ${user.email} (${user.id})`);
+
+  await seedPlanTemplates(user.id);
+}
+
+async function seedPlanTemplates(adminId: string): Promise<void> {
+  const file = join(__dirname, 'seed-data', 'plan-templates.json');
+  if (!existsSync(file)) {
+    console.log('No prisma/seed-data/plan-templates.json found; skipping plan templates.');
+    return;
+  }
+  const templates = JSON.parse(readFileSync(file, 'utf8')) as SeedTemplate[];
+
+  for (const template of templates) {
+    const existing = await prisma.planTemplate.findFirst({
+      where: { title: template.title },
+      select: { id: true },
+    });
+    if (existing) {
+      console.log(`Plan template already present, skipped: ${template.title}`);
+      continue;
+    }
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.planTemplate.create({
+        data: {
+          title: template.title,
+          description: template.description,
+          status: template.status,
+          createdById: adminId,
+        },
+        select: { id: true },
+      });
+      const sectionIdByPosition = new Map<number, string>();
+      for (const [i, section] of (template.sections ?? []).entries()) {
+        const row = await tx.planTemplateSection.create({
+          data: { planTemplateId: created.id, title: section.title, position: i + 1 },
+          select: { id: true },
+        });
+        sectionIdByPosition.set(i + 1, row.id);
+      }
+      await tx.planTemplateDay.createMany({
+        data: template.days.map((day) => ({
+          planTemplateId: created.id,
+          sectionId: day.sectionPosition ? sectionIdByPosition.get(day.sectionPosition) : undefined,
+          dayNumber: day.dayNumber,
+          title: day.title,
+          instructions: day.instructions,
+        })),
+      });
+    });
+    console.log(`Seeded plan template: ${template.title} (${template.status})`);
+  }
 }
 
 main()

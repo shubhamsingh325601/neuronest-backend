@@ -30,6 +30,8 @@ describe('GetPlanService', () => {
     createdById: 'clinician-1',
     createdAt: new Date(),
     updatedAt: new Date(),
+    days: [],
+    sections: [],
   };
 
   beforeEach(async () => {

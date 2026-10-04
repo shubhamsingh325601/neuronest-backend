@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PlanTemplateStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { PlanTemplateDto } from '@modules/plans/shared/plan-template.dto';
+import { PLAN_TEMPLATE_INCLUDE, PlanTemplateDto } from '@modules/plans/shared/plan-template.dto';
 
 /**
  * Admin archives a plan template (C2, plan 0008). Valid from `DRAFT` or `PUBLISHED`;
@@ -16,7 +16,7 @@ export class ArchivePlanTemplateService {
   async archive(id: string): Promise<PlanTemplateDto> {
     const template = await this.prisma.planTemplate.findUnique({
       where: { id },
-      include: { days: true },
+      include: PLAN_TEMPLATE_INCLUDE,
     });
     if (!template) {
       throw new NotFoundException({
@@ -31,7 +31,7 @@ export class ArchivePlanTemplateService {
     const updated = await this.prisma.planTemplate.update({
       where: { id },
       data: { status: PlanTemplateStatus.ARCHIVED },
-      include: { days: true },
+      include: PLAN_TEMPLATE_INCLUDE,
     });
     return PlanTemplateDto.from(updated);
   }

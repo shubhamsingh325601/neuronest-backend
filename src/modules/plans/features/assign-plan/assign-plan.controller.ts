@@ -17,7 +17,8 @@ export class AssignPlanController {
   @ApiCreatedResponse({ type: PlanDto })
   @ApiOperation({
     operationId: 'planAssign',
-    summary: 'CLINICIAN(assigned)/ADMIN: assign a published template to a child as a new active plan.',
+    summary:
+      'CLINICIAN(assigned)/ADMIN: assign a published template to a child as a new active plan.',
   })
   assign(
     @Param('childId', ParseUUIDPipe) childId: string,

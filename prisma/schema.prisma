@@ -79,17 +79,17 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  refreshTokens      RefreshToken[]
-  verificationTokens VerificationToken[]
+  refreshTokens          RefreshToken[]
+  verificationTokens     VerificationToken[]
   child                  Child?                     @relation("ChildParent")
   clinicianAssignments   ClinicianChildAssignment[] @relation("ClinicianAssignments")
   assignmentsMadeAsAdmin ClinicianChildAssignment[] @relation("AssignmentsMadeByAdmin")
   uploadedMedia          Media[]                    @relation("UploadedMedia")
-  planTemplatesCreated   PlanTemplate[]              @relation("PlanTemplatesCreated")
-  plansCreated           Plan[]                      @relation("PlansCreated")
-  planNotesAuthored      PlanNote[]                   @relation("PlanNotesAuthored")
-  monthlyCallLogsLogged  MonthlyCallLog[]             @relation("MonthlyCallLogsLogged")
-  clinicianProfile       ClinicianProfile?            @relation("ClinicianProfileUser")
+  planTemplatesCreated   PlanTemplate[]             @relation("PlanTemplatesCreated")
+  plansCreated           Plan[]                     @relation("PlansCreated")
+  planNotesAuthored      PlanNote[]                 @relation("PlanNotesAuthored")
+  monthlyCallLogsLogged  MonthlyCallLog[]           @relation("MonthlyCallLogsLogged")
+  clinicianProfile       ClinicianProfile?          @relation("ClinicianProfileUser")
 
   @@map("users")
 }
@@ -204,16 +204,31 @@ model PlanTemplate {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  days  PlanTemplateDay[]
-  plans Plan[]
+  days     PlanTemplateDay[]
+  sections PlanTemplateSection[]
+  plans    Plan[]
 
   @@map("plan_templates")
 }
 
+model PlanTemplateSection {
+  id             String            @id @default(uuid()) @db.Uuid
+  planTemplateId String            @db.Uuid
+  planTemplate   PlanTemplate      @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+  title          String
+  position       Int
+  days           PlanTemplateDay[]
+
+  @@unique([planTemplateId, position])
+  @@map("plan_template_sections")
+}
+
 model PlanTemplateDay {
-  id             String       @id @default(uuid()) @db.Uuid
-  planTemplateId String       @db.Uuid
-  planTemplate   PlanTemplate @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+  id             String               @id @default(uuid()) @db.Uuid
+  planTemplateId String               @db.Uuid
+  planTemplate   PlanTemplate         @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+  sectionId      String?              @db.Uuid
+  section        PlanTemplateSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   dayNumber      Int
   title          String
   instructions   String
@@ -236,10 +251,42 @@ model Plan {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  notes PlanNote[]
+  notes    PlanNote[]
+  days     PlanDay[]
+  sections PlanSection[]
 
   @@index([childId])
   @@map("plans")
+}
+
+/// Plan-owned copy of a template section, written on assign (snapshot — plan 0016).
+model PlanSection {
+  id       String    @id @default(uuid()) @db.Uuid
+  planId   String    @db.Uuid
+  plan     Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  title    String
+  position Int
+  days     PlanDay[]
+
+  @@unique([planId, position])
+  @@map("plan_sections")
+}
+
+/// Plan-owned day content: copied from the template on assign, then editable per child.
+model PlanDay {
+  id           String       @id @default(uuid()) @db.Uuid
+  planId       String       @db.Uuid
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+  sectionId    String?      @db.Uuid
+  section      PlanSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  dayNumber    Int
+  title        String
+  instructions String
+  updatedById  String?      @db.Uuid
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([planId, dayNumber])
+  @@map("plan_days")
 }
 
 model PlanNote {

@@ -39,9 +39,9 @@ describe('ListPlanNotesService', () => {
 
   it('forbids a non-assigned clinician', async () => {
     prisma.clinicianChildAssignment.findUnique.mockResolvedValue(null);
-    await expect(
-      service.list('plan-1', asUser('clinician-1', Role.CLINICIAN), {}),
-    ).rejects.toThrow(ForbiddenException);
+    await expect(service.list('plan-1', asUser('clinician-1', Role.CLINICIAN), {})).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('sorts oldest-first', async () => {

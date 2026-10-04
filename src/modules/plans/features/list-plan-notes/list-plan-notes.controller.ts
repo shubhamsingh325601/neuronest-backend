@@ -18,7 +18,7 @@ export class ListPlanNotesController {
   @ApiOperation({
     operationId: 'planNoteList',
     summary:
-      "CLINICIAN(assigned)/ADMIN: cursor-paginated notes on a plan, oldest-first — not visible to PARENT.",
+      'CLINICIAN(assigned)/ADMIN: cursor-paginated notes on a plan, oldest-first — not visible to PARENT.',
   })
   list(
     @Param('id', ParseUUIDPipe) planId: string,

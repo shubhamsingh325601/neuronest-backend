@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PlanTemplateStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { PlanTemplateDto } from '@modules/plans/shared/plan-template.dto';
+import { PLAN_TEMPLATE_INCLUDE, PlanTemplateDto } from '@modules/plans/shared/plan-template.dto';
 
 /**
  * Admin publishes a template — a one-way gate (no template versioning this phase;
@@ -15,7 +15,7 @@ export class PublishPlanTemplateService {
   async publish(id: string): Promise<PlanTemplateDto> {
     const template = await this.prisma.planTemplate.findUnique({
       where: { id },
-      include: { days: true },
+      include: PLAN_TEMPLATE_INCLUDE,
     });
     if (!template) {
       throw new NotFoundException({
@@ -30,7 +30,7 @@ export class PublishPlanTemplateService {
     const updated = await this.prisma.planTemplate.update({
       where: { id },
       data: { status: PlanTemplateStatus.PUBLISHED },
-      include: { days: true },
+      include: PLAN_TEMPLATE_INCLUDE,
     });
     return PlanTemplateDto.from(updated);
   }

@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { PlanDto } from '@modules/plans/shared/plan.dto';
+import { PLAN_CONTENT_INCLUDE, PlanDetailDto } from '@modules/plans/shared/plan.dto';
 
 /**
  * Reads a single plan by id (B3, plan 0008) — same existence-check shape as
@@ -14,8 +14,11 @@ import { PlanDto } from '@modules/plans/shared/plan.dto';
 export class GetPlanService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getById(id: string, caller: AuthenticatedUser): Promise<PlanDto> {
-    const plan = await this.prisma.plan.findUnique({ where: { id } });
+  async getById(id: string, caller: AuthenticatedUser): Promise<PlanDetailDto> {
+    const plan = await this.prisma.plan.findUnique({
+      where: { id },
+      include: PLAN_CONTENT_INCLUDE,
+    });
     if (!plan) {
       throw new NotFoundException({ code: 'PLAN_NOT_FOUND', message: 'No plan with that id.' });
     }
@@ -39,7 +42,7 @@ export class GetPlanService {
     }
     // ADMIN: no check.
 
-    return PlanDto.from(plan);
+    return PlanDetailDto.fromWithContent(plan);
   }
 
   private forbidden(): ForbiddenException {

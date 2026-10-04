@@ -8,11 +8,12 @@ import { PlanStatus, PlanTemplateStatus, Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { PlanDto } from '@modules/plans/shared/plan.dto';
+import { snapshotTemplateIntoPlan } from '@modules/plans/shared/snapshot-template';
 import { AssignPlanDto } from './dto/assign-plan.dto';
 
 /**
  * CLINICIAN(assigned)/ADMIN assigns a `PUBLISHED` template to a child, creating a new
- * `ACTIVE` plan. `plan:manage` scoping walks the same existence-check shape as
+ * `ACTIVE` plan and snapshotting the template's sections/days into plan-owned rows (plan 0016). `plan:manage` scoping walks the same existence-check shape as
  * `child:read` (docs/rbac.md), from the child directly since there's no `Plan` row
  * yet. At most one `ACTIVE` plan per child is a service-layer invariant (§3 row 3 of
  * plan 0006) — `409 PLAN_ALREADY_ACTIVE` if one exists; the caller must
@@ -22,11 +23,7 @@ import { AssignPlanDto } from './dto/assign-plan.dto';
 export class AssignPlanService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async assign(
-    childId: string,
-    caller: AuthenticatedUser,
-    dto: AssignPlanDto,
-  ): Promise<PlanDto> {
+  async assign(childId: string, caller: AuthenticatedUser, dto: AssignPlanDto): Promise<PlanDto> {
     const child = await this.prisma.child.findUnique({
       where: { id: childId },
       select: { id: true },
@@ -74,13 +71,17 @@ export class AssignPlanService {
       });
     }
 
-    const plan = await this.prisma.plan.create({
-      data: {
-        childId,
-        planTemplateId: dto.planTemplateId,
-        startDate: new Date(dto.startDate),
-        createdById: caller.id,
-      },
+    const plan = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.plan.create({
+        data: {
+          childId,
+          planTemplateId: dto.planTemplateId,
+          startDate: new Date(dto.startDate),
+          createdById: caller.id,
+        },
+      });
+      await snapshotTemplateIntoPlan(tx, dto.planTemplateId, created.id);
+      return created;
     });
     return PlanDto.from(plan);
   }

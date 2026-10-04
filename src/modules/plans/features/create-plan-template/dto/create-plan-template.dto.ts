@@ -10,6 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PlanTemplateDayInputDto } from './plan-template-day-input.dto';
+import { PlanTemplateSectionInputDto } from './plan-template-section-input.dto';
 
 export class CreatePlanTemplateDto {
   @ApiProperty({ minLength: 1, maxLength: 200 })
@@ -30,4 +31,11 @@ export class CreatePlanTemplateDto {
   @ValidateNested({ each: true })
   @Type(() => PlanTemplateDayInputDto)
   days!: PlanTemplateDayInputDto[];
+
+  @ApiPropertyOptional({ type: [PlanTemplateSectionInputDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PlanTemplateSectionInputDto)
+  sections?: PlanTemplateSectionInputDto[];
 }

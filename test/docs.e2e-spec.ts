@@ -119,6 +119,31 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
   },
   {
     method: 'post',
+    path: '/v1/plan-templates/{id}/clone',
+    operationId: 'planTemplateClone',
+  },
+  {
+    method: 'put',
+    path: '/v1/plan-templates/{id}/content',
+    operationId: 'planTemplateContentReplace',
+  },
+  {
+    method: 'put',
+    path: '/v1/plans/{id}/days/{dayNumber}',
+    operationId: 'planDayUpsert',
+  },
+  {
+    method: 'delete',
+    path: '/v1/plans/{id}/days/{dayNumber}',
+    operationId: 'planDayDelete',
+  },
+  {
+    method: 'put',
+    path: '/v1/plans/{id}/sections',
+    operationId: 'planSectionsReplace',
+  },
+  {
+    method: 'post',
     path: '/v1/children/{childId}/plans',
     operationId: 'planAssign',
   },

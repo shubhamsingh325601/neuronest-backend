@@ -1,6 +1,6 @@
 # Plan 0016 — Phase 16: Plan Content Model (Template → Per-Child Plan)
 
-Status: **Proposed** (design needs a product walk-through before build — see §8)
+Status: **Done** (e2e 246 passing, 2026-10-04)
 Owner: backend
 Last updated: 2026-10-04
 
@@ -63,6 +63,10 @@ content; one content shape shared by template, manual plan and future AI plan.
 | 7 | A `Plan` may later have `origin = AI` and an optional `reviewedAt/reviewedById`; **not added now** (AI is out of scope). | The snapshot model means no further schema change is needed for the content itself. |
 | 8 | Existing assigned plans are **backfilled**: a one-off migration copies each plan's template days into `plan_days`. | Staging only, but the migration must be re-runnable-safe. |
 | 9 | Coaching tips (plan 0012) and plan-day completion (future) attach to the plan, not the template. | Consistent with the snapshot. |
+| 11 | **Day range (Q1, answered 2026-10-04: undecided → backend default chosen):** a clinician may upsert **any** `dayNumber` `1..365` on a plan, including beyond the template's last day. Plan days are plan-owned rows (`@@unique([planId, dayNumber])`), so gaps and extension are cheap; template-range-only would be a pure validation rule that can be added later without schema change. Template content itself still requires contiguous `1..N`. | Revisit if product wants a hard cap at the template range. |
+| 12 | **Edit flagging (Q2):** no flag/notification. Edits only stamp `updatedAt` / `updatedById` on the day. | Additive `lastEditedAt` in the DTO is a later option. |
+| 13 | **Push template fixes to assigned plans (Q3):** **No**, until product confirms. Fix = clone template, publish, assign anew. | No re-sync endpoint this phase. |
+| 14 | **Seed templates from a JSON file:** `prisma/seed-data/plan-templates.json` holds starter templates (title, description, status, optional sections, days). `npm run db:seed` upserts them idempotently (matched by title) so product can see what a template looks like. | The JSON is gitignored (local seed data). |
 | 10 | Template `description`/extras that are truly free-form may live in a `meta Json?` column on `Plan` and `PlanTemplate`; nothing queryable goes in JSON. | Escape hatch instead of EAV. |
 
 ## 4. Data model
@@ -132,14 +136,15 @@ model PlanDay {
 
 ## 7. Build order (ordered checklist — nothing started yet)
 
-- [ ] **0.0** Walk the flow with product (§8 questions) and revise this plan.
-- [ ] **1.1** Migration A + models + `truncateAll()`.
-- [ ] **1.2** `AssignPlanService` snapshot copy; `Today`/`GetPlan` read from `plan_days`; Migration B backfill.
-- [ ] **1.3** e2e: assign copies days; editing/cloning a template never changes an assigned plan; `plans/today` and `GET /plans/{id}` unchanged for existing data.
-- [ ] **1.4** Verify full suite.
-- [ ] **2.1** Template draft edit + clone; e2e (published immutable → 409).
-- [ ] **2.2** Clinician plan-day/section edit; e2e (assigned vs unassigned vs parent 403, edit only while ACTIVE).
-- [ ] **3.1** Docs pass; Status → **Done**; README; summary.
+- [x] **0.0** Walk the flow with product (§8 questions) and revise this plan. Done 2026-10-04 (rows 11–14).
+- [x] **0.1** Seed JSON of starter templates + seed.ts upsert (row 14).
+- [x] **1.1** Migration A + models + `truncateAll()`.
+- [x] **1.2** `AssignPlanService` snapshot copy; `Today`/`GetPlan` read from `plan_days`; Migration B backfill.
+- [x] **1.3** (written in `test/plan-content.e2e-spec.ts`, run, passing) e2e: assign copies days; editing/cloning a template never changes an assigned plan; `plans/today` and `GET /plans/{id}` unchanged for existing data.
+- [x] **1.4** Verify full suite: unit (331) and e2e (246) green.
+- [x] **2.1** Template draft edit + clone; e2e (published immutable → 409).
+- [x] **2.2** Clinician plan-day/section edit; e2e (assigned vs unassigned vs parent 403, edit only while ACTIVE).
+- [x] **3.1** Docs pass; Status → **Done**; README.
 
 ## Testing
 
@@ -149,11 +154,11 @@ Unit: snapshot copy, immutability rules, scoping. E2E as above. `docs.e2e` rows 
 
 - Snapshot duplicates content per plan (cheap at this scale).
 - Backfill correctness for existing plans (verify counts before/after).
-- Open questions for the product walk-through: (1) may the clinician add days beyond the template's range? (2) must a clinician's edit be flagged to the parent/admin? (3) should an admin be able to push a corrected template to *already-assigned* plans (default: no)?
+- Open questions for the product walk-through: answered — see §3 rows 11–13.
 
 ## 8. How to resume
 
-> Nothing implemented yet. **Run the product walk-through first (step 0.0).**
+> Step 0.0 is done; continue from the first unchecked item in §7.
 >
 > Paste-ready prompt: *"Read docs/plans/0016. Walk me through the §7 step 0.0 questions,
 > update the plan with my answers, then implement from Batch 1. No EAV."*

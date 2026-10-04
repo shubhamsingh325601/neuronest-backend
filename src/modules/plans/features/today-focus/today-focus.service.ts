@@ -2,16 +2,15 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PlanStatus, Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { PlanTemplateDayDto } from '@modules/plans/shared/plan-template.dto';
-import { PlanDto } from '@modules/plans/shared/plan.dto';
+import { PlanDayDto, PlanDto } from '@modules/plans/shared/plan.dto';
 import { computeDayNumber } from './day-offset.util';
 import { TodayFocusResponseDto } from './dto/today-focus.response.dto';
 
 /**
  * Computed read, no new table (§3 row 8 of plan 0006). Same ownership branch as
  * `GetChildService` (docs/rbac.md §6). Finds the child's `ACTIVE` plan
- * (`404 PLAN_NOT_FOUND` if none) and joins to the `PlanTemplateDay` matching today's
- * offset — a day outside the template's range is `day: null`, not an error.
+ * (`404 PLAN_NOT_FOUND` if none) and joins to the plan-owned `PlanDay` matching today's
+ * offset (plan 0016: snapshot, not the live template) — a day outside the plan's range is `day: null`, not an error.
  */
 @Injectable()
 export class TodayFocusService {
@@ -43,7 +42,7 @@ export class TodayFocusService {
 
     const plan = await this.prisma.plan.findFirst({
       where: { childId, status: PlanStatus.ACTIVE },
-      include: { planTemplate: { include: { days: true } } },
+      include: { days: true },
     });
     if (!plan) {
       throw new NotFoundException({
@@ -53,11 +52,11 @@ export class TodayFocusService {
     }
 
     const dayNumber = computeDayNumber(plan.startDate, new Date());
-    const day = plan.planTemplate.days.find((d) => d.dayNumber === dayNumber) ?? null;
+    const day = plan.days.find((d) => d.dayNumber === dayNumber) ?? null;
 
     return {
       plan: PlanDto.from(plan),
-      day: day ? PlanTemplateDayDto.from(day) : null,
+      day: day ? PlanDayDto.from(day) : null,
     };
   }
 

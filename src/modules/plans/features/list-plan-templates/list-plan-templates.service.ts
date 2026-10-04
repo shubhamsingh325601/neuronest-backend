@@ -4,7 +4,7 @@ import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { DEFAULT_PAGE_LIMIT } from '@common/pagination/cursor-pagination.query.dto';
 import { decodeCursor, toCursorPage } from '@common/pagination/cursor.util';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { PlanTemplateDto } from '@modules/plans/shared/plan-template.dto';
+import { PLAN_TEMPLATE_INCLUDE, PlanTemplateDto } from '@modules/plans/shared/plan-template.dto';
 import { ListPlanTemplatesQueryDto } from './dto/list-plan-templates.query.dto';
 import { ListPlanTemplatesResponseDto } from './dto/list-plan-templates.response.dto';
 
@@ -29,7 +29,7 @@ export class ListPlanTemplatesService {
       where,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
-      include: { days: true },
+      include: PLAN_TEMPLATE_INCLUDE,
       ...(query.cursor ? { cursor: { id: decodeCursor(query.cursor) }, skip: 1 } : {}),
     });
 

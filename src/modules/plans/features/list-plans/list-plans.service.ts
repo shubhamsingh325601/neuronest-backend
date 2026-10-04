@@ -49,7 +49,10 @@ export class ListPlansService {
     // ADMIN: no check.
 
     const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
-    const where: Prisma.PlanWhereInput = { childId, ...(query.status ? { status: query.status } : {}) };
+    const where: Prisma.PlanWhereInput = {
+      childId,
+      ...(query.status ? { status: query.status } : {}),
+    };
     const rows = await this.prisma.plan.findMany({
       where,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PlanTemplateStatus, Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { PlanTemplateDto } from '@modules/plans/shared/plan-template.dto';
+import { PLAN_TEMPLATE_INCLUDE, PlanTemplateDto } from '@modules/plans/shared/plan-template.dto';
 
 /**
  * `plan-template:read` for CLINICIAN is a query-filter shape, not an existence check
@@ -16,7 +16,7 @@ export class GetPlanTemplateService {
   async getById(id: string, caller: AuthenticatedUser): Promise<PlanTemplateDto> {
     const template = await this.prisma.planTemplate.findUnique({
       where: { id },
-      include: { days: true },
+      include: PLAN_TEMPLATE_INCLUDE,
     });
     if (
       !template ||
