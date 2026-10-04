@@ -10,9 +10,9 @@ describe('RefreshTokenService', () => {
     refreshToken: {
       findUnique: jest.fn(),
       create: jest.fn(),
-      update: jest.fn(),
       updateMany: jest.fn(),
     },
+    $transaction: jest.fn(),
   };
   const accessTokens = { issue: jest.fn() };
   const config = {
@@ -20,8 +20,17 @@ describe('RefreshTokenService', () => {
   };
   let service: RefreshTokenService;
 
+  const validRow = (status = 'ACTIVE') => ({
+    id: 'rt1',
+    userId: 'u1',
+    revokedAt: null,
+    expiresAt: new Date(Date.now() + 100000),
+    user: { id: 'u1', email: 'p@example.com', role: 'PARENT', status },
+  });
+
   beforeEach(async () => {
     jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prisma));
     config.get.mockReturnValue({ refreshTtlDays: 30, accessSecret: 's', accessTtl: '15m' });
     accessTokens.issue.mockResolvedValue({ accessToken: 'access', expiresIn: 900 });
     const moduleRef = await Test.createTestingModule({
@@ -51,23 +60,43 @@ describe('RefreshTokenService', () => {
     expect(createArg.data.userId).toBe('u1');
   });
 
-  it('rotates a valid token: revokes the old row, issues a new pair', async () => {
-    prisma.refreshToken.findUnique.mockResolvedValue({
-      id: 'rt1',
-      userId: 'u1',
-      revokedAt: null,
-      expiresAt: new Date(Date.now() + 100000),
-      user: { id: 'u1', email: 'p@example.com', role: 'PARENT', status: 'ACTIVE' },
-    });
+  it('rotates a valid token: conditionally revokes the old row, issues a new pair', async () => {
+    prisma.refreshToken.findUnique.mockResolvedValue(validRow());
+    prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
     prisma.refreshToken.create.mockResolvedValue({});
 
     await service.rotate('some-token');
 
-    expect(prisma.refreshToken.update).toHaveBeenCalledWith({
-      where: { id: 'rt1' },
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { id: 'rt1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
     expect(prisma.refreshToken.create).toHaveBeenCalled();
+  });
+
+  it('loses a rotation race with 401 and does not revoke the family or issue a token', async () => {
+    prisma.refreshToken.findUnique.mockResolvedValue(validRow());
+    prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.rotate('some-token')).rejects.toMatchObject({
+      response: { code: 'INVALID_REFRESH_TOKEN' },
+    });
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a non-ACTIVE user, revoking the presented token', async () => {
+    prisma.refreshToken.findUnique.mockResolvedValue(validRow('SUSPENDED'));
+    prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(service.rotate('some-token')).rejects.toMatchObject({
+      response: { code: 'INVALID_REFRESH_TOKEN' },
+    });
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { id: 'rt1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 
   it('treats reuse of a revoked token as compromise and revokes the whole family', async () => {

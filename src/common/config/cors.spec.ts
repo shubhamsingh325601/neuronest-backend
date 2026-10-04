@@ -74,6 +74,8 @@ describe('envValidationSchema CORS_ORIGINS', () => {
       CLOUDINARY_CLOUD_NAME: 'c',
       CLOUDINARY_API_KEY: 'k',
       CLOUDINARY_API_SECRET: 's',
+      RESEND_API_KEY: 're_key',
+      TRUST_PROXY_HOPS: '0',
     };
     expect(envValidationSchema.validate(prod).error).toBeDefined();
     expect(envValidationSchema.validate({ ...prod, CORS_ORIGINS: '' }).error).toBeDefined();

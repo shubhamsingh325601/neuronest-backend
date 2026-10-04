@@ -14,7 +14,7 @@ describe('ConfirmUploadService', () => {
   const prisma = { media: { findUnique: jest.fn(), update: jest.fn() } };
   const mediaStorage = {
     createUploadTicket: jest.fn(),
-    verifyUpload: jest.fn(),
+    inspectUpload: jest.fn(),
     createPlaybackUrl: jest.fn(),
   };
   let service: ConfirmUploadService;
@@ -62,34 +62,44 @@ describe('ConfirmUploadService', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('verifies with the storage provider and marks UPLOADED', async () => {
+  it('persists provider-reported metadata and ignores the client-supplied body', async () => {
     prisma.media.findUnique.mockResolvedValue(pendingMedia);
-    mediaStorage.verifyUpload.mockResolvedValue(true);
+    mediaStorage.inspectUpload.mockResolvedValue({
+      bytes: 4096,
+      format: 'jpg',
+      mimeType: 'image/jpeg',
+      durationSeconds: null,
+    });
     mediaStorage.createPlaybackUrl.mockResolvedValue({
       url: 'https://cdn.example.com/media-1',
       expiresAt: null,
     });
-    prisma.media.update.mockResolvedValue({
-      ...pendingMedia,
-      status: MediaStatus.UPLOADED,
-      mimeType: 'image/jpeg',
-      sizeBytes: 1024,
-    });
+    prisma.media.update.mockImplementation(({ data }) => Promise.resolve({ ...pendingMedia, ...data }));
 
     const result = await service.confirm('media-1', 'parent-1', {
       status: MediaStatus.UPLOADED,
-      mimeType: 'image/jpeg',
-      sizeBytes: 1024,
+      mimeType: 'video/forged',
+      sizeBytes: 1,
+      durationSeconds: 99999,
     });
 
-    expect(mediaStorage.verifyUpload).toHaveBeenCalledWith('fake/child-1/media-1', MediaType.PHOTO);
+    expect(mediaStorage.inspectUpload).toHaveBeenCalledWith('fake/child-1/media-1', MediaType.PHOTO);
+    expect(prisma.media.update).toHaveBeenCalledWith({
+      where: { id: 'media-1' },
+      data: {
+        status: MediaStatus.UPLOADED,
+        mimeType: 'image/jpeg',
+        sizeBytes: 4096,
+        durationSeconds: null,
+      },
+    });
     expect(result.status).toBe(MediaStatus.UPLOADED);
     expect(result.playbackUrl).toBe('https://cdn.example.com/media-1');
   });
 
   it('rejects UPLOADED when the provider has no asset at that key', async () => {
     prisma.media.findUnique.mockResolvedValue(pendingMedia);
-    mediaStorage.verifyUpload.mockResolvedValue(false);
+    mediaStorage.inspectUpload.mockResolvedValue(null);
 
     await expect(
       service.confirm('media-1', 'parent-1', { status: MediaStatus.UPLOADED }),
@@ -97,13 +107,21 @@ describe('ConfirmUploadService', () => {
     expect(prisma.media.update).not.toHaveBeenCalled();
   });
 
-  it('marks FAILED without calling verifyUpload', async () => {
+  it('marks FAILED without inspecting the provider, storing null metadata', async () => {
     prisma.media.findUnique.mockResolvedValue(pendingMedia);
     prisma.media.update.mockResolvedValue({ ...pendingMedia, status: MediaStatus.FAILED });
 
-    const result = await service.confirm('media-1', 'parent-1', { status: MediaStatus.FAILED });
+    const result = await service.confirm('media-1', 'parent-1', {
+      status: MediaStatus.FAILED,
+      mimeType: 'image/png',
+      sizeBytes: 5,
+    });
 
-    expect(mediaStorage.verifyUpload).not.toHaveBeenCalled();
+    expect(mediaStorage.inspectUpload).not.toHaveBeenCalled();
+    expect(prisma.media.update).toHaveBeenCalledWith({
+      where: { id: 'media-1' },
+      data: { status: MediaStatus.FAILED, mimeType: null, sizeBytes: null, durationSeconds: null },
+    });
     expect(result.status).toBe(MediaStatus.FAILED);
   });
 
@@ -118,7 +136,7 @@ describe('ConfirmUploadService', () => {
     const result = await service.confirm('media-1', 'parent-1', { status: MediaStatus.UPLOADED });
 
     expect(prisma.media.update).not.toHaveBeenCalled();
-    expect(mediaStorage.verifyUpload).not.toHaveBeenCalled();
+    expect(mediaStorage.inspectUpload).not.toHaveBeenCalled();
     expect(result.status).toBe(MediaStatus.UPLOADED);
     expect(result.playbackUrl).toBe('https://cdn.example.com/media-1');
   });

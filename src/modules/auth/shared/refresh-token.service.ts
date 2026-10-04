@@ -1,6 +1,6 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { User } from '@prisma/client';
+import { Prisma, UserStatus, type User } from '@prisma/client';
 import type { AppConfig } from '@common/config/configuration';
 import { AccessTokenService } from '@common/authz/access-token.service';
 import { generateOpaqueToken, sha256 } from '@common/crypto/token.util';
@@ -30,9 +30,12 @@ export class RefreshTokenService {
   }
 
   /** Mint a new access + refresh pair for a freshly authenticated user. */
-  async issueSession(user: SessionUser): Promise<SessionTokensDto> {
+  async issueSession(
+    user: SessionUser,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<SessionTokensDto> {
     const { accessToken, expiresIn } = await this.accessTokens.issue(user);
-    const refreshToken = await this.createRefreshToken(user.id);
+    const refreshToken = await this.createRefreshToken(user.id, db);
     return { accessToken, refreshToken, tokenType: 'Bearer', expiresIn };
   }
 
@@ -66,12 +69,35 @@ export class RefreshTokenService {
       });
     }
 
-    await this.prisma.refreshToken.update({
-      where: { id: existing.id },
-      data: { revokedAt: new Date() },
-    });
+    // Conditional revoke: of two concurrent rotations of one token, exactly one flips
+    // `revokedAt` (count 1). The loser gets a plain 401 — it is a race, not token theft,
+    // so it does not trigger family revocation.
+    const user = existing.user;
+    const invalid = () =>
+      new UnauthorizedException({
+        code: 'INVALID_REFRESH_TOKEN',
+        message: 'Refresh token is expired or has been revoked.',
+      });
 
-    return this.issueSession(existing.user);
+    if (user.status !== UserStatus.ACTIVE) {
+      // Defence in depth: suspend/deactivate already revoke tokens. Burn this one too.
+      await this.prisma.refreshToken.updateMany({
+        where: { id: existing.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw invalid();
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.refreshToken.updateMany({
+        where: { id: existing.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw invalid();
+      }
+      return this.issueSession(user, tx);
+    });
   }
 
   /** Revoke a single token (logout). Idempotent — unknown tokens are ignored. */
@@ -90,9 +116,9 @@ export class RefreshTokenService {
     });
   }
 
-  private async createRefreshToken(userId: string): Promise<string> {
+  private async createRefreshToken(userId: string, db: Prisma.TransactionClient): Promise<string> {
     const token = generateOpaqueToken(32);
-    await this.prisma.refreshToken.create({
+    await db.refreshToken.create({
       data: {
         userId,
         tokenHash: sha256(token),

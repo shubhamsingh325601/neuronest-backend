@@ -4,23 +4,26 @@ import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 type ConfirmableStatus = Extract<MediaStatus, 'UPLOADED' | 'FAILED'>;
 
+const IGNORED =
+  'Accepted for backward compatibility but ignored — the server records the storage provider-reported value.';
+
 export class ConfirmUploadDto {
   @ApiProperty({ enum: [MediaStatus.UPLOADED, MediaStatus.FAILED] })
   @IsIn([MediaStatus.UPLOADED, MediaStatus.FAILED])
   status!: ConfirmableStatus;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: IGNORED })
   @IsOptional()
   @IsString()
   mimeType?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: IGNORED })
   @IsOptional()
   @IsInt()
   @Min(0)
   sizeBytes?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: IGNORED })
   @IsOptional()
   @IsInt()
   @Min(0)

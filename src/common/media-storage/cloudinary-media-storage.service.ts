@@ -8,7 +8,9 @@ import {
   type CreateUploadTicketInput,
   type CreateUploadTicketResult,
   type PlaybackUrlResult,
+  type UploadedAssetInfo,
 } from './media-storage.service';
+import { mimeTypeFor } from './mime-type.util';
 
 const RESOURCE_TYPE: Record<MediaType, 'image' | 'video'> = {
   [MediaType.PHOTO]: 'image',
@@ -21,8 +23,8 @@ const DELIVERY_TYPE = 'authenticated' as const;
 /**
  * Real Cloudinary-backed implementation. `createUploadTicket` only signs params
  * locally (no network call) — the client uploads the bytes directly to Cloudinary
- * using the returned ticket. `verifyUpload` is the one call that hits Cloudinary's
- * Admin API, to confirm the asset actually landed before `confirm` trusts it.
+ * using the returned ticket. `inspectUpload` is the one call that hits Cloudinary's
+ * Admin API, to confirm the asset landed and read its real size / type / duration.
  *
  * Every asset is uploaded and read as `type: 'authenticated'` delivery (§3 row 7 of
  * plan 0008) — the default public delivery type never required a signature at all, so
@@ -68,16 +70,26 @@ export class CloudinaryMediaStorageService extends MediaStorageService {
     };
   }
 
-  async verifyUpload(storageKey: string, type: MediaType): Promise<boolean> {
+  async inspectUpload(storageKey: string, type: MediaType): Promise<UploadedAssetInfo | null> {
+    const resourceType = RESOURCE_TYPE[type];
     try {
-      await cloudinary.api.resource(storageKey, {
-        resource_type: RESOURCE_TYPE[type],
+      const asset = (await cloudinary.api.resource(storageKey, {
+        resource_type: resourceType,
         type: DELIVERY_TYPE,
-      });
-      return true;
+      })) as { bytes: number; format: string; duration?: number };
+      return {
+        bytes: asset.bytes,
+        format: asset.format,
+        mimeType: mimeTypeFor(resourceType, asset.format),
+        // Cloudinary may not report video duration immediately — null, never a guess.
+        durationSeconds:
+          resourceType === 'video' && typeof asset.duration === 'number'
+            ? Math.round(asset.duration)
+            : null,
+      };
     } catch (err) {
       if (this.isNotFound(err)) {
-        return false;
+        return null;
       }
       throw err;
     }

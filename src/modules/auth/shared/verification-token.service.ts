@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { VerificationChannel, VerificationTokenType } from '@prisma/client';
+import { Prisma, VerificationChannel, VerificationTokenType } from '@prisma/client';
 import type { AppConfig } from '@common/config/configuration';
 import {
   generateNumericCode,
@@ -37,11 +37,17 @@ export class VerificationTokenService {
     this.accountSetupTtlMs = v.accountSetupTtlMin * 60_000;
   }
 
-  /** Consume any outstanding email codes for the user and issue a fresh one. */
-  async issueEmailVerificationCode(userId: string): Promise<string> {
-    await this.consumeOutstanding(userId, VerificationTokenType.EMAIL_VERIFICATION);
+  /**
+   * Consume any outstanding email codes for the user and issue a fresh one. Pass `db`
+   * (a transaction client) to make the issue part of a caller's transaction.
+   */
+  async issueEmailVerificationCode(
+    userId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<string> {
+    await this.consumeOutstanding(userId, VerificationTokenType.EMAIL_VERIFICATION, db);
     const code = generateNumericCode(6);
-    await this.prisma.verificationToken.create({
+    await db.verificationToken.create({
       data: {
         userId,
         type: VerificationTokenType.EMAIL_VERIFICATION,
@@ -128,11 +134,7 @@ export class VerificationTokenService {
     if (!row) {
       return null;
     }
-    await this.prisma.verificationToken.update({
-      where: { id: row.id },
-      data: { consumedAt: new Date() },
-    });
-    return row.userId;
+    return this.claim(row.id, row.userId);
   }
 
   /** Issue an account-setup token. Returns the plaintext for the email link. */
@@ -164,15 +166,27 @@ export class VerificationTokenService {
     if (!row) {
       return null;
     }
-    await this.prisma.verificationToken.update({
-      where: { id: row.id },
-      data: { consumedAt: new Date() },
-    });
-    return row.userId;
+    return this.claim(row.id, row.userId);
   }
 
-  private async consumeOutstanding(userId: string, type: VerificationTokenType): Promise<void> {
-    await this.prisma.verificationToken.updateMany({
+  /**
+   * Single-use claim: of two concurrent requests presenting one token, exactly one
+   * flips `consumedAt` (count 1); the loser sees count 0 and gets null.
+   */
+  private async claim(id: string, userId: string): Promise<string | null> {
+    const claimed = await this.prisma.verificationToken.updateMany({
+      where: { id, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    return claimed.count === 1 ? userId : null;
+  }
+
+  private async consumeOutstanding(
+    userId: string,
+    type: VerificationTokenType,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
+    await db.verificationToken.updateMany({
       where: { userId, type, consumedAt: null },
       data: { consumedAt: new Date() },
     });

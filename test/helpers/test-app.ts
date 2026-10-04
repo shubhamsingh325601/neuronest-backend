@@ -1,12 +1,9 @@
-import { HttpAdapterHost } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '@app/app.module';
+import { configureApp, type ConfigureAppOptions } from '@common/bootstrap/configure-app';
 import { EmailService } from '@common/email/email.service';
-import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { MediaStorageService } from '@common/media-storage/media-storage.service';
-import { setupOpenApi } from '@common/openapi/openapi';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { FakeEmailService } from './fake-email.service';
 import { FakeMediaStorageService } from './fake-media-storage.service';
@@ -24,7 +21,7 @@ export interface TestContext {
  * media storage providers swapped for in-memory fakes. Also mounts the OpenAPI routes
  * so the docs test can hit /openapi.json.
  */
-export async function createTestApp(): Promise<TestContext> {
+export async function createTestApp(options: ConfigureAppOptions = {}): Promise<TestContext> {
   const mail = new FakeEmailService();
   const mediaStorage = new FakeMediaStorageService();
 
@@ -36,17 +33,7 @@ export async function createTestApp(): Promise<TestContext> {
     .compile();
 
   const app = moduleRef.createNestApplication();
-  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    }),
-  );
-  app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
-  setupOpenApi(app);
+  configureApp(app, { trustProxyHops: options.trustProxyHops });
 
   await app.init();
 

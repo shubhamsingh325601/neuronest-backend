@@ -7,7 +7,7 @@ import { CreateUploadTicketService } from './create-upload-ticket.service';
 
 describe('CreateUploadTicketService', () => {
   const prisma = { child: { findUnique: jest.fn() }, media: { create: jest.fn() } };
-  const mediaStorage = { createUploadTicket: jest.fn(), verifyUpload: jest.fn() };
+  const mediaStorage = { createUploadTicket: jest.fn(), inspectUpload: jest.fn() };
   let service: CreateUploadTicketService;
 
   beforeEach(async () => {

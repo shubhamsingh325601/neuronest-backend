@@ -13,6 +13,15 @@ export interface CreateUploadTicketResult {
   uploadParams: Record<string, unknown>;
 }
 
+/** Facts about a landed asset, as reported by the storage provider (never the client). */
+export interface UploadedAssetInfo {
+  bytes: number;
+  format: string;
+  mimeType: string;
+  /** Whole seconds; `null` for photos or when the provider has not reported one yet. */
+  durationSeconds: number | null;
+}
+
 export interface PlaybackUrlResult {
   url: string;
   /**
@@ -32,8 +41,12 @@ export abstract class MediaStorageService {
   /** Mint a signed upload ticket. Local signing only — no network call. */
   abstract createUploadTicket(input: CreateUploadTicketInput): Promise<CreateUploadTicketResult>;
 
-  /** Confirm the asset actually landed at the provider before trusting a client's self-reported `confirm` body. */
-  abstract verifyUpload(storageKey: string, type: MediaType): Promise<boolean>;
+  /**
+   * Look up the asset at the provider. `null` = it did not land. Otherwise the
+   * provider-reported size / type / duration — the only trustworthy source for
+   * `Media` metadata, since a client's self-reported `confirm` body is not.
+   */
+  abstract inspectUpload(storageKey: string, type: MediaType): Promise<UploadedAssetInfo | null>;
 
   /**
    * Mint a mediated playback URL for an `UPLOADED` asset. Minted fresh per request —

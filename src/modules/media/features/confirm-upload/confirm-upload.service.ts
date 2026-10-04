@@ -18,9 +18,9 @@ import { ConfirmUploadDto } from './dto/confirm-upload.dto';
  * - Re-confirming with the **same** terminal status is an idempotent no-op (protects
  *   a double-click / retry, same shape as Phase 3's approve/reject idempotency).
  * - Re-confirming with a **different** terminal status is `409 MEDIA_ALREADY_CONFIRMED`.
- * A `status: UPLOADED` confirm is only trusted once `MediaStorageService.verifyUpload`
- * confirms the asset actually landed — the client's self-reported body is not enough
- * on its own.
+ * A `status: UPLOADED` confirm is only trusted once `MediaStorageService.inspectUpload`
+ * finds the asset at the provider, and the persisted mimeType / sizeBytes / durationSeconds
+ * come from that lookup — the client's self-reported body is ignored.
  */
 @Injectable()
 export class ConfirmUploadService {
@@ -54,24 +54,30 @@ export class ConfirmUploadService {
       });
     }
 
+    let metadata: { mimeType: string | null; sizeBytes: number | null; durationSeconds: number | null } = {
+      mimeType: null,
+      sizeBytes: null,
+      durationSeconds: null,
+    };
     if (dto.status === MediaStatus.UPLOADED) {
-      const landed = await this.mediaStorage.verifyUpload(media.storageKey, media.type);
-      if (!landed) {
+      const asset = await this.mediaStorage.inspectUpload(media.storageKey, media.type);
+      if (!asset) {
         throw new BadRequestException({
           code: 'MEDIA_UPLOAD_NOT_VERIFIED',
           message: 'The storage provider has no asset at this ticket — the upload did not land.',
         });
       }
+      // Provider-verified values only; the request's mimeType/sizeBytes/durationSeconds are ignored.
+      metadata = {
+        mimeType: asset.mimeType,
+        sizeBytes: asset.bytes,
+        durationSeconds: asset.durationSeconds,
+      };
     }
 
     const updated = await this.prisma.media.update({
       where: { id },
-      data: {
-        status: dto.status,
-        mimeType: dto.status === MediaStatus.UPLOADED ? (dto.mimeType ?? null) : null,
-        sizeBytes: dto.status === MediaStatus.UPLOADED ? (dto.sizeBytes ?? null) : null,
-        durationSeconds: dto.status === MediaStatus.UPLOADED ? (dto.durationSeconds ?? null) : null,
-      },
+      data: { status: dto.status, ...metadata },
     });
     return MediaDto.from(updated, await resolvePlaybackUrl(this.mediaStorage, updated));
   }

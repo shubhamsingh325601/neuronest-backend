@@ -190,3 +190,144 @@ describe('Change password (B4, e2e)', () => {
     expect(limitedCode).toBe('RATE_LIMITED');
   });
 });
+
+describe('Auth correctness under contention (Phase 9 Batch 1, e2e)', () => {
+  let ctx: TestContext;
+  const http = () => request(ctx.app.getHttpServer());
+  const password = 'a-strong-passphrase';
+
+  beforeAll(async () => {
+    ctx = await createTestApp();
+  });
+  afterAll(async () => {
+    await ctx.close();
+  });
+
+  it('B-1: a second signup for an unverified email replaces credentials — only the second password works', async () => {
+    const email = 'prehijack@example.com';
+    const attacker = await http()
+      .post('/v1/auth/signup')
+      .send({ email, password: 'attacker-passphrase-1', name: 'Attacker' });
+    expect(attacker.status).toBe(201);
+    const attackerSession = ctx.mail.lastCodeFor(email)!;
+
+    const owner = await http()
+      .post('/v1/auth/signup')
+      .send({ email, password: 'owners-passphrase-2', name: 'Owner' });
+    expect(owner.status).toBe(201);
+    expect(owner.body).toEqual({ id: attacker.body.id, email });
+
+    // The attacker's earlier code was consumed by the re-issue.
+    const stale = await http().post('/v1/auth/verify-email').send({ email, code: attackerSession });
+    expect(stale.status).not.toBe(200);
+
+    const verify = await http()
+      .post('/v1/auth/verify-email')
+      .send({ email, code: ctx.mail.lastCodeFor(email)! });
+    expect(verify.status).toBe(200);
+
+    const asAttacker = await http()
+      .post('/v1/auth/login')
+      .send({ email, password: 'attacker-passphrase-1' });
+    expect(asAttacker.status).toBe(401);
+    expect(asAttacker.body.code).toBe('INVALID_CREDENTIALS');
+
+    const asOwner = await http()
+      .post('/v1/auth/login')
+      .send({ email, password: 'owners-passphrase-2' });
+    expect(asOwner.status).toBe(200);
+    const me = await http()
+      .get('/v1/users/me')
+      .set('Authorization', `Bearer ${asOwner.body.accessToken as string}`);
+    expect(me.body.name).toBe('Owner');
+  });
+
+  it('signup for an already-verified email is still 409', async () => {
+    const email = 'verified-dup@example.com';
+    await http().post('/v1/auth/signup').send({ email, password, name: 'First' });
+    await http()
+      .post('/v1/auth/verify-email')
+      .send({ email, code: ctx.mail.lastCodeFor(email)! });
+
+    const again = await http().post('/v1/auth/signup').send({ email, password, name: 'Second' });
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('EMAIL_ALREADY_REGISTERED');
+  });
+
+  it('X-5: signup over an INVITED clinician row is 409 and mutates nothing', async () => {
+    const email = 'invited-clinician@example.com';
+    const invited = await ctx.prisma.user.create({
+      data: {
+        email,
+        passwordHash: null,
+        name: 'Dr Invited',
+        role: 'CLINICIAN',
+        status: UserStatus.INVITED,
+        emailVerifiedAt: null,
+      },
+    });
+    ctx.mail.clear();
+
+    const res = await http()
+      .post('/v1/auth/signup')
+      .send({ email, password: 'attacker-passphrase-1', name: 'Attacker' });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('EMAIL_ALREADY_REGISTERED');
+
+    const after = await ctx.prisma.user.findUniqueOrThrow({ where: { id: invited.id } });
+    expect(after.passwordHash).toBeNull();
+    expect(after.name).toBe('Dr Invited');
+    expect(after.role).toBe('CLINICIAN');
+    expect(ctx.mail.sent).toHaveLength(0);
+  });
+
+  it('B-7: two concurrent refreshes with one token — exactly one succeeds, the other is 401 INVALID_REFRESH_TOKEN', async () => {
+    const email = 'race-refresh@example.com';
+    await ctx.prisma.user.create({
+      data: {
+        email,
+        passwordHash: await ctx.app.get(PasswordService).hash(password),
+        name: 'Racer',
+        role: 'PARENT',
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const login = await http().post('/v1/auth/login').send({ email, password });
+    const refreshToken = login.body.refreshToken as string;
+
+    const [a, b] = await Promise.all([
+      http().post('/v1/auth/refresh').send({ refreshToken }),
+      http().post('/v1/auth/refresh').send({ refreshToken }),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([200, 401]);
+    const loser = a.status === 401 ? a : b;
+    expect(loser.body.code).toBe('INVALID_REFRESH_TOKEN');
+  });
+
+  it('X-4: two concurrent password resets with one token — exactly one succeeds', async () => {
+    const email = 'race-reset@example.com';
+    await ctx.prisma.user.create({
+      data: {
+        email,
+        passwordHash: await ctx.app.get(PasswordService).hash(password),
+        name: 'Resetter',
+        role: 'PARENT',
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const forgot = await http().post('/v1/auth/forgot-password').send({ email });
+    expect(forgot.status).toBe(202);
+    const token = new URL(ctx.mail.lastResetUrlFor(email)!).searchParams.get('token')!;
+
+    const [a, b] = await Promise.all([
+      http().post('/v1/auth/reset-password').send({ token, newPassword: 'brand-new-passphrase-1' }),
+      http().post('/v1/auth/reset-password').send({ token, newPassword: 'brand-new-passphrase-2' }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 400]);
+    const loser = a.status === 400 ? a : b;
+    expect(loser.body.code).toBe('INVALID_RESET_TOKEN');
+  });
+});

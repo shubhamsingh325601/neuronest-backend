@@ -64,31 +64,42 @@ describe('VerificationTokenService — ACCOUNT_SETUP', () => {
     });
   });
 
-  describe('consumeAccountSetupToken', () => {
-    it('returns the user id and consumes the row on a valid token', async () => {
+  describe.each([
+    ['consumeAccountSetupToken', 'ACCOUNT_SETUP'],
+    ['consumePasswordResetToken', 'PASSWORD_RESET'],
+  ] as const)('%s', (method, type) => {
+    it('returns the user id after a conditional single-use consume', async () => {
       verificationToken.findFirst.mockResolvedValue({ id: 'vt1', userId: 'u1' });
+      verificationToken.updateMany.mockResolvedValue({ count: 1 });
 
-      await expect(service.consumeAccountSetupToken('t'.repeat(43))).resolves.toBe('u1');
+      await expect(service[method]('t'.repeat(43))).resolves.toBe('u1');
 
       expect(verificationToken.findFirst).toHaveBeenCalledWith({
         where: {
-          type: 'ACCOUNT_SETUP',
+          type,
           tokenHash: sha256('t'.repeat(43)),
           consumedAt: null,
           expiresAt: { gt: expect.any(Date) },
         },
       });
-      expect(verificationToken.update).toHaveBeenCalledWith({
-        where: { id: 'vt1' },
+      expect(verificationToken.updateMany).toHaveBeenCalledWith({
+        where: { id: 'vt1', consumedAt: null },
         data: { consumedAt: expect.any(Date) },
       });
+    });
+
+    it('returns null when a concurrent request already consumed the token', async () => {
+      verificationToken.findFirst.mockResolvedValue({ id: 'vt1', userId: 'u1' });
+      verificationToken.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service[method]('t'.repeat(43))).resolves.toBeNull();
     });
 
     it('returns null and consumes nothing for an unknown / expired / used token', async () => {
       verificationToken.findFirst.mockResolvedValue(null);
 
-      await expect(service.consumeAccountSetupToken('x'.repeat(43))).resolves.toBeNull();
-      expect(verificationToken.update).not.toHaveBeenCalled();
+      await expect(service[method]('x'.repeat(43))).resolves.toBeNull();
+      expect(verificationToken.updateMany).not.toHaveBeenCalled();
     });
   });
 });

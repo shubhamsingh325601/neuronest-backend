@@ -12,6 +12,7 @@ export interface AppConfig {
   cors: {
     origins: string[];
   };
+  trustProxyHops: number;
   database: {
     url: string;
   };
@@ -62,6 +63,7 @@ export const configuration = (): AppConfig => ({
   cors: {
     origins: parseCorsOrigins(process.env.CORS_ORIGINS),
   },
+  trustProxyHops: parseInt(process.env.TRUST_PROXY_HOPS ?? '0', 10),
   database: {
     url: process.env.DATABASE_URL as string,
   },

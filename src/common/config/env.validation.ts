@@ -52,7 +52,12 @@ export const envValidationSchema = Joi.object({
   PASSWORD_RESET_TTL_MIN: Joi.number().integer().positive().default(60),
   ACCOUNT_SETUP_TTL_MIN: Joi.number().integer().positive().default(60),
 
-  RESEND_API_KEY: Joi.string().allow('').default(''),
+  // Required in production: an empty key makes the email service log instead of send,
+  // which would silently break verification and password-reset mail.
+  RESEND_API_KEY: Joi.string()
+    .allow('')
+    .default('')
+    .when('NODE_ENV', { is: 'production', then: Joi.string().required().invalid('') }),
   EMAIL_FROM: Joi.string().required(),
 
   // Required in production (real Cloudinary account); local/test run against the
@@ -69,6 +74,15 @@ export const envValidationSchema = Joi.object({
     .allow('')
     .default('')
     .when('NODE_ENV', { is: 'production', then: Joi.string().required() }),
+
+  // Number of reverse-proxy hops in front of the app (Express 'trust proxy'), so the rate
+  // limiter keys on the real client IP. Must be measured per host — never guessed, never
+  // 'true' (spoofable X-Forwarded-For). Required in production; 0 = no proxy.
+  TRUST_PROXY_HOPS: Joi.number()
+    .integer()
+    .min(0)
+    .default(0)
+    .when('NODE_ENV', { is: 'production', then: Joi.number().integer().min(0).required() }),
 
   THROTTLE_TTL_SEC: Joi.number().integer().positive().default(60),
   THROTTLE_LIMIT: Joi.number().integer().positive().default(100),

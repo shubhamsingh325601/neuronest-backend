@@ -110,7 +110,7 @@ describe('Media upload: ticket → confirm → list (e2e)', () => {
     const confirm = await asToken(parentOwner.token)(
       http()
         .post(`/v1/media/${mediaId}/confirm`)
-        .send({ status: 'UPLOADED', mimeType: 'image/jpeg', sizeBytes: 2048 }),
+        .send({ status: 'UPLOADED' }),
     );
     expect(confirm.status).toBe(200);
     expect(confirm.body).toMatchObject({
@@ -118,6 +118,7 @@ describe('Media upload: ticket → confirm → list (e2e)', () => {
       status: 'UPLOADED',
       mimeType: 'image/jpeg',
       sizeBytes: 2048,
+      durationSeconds: null,
     });
     expect(confirm.body.storageKey).toBeUndefined();
     expect(typeof confirm.body.playbackUrl).toBe('string');
@@ -160,6 +161,61 @@ describe('Media upload: ticket → confirm → list (e2e)', () => {
     expect(confirm.status).toBe(200);
     expect(confirm.body.status).toBe('FAILED');
     expect(confirm.body.mimeType).toBeNull();
+  });
+
+  it('B-4: forged mimeType / sizeBytes / durationSeconds are ignored — provider values are persisted', async () => {
+    const ticket = await asToken(parentOwner.token)(
+      http().post(`/v1/children/${childId}/media/upload-tickets`).send({ type: 'VIDEO' }),
+    );
+    const media = ticket.body.media as { id: string; childId: string };
+    ctx.mediaStorage.simulateAsset(`fake/${media.childId}/${media.id}`, {
+      bytes: 5_000_000,
+      format: 'mov',
+      mimeType: 'video/quicktime',
+      durationSeconds: 31,
+    });
+
+    const confirm = await asToken(parentOwner.token)(
+      http().post(`/v1/media/${media.id}/confirm`).send({
+        status: 'UPLOADED',
+        mimeType: 'application/x-evil',
+        sizeBytes: 1,
+        durationSeconds: 99999,
+      }),
+    );
+    expect(confirm.status).toBe(200);
+    expect(confirm.body).toMatchObject({
+      status: 'UPLOADED',
+      mimeType: 'video/quicktime',
+      sizeBytes: 5_000_000,
+      durationSeconds: 31,
+    });
+  });
+
+  it('B-4: a PHOTO has a null duration even if the client claims one', async () => {
+    const ticket = await asToken(parentOwner.token)(
+      http().post(`/v1/children/${childId}/media/upload-tickets`).send({ type: 'PHOTO' }),
+    );
+    const confirm = await asToken(parentOwner.token)(
+      http()
+        .post(`/v1/media/${ticket.body.media.id as string}/confirm`)
+        .send({ status: 'UPLOADED', durationSeconds: 60 }),
+    );
+    expect(confirm.status).toBe(200);
+    expect(confirm.body.durationSeconds).toBeNull();
+  });
+
+  it('B-4: a FAILED confirm stores null metadata regardless of the body', async () => {
+    const ticket = await asToken(parentOwner.token)(
+      http().post(`/v1/children/${childId}/media/upload-tickets`).send({ type: 'PHOTO' }),
+    );
+    const confirm = await asToken(parentOwner.token)(
+      http()
+        .post(`/v1/media/${ticket.body.media.id as string}/confirm`)
+        .send({ status: 'FAILED', mimeType: 'image/png', sizeBytes: 77 }),
+    );
+    expect(confirm.status).toBe(200);
+    expect(confirm.body).toMatchObject({ status: 'FAILED', mimeType: null, sizeBytes: null });
   });
 
   it('confirming UPLOADED when the provider never received the asset is a 400', async () => {

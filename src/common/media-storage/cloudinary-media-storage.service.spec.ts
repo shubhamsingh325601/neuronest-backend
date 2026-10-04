@@ -1,3 +1,4 @@
+import { v2 as cloudinary } from 'cloudinary';
 import { MediaType } from '@prisma/client';
 import { CloudinaryMediaStorageService } from './cloudinary-media-storage.service';
 
@@ -115,5 +116,60 @@ describe('CloudinaryMediaStorageService — createPlaybackUrl', () => {
     const service = new CloudinaryMediaStorageService(configFor() as never);
     const { url } = await service.createPlaybackUrl('neuronest/child-1/media-1', MediaType.VIDEO);
     expect(url).toContain('/video/authenticated/');
+  });
+});
+
+describe('CloudinaryMediaStorageService — inspectUpload', () => {
+  const config = {
+    get: jest.fn().mockReturnValue({ cloudName: 'c', apiKey: 'k', apiSecret: 's' }),
+  };
+  let resource: jest.SpyInstance;
+  let service: CloudinaryMediaStorageService;
+
+  beforeEach(() => {
+    service = new CloudinaryMediaStorageService(config as never);
+    resource = jest.spyOn(cloudinary.api, 'resource');
+  });
+  afterEach(() => {
+    resource.mockRestore();
+  });
+
+  it('returns provider-reported bytes, MIME type and rounded duration for a video', async () => {
+    resource.mockResolvedValue({ bytes: 5_000_000, format: 'mp4', duration: 12.4 });
+
+    await expect(service.inspectUpload('neuronest/c/m', MediaType.VIDEO)).resolves.toEqual({
+      bytes: 5_000_000,
+      format: 'mp4',
+      mimeType: 'video/mp4',
+      durationSeconds: 12,
+    });
+    expect(resource).toHaveBeenCalledWith('neuronest/c/m', {
+      resource_type: 'video',
+      type: 'authenticated',
+    });
+  });
+
+  it('reports a null duration for a photo, or when the provider has not reported one yet', async () => {
+    resource.mockResolvedValue({ bytes: 2048, format: 'jpg' });
+    await expect(service.inspectUpload('k', MediaType.PHOTO)).resolves.toMatchObject({
+      mimeType: 'image/jpeg',
+      durationSeconds: null,
+    });
+
+    resource.mockResolvedValue({ bytes: 9, format: 'mov' });
+    await expect(service.inspectUpload('k', MediaType.VIDEO)).resolves.toMatchObject({
+      mimeType: 'video/quicktime',
+      durationSeconds: null,
+    });
+  });
+
+  it('returns null when the asset has not landed (404)', async () => {
+    resource.mockRejectedValue({ http_code: 404 });
+    await expect(service.inspectUpload('k', MediaType.PHOTO)).resolves.toBeNull();
+  });
+
+  it('rethrows non-404 provider errors', async () => {
+    resource.mockRejectedValue({ http_code: 500 });
+    await expect(service.inspectUpload('k', MediaType.PHOTO)).rejects.toEqual({ http_code: 500 });
   });
 });
