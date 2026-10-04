@@ -69,6 +69,7 @@ describe('Admin summary (e2e)', () => {
       activePlans: expect.any(Number),
       childrenWithAssignedClinician: expect.any(Number),
       childrenWithoutClinician: expect.any(Number),
+      deadJobs: expect.any(Number),
     });
     expect(res.body).not.toHaveProperty('pendingClinicianApplications');
     expect(res.body.activeClinicians).toBeGreaterThanOrEqual(1);

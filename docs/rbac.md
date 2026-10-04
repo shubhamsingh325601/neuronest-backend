@@ -39,6 +39,9 @@ export const PERMISSIONS = [
   'user:list',                     // GET  /v1/users(/:id) — ADMIN only (general directory, all roles)
   'admin-summary:read',            // GET  /v1/admin/summary — ADMIN only
   'user:change-password:self',     // POST /v1/auth/change-password — PARENT/CLINICIAN/ADMIN (self)
+  // Background job queue (Phase 11):
+  'job:read',                      // GET  /v1/admin/jobs(/:id) — ADMIN only
+  'job:manage',                    // POST /v1/admin/jobs/:id/requeue, /v1/admin/jobs/run-due — ADMIN only
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -374,6 +377,20 @@ Activate/deactivate deliberately reuses `user:manage-status` (`/users/{id}/suspe
 - `POST /v1/children/{id}/clinicians` only accepts an `INVITED` or `ACTIVE` clinician
   (`409 CLINICIAN_NOT_ACTIVE` otherwise) — `INVITED` so an admin can pre-assign.
 - A clinician's email can change only while `INVITED` (`409 CLINICIAN_EMAIL_LOCKED`).
+
+### `job:read` / `job:manage` (Phase 11) — new ADMIN-only permissions, plus the one `@Public()` machine route
+
+`GET /v1/admin/jobs(/{id})` needs `job:read`; `POST /v1/admin/jobs/{id}/requeue` and
+`POST /v1/admin/jobs/run-due` need `job:manage`. Both are granted to `ADMIN` only (via the
+`...PERMISSIONS` spread — never added to a non-admin role). No ownership branch: the guard
+alone restricts them. Job payloads carry no secrets by construction, so the admin view
+includes `payload`; the internal `lockedBy` instance id is not exposed.
+
+**Documented exception to "every handler has an `@Auth`":** `POST /v1/jobs/run-due` (machine
+trigger for an external cron/pinger) is `@Public()` **plus** `JobsTokenGuard`, which compares
+the `X-Jobs-Token` header to `JOBS_RUN_TOKEN` in constant time. There is no user to
+authenticate. Unset `JOBS_RUN_TOKEN` (the default) → the route returns `404`; a wrong or
+missing header → `401 INVALID_JOBS_TOKEN`. The global throttler still applies.
 
 ## 7. Future Migration Path to `@casl/ability`
 

@@ -19,4 +19,9 @@ export class AdminSummaryResponseDto {
 
   @ApiProperty()
   childrenWithoutClinician!: number;
+
+  @ApiProperty({
+    description: 'Background jobs in DEAD (the error list) awaiting an admin requeue.',
+  })
+  deadJobs!: number;
 }

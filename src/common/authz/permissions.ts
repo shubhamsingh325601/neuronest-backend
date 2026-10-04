@@ -46,6 +46,10 @@ export const PERMISSIONS = [
   'user:list',
   'admin-summary:read',
   'user:change-password:self',
+  // Background job queue (Phase 11). ADMIN only: `job:read` lists/gets jobs (the DEAD rows
+  // are the error list); `job:manage` requeues a DEAD job and triggers a run-now pass.
+  'job:read',
+  'job:manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

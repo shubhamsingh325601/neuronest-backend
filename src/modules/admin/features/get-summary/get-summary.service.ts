@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { PlanStatus, Role, UserStatus } from '@prisma/client';
+import { JobStatus, PlanStatus, Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { AdminSummaryResponseDto } from './dto/admin-summary.response.dto';
 
 /**
- * D1 (plan 0008) — fixed flat shape, six independent `COUNT` queries against
+ * D1 (plan 0008) — fixed flat shape, seven independent `COUNT` queries against
  * already-indexed columns. No materialized view, no new index, no generic analytics
  * surface (§3 row 12) — revisit only if a specific query is measured slow at real
  * data volume.
@@ -21,6 +21,7 @@ export class GetSummaryService {
       activePlans,
       childrenWithAssignedClinician,
       childrenWithoutClinician,
+      deadJobs,
     ] = await Promise.all([
       this.prisma.user.count({ where: { role: Role.CLINICIAN, status: UserStatus.INVITED } }),
       this.prisma.user.count({ where: { role: Role.CLINICIAN, status: UserStatus.ACTIVE } }),
@@ -28,6 +29,7 @@ export class GetSummaryService {
       this.prisma.plan.count({ where: { status: PlanStatus.ACTIVE } }),
       this.prisma.child.count({ where: { clinicianAssignments: { some: {} } } }),
       this.prisma.child.count({ where: { clinicianAssignments: { none: {} } } }),
+      this.prisma.job.count({ where: { status: JobStatus.DEAD } }),
     ]);
 
     return {
@@ -37,6 +39,7 @@ export class GetSummaryService {
       activePlans,
       childrenWithAssignedClinician,
       childrenWithoutClinician,
+      deadJobs,
     };
   }
 }

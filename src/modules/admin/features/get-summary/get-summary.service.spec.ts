@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { PlanStatus, Role, UserStatus } from '@prisma/client';
+import { JobStatus, PlanStatus, Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { GetSummaryService } from './get-summary.service';
 
@@ -8,6 +8,7 @@ describe('GetSummaryService', () => {
     user: { count: jest.fn() },
     plan: { count: jest.fn() },
     child: { count: jest.fn() },
+    job: { count: jest.fn() },
   };
   let service: GetSummaryService;
 
@@ -20,12 +21,10 @@ describe('GetSummaryService', () => {
   });
 
   it('runs one independent COUNT per field, with the right filters', async () => {
-    prisma.user.count
-      .mockResolvedValueOnce(3)
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(7);
+    prisma.user.count.mockResolvedValueOnce(3).mockResolvedValueOnce(5).mockResolvedValueOnce(7);
     prisma.plan.count.mockResolvedValue(4);
     prisma.child.count.mockResolvedValueOnce(6).mockResolvedValueOnce(2);
+    prisma.job.count.mockResolvedValue(9);
 
     const result = await service.get();
 
@@ -46,6 +45,8 @@ describe('GetSummaryService', () => {
       where: { clinicianAssignments: { none: {} } },
     });
 
+    expect(prisma.job.count).toHaveBeenCalledWith({ where: { status: JobStatus.DEAD } });
+
     expect(result).toEqual({
       invitedClinicians: 3,
       activeClinicians: 5,
@@ -53,6 +54,7 @@ describe('GetSummaryService', () => {
       activePlans: 4,
       childrenWithAssignedClinician: 6,
       childrenWithoutClinician: 2,
+      deadJobs: 9,
     });
     expect(result).not.toHaveProperty('pendingClinicianApplications');
   });
@@ -61,6 +63,7 @@ describe('GetSummaryService', () => {
     prisma.user.count.mockResolvedValue(0);
     prisma.plan.count.mockResolvedValue(0);
     prisma.child.count.mockResolvedValue(0);
+    prisma.job.count.mockResolvedValue(0);
 
     const result = await service.get();
 
@@ -71,6 +74,7 @@ describe('GetSummaryService', () => {
       activePlans: 0,
       childrenWithAssignedClinician: 0,
       childrenWithoutClinician: 0,
+      deadJobs: 0,
     });
   });
 });
