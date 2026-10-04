@@ -4,7 +4,7 @@ import { PasswordService } from '@common/crypto/password.service';
 import { createTestApp, type TestContext } from './helpers/test-app';
 
 /**
- * `/v1/auth/*` is throttled to 5 req/60s per IP (shared across signup/verify/login —
+ * `/v1/auth/*` is throttled to 5 req/60s per identity (email / token / user id, never IP —
  * see docs/api-conventions.md), and every actor below only needs one `/v1/auth/login`
  * call (users are seeded directly via Prisma, bypassing signup/verify entirely — same
  * technique as the admin seed in user-status.e2e-spec.ts). All five actors

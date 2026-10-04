@@ -69,13 +69,17 @@ Incoming Request
   │     Exact-match allow-list from CORS_ORIGINS. Answers OPTIONS preflights itself, so
   │     preflights are never throttled or auth-checked. No Origin header = untouched.
   │
-  ├─ 1. ThrottlerGuard (APP_GUARD)
-  │     Evaluates IP-based rate limits. @AuthThrottle() tightens auth routes to 5 req/60s.
-  │
-  ├─ 2. JwtAuthGuard (APP_GUARD)
+  ├─ 1. JwtAuthGuard (APP_GUARD)
   │     Validates access token signature and expiration.
   │     Re-reads user status from DB: rejects DEACTIVATED / SUSPENDED accounts immediately.
   │     Skipped if the handler is decorated with @Public().
+  │
+  ├─ 2. AppThrottlerGuard (APP_GUARD)
+  │     Rate limits by IDENTITY, never client IP: user id (authenticated), else the body
+  │     `email`, else a hash of the body `token`/`refreshToken`; requests that identify
+  │     nobody (health) are not limited. @AuthThrottle() tightens auth routes to 5 req/60s.
+  │     IP limiting was dropped on purpose (proxy chains differ per host); add it later
+  │     only if traffic needs it.
   │
   ├─ 3. PermissionsGuard (APP_GUARD)
   │     Evaluates user role against the static ROLE_PERMISSIONS map.

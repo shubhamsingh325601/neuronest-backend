@@ -16,7 +16,7 @@ an account (see [rbac.md](rbac.md) and each flow's "enumeration" note).
 
 Issuing a new verification / reset / account-setup token for a user+type first
 **consumes any outstanding one** of that type. Every `/v1/auth/*` route is additionally rate-limited to 5 req / 60 s
-(`@AuthThrottle()`).
+(`@AuthThrottle()`), keyed on the account email (or token / user id), not the client IP.
 
 ## Signup → verify → login → refresh → logout
 

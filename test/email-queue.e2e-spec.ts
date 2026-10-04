@@ -12,9 +12,6 @@ describe('Async email via the job queue (e2e)', () => {
   let ctx: TestContext;
   const http = () => request(ctx.app.getHttpServer());
   const password = 'a-strong-passphrase';
-  // /v1/auth is limited to 5 req/min per IP; give each call its own client address.
-  let nextClient = 1;
-  const fromNewClient = (req: request.Test) => req.set('X-Forwarded-For', `10.2.0.${nextClient++}`);
   const as = (token: string) => (req: request.Test) => req.set('Authorization', `Bearer ${token}`);
   const makeDue = () =>
     ctx.prisma.job.updateMany({
@@ -39,11 +36,9 @@ describe('Async email via the job queue (e2e)', () => {
   };
 
   beforeAll(async () => {
-    ctx = await createTestApp({ trustProxyHops: 1 });
+    ctx = await createTestApp();
     const user = await createUser('queue-admin@example.com', Role.ADMIN);
-    const login = await fromNewClient(
-      http().post('/v1/auth/login').send({ email: user.email, password }),
-    );
+    const login = await http().post('/v1/auth/login').send({ email: user.email, password });
     admin = { id: user.id, token: login.body.accessToken as string };
   });
   beforeEach(async () => {
@@ -57,9 +52,9 @@ describe('Async email via the job queue (e2e)', () => {
 
   describe('signup', () => {
     it('commits the user and a userId-only job together, and sends the code via the queue', async () => {
-      const res = await fromNewClient(
-        http().post('/v1/auth/signup').send({ email: 'new@example.com', password, name: 'New' }),
-      );
+      const res = await http()
+        .post('/v1/auth/signup')
+        .send({ email: 'new@example.com', password, name: 'New' });
       expect(res.status).toBe(201);
 
       const jobs = await ctx.prisma.job.findMany();
@@ -74,17 +69,17 @@ describe('Async email via the job queue (e2e)', () => {
       // cardinal rule 7: no secret in the stored payload
       expect(JSON.stringify(jobs[0].payload)).not.toContain(code);
 
-      const verify = await fromNewClient(
-        http().post('/v1/auth/verify-email').send({ email: 'new@example.com', code }),
-      );
+      const verify = await http()
+        .post('/v1/auth/verify-email')
+        .send({ email: 'new@example.com', code });
       expect(verify.status).toBe(200);
     });
 
     it('a provider outage never fails or rolls back signup; the job retries, then delivers', async () => {
       ctx.mail.failSends = true;
-      const res = await fromNewClient(
-        http().post('/v1/auth/signup').send({ email: 'outage@example.com', password, name: 'O' }),
-      );
+      const res = await http()
+        .post('/v1/auth/signup')
+        .send({ email: 'outage@example.com', password, name: 'O' });
       expect(res.status).toBe(201);
       expect(await ctx.prisma.user.count({ where: { email: 'outage@example.com' } })).toBe(1);
 
@@ -104,9 +99,7 @@ describe('Async email via the job queue (e2e)', () => {
 
     it('persistent failure → DEAD → admin requeue → delivered', async () => {
       ctx.mail.failSends = true;
-      await fromNewClient(
-        http().post('/v1/auth/signup').send({ email: 'dead@example.com', password, name: 'D' }),
-      );
+      await http().post('/v1/auth/signup').send({ email: 'dead@example.com', password, name: 'D' });
       const job = await ctx.prisma.job.findFirstOrThrow();
       // Burn the remaining attempts quickly.
       await ctx.prisma.job.update({ where: { id: job.id }, data: { maxAttempts: 2 } });
@@ -131,7 +124,7 @@ describe('Async email via the job queue (e2e)', () => {
 
   describe('enumeration safety (cardinal rule 6)', () => {
     const probe = async (path: string, email: string) => {
-      const res = await fromNewClient(http().post(path).send({ email }));
+      const res = await http().post(path).send({ email });
       return { status: res.status, body: res.body, type: res.headers['content-type'] };
     };
 
@@ -170,9 +163,9 @@ describe('Async email via the job queue (e2e)', () => {
       expect(JSON.stringify(job.payload)).not.toContain(new URL(url).searchParams.get('token')!);
 
       const token = new URL(url).searchParams.get('token')!;
-      const reset = await fromNewClient(
-        http().post('/v1/auth/reset-password').send({ token, newPassword: 'brand-new-passphrase' }),
-      );
+      const reset = await http()
+        .post('/v1/auth/reset-password')
+        .send({ token, newPassword: 'brand-new-passphrase' });
       expect(reset.status).toBe(200);
     });
 
@@ -195,9 +188,9 @@ describe('Async email via the job queue (e2e)', () => {
   describe('late jobs are no-ops (state re-checked at run time)', () => {
     it('a verification email is not sent if the user verified before the job ran', async () => {
       ctx.mail.failSends = true;
-      const signup = await fromNewClient(
-        http().post('/v1/auth/signup').send({ email: 'late@example.com', password, name: 'L' }),
-      );
+      const signup = await http()
+        .post('/v1/auth/signup')
+        .send({ email: 'late@example.com', password, name: 'L' });
       expect(signup.status).toBe(201);
       await ctx.prisma.user.update({
         where: { email: 'late@example.com' },
@@ -265,11 +258,9 @@ describe('Async email via the job queue (e2e)', () => {
       );
       expect(patch.status).toBe(200);
 
-      const attempt = await fromNewClient(
-        http()
-          .post('/v1/auth/complete-account-setup')
-          .send({ token: oldToken, password: 'chosen-strong-passphrase' }),
-      );
+      const attempt = await http()
+        .post('/v1/auth/complete-account-setup')
+        .send({ token: oldToken, password: 'chosen-strong-passphrase' });
       expect(attempt.status).toBe(400);
 
       ctx.mail.failSends = false;

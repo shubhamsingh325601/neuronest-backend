@@ -29,14 +29,10 @@ describe('Clinician lifecycle (e2e)', () => {
   const as = (token: string) => (req: request.Test) => req.set('Authorization', `Bearer ${token}`);
   const tokenFromMail = (to: string) =>
     new URL(ctx.mail.lastSetupUrlFor(to)!).searchParams.get('token')!;
-  // The /v1/auth surface is limited to 5 requests/min per IP; give each auth call its own
-  // client address (the app trusts one proxy hop in this suite).
-  let nextClient = 1;
-  const fromNewClient = (req: request.Test) => req.set('X-Forwarded-For', `10.1.0.${nextClient++}`);
   const completeSetup = (token: string, pw = chosen) =>
-    fromNewClient(http().post('/v1/auth/complete-account-setup').send({ token, password: pw }));
+    http().post('/v1/auth/complete-account-setup').send({ token, password: pw });
   const loginAs = (email: string, pw: string) =>
-    fromNewClient(http().post('/v1/auth/login').send({ email, password: pw }));
+    http().post('/v1/auth/login').send({ email, password: pw });
 
   let admin: { id: string; token: string };
   let parent: { id: string; token: string };
@@ -46,7 +42,7 @@ describe('Clinician lifecycle (e2e)', () => {
     as(admin.token)(http().post('/v1/clinicians').send(body));
 
   beforeAll(async () => {
-    ctx = await createTestApp({ trustProxyHops: 1 });
+    ctx = await createTestApp();
     admin = await createLoggedInUser('lifecycle-admin@example.com', Role.ADMIN);
     parent = await createLoggedInUser('lifecycle-parent@example.com', Role.PARENT);
     clinician = await createLoggedInUser('lifecycle-clinician@example.com', Role.CLINICIAN);
@@ -77,7 +73,8 @@ describe('Clinician lifecycle (e2e)', () => {
     });
     expect(res.body.invitationSentAt).toEqual(expect.any(String));
     const hours =
-      (Date.parse(res.body.invitationExpiresAt) - Date.parse(res.body.invitationSentAt)) / 3_600_000;
+      (Date.parse(res.body.invitationExpiresAt) - Date.parse(res.body.invitationSentAt)) /
+      3_600_000;
     expect(Math.round(hours)).toBe(72);
 
     const user = await ctx.prisma.user.findUnique({ where: { email: 'sam@clinic.example' } });
@@ -191,7 +188,9 @@ describe('Clinician lifecycle (e2e)', () => {
     expect(await ctx.prisma.user.count({ where: { email: 'unlucky@clinic.example' } })).toBe(1);
 
     ctx.mail.failSends = false;
-    const resend = await as(admin.token)(http().post(`/v1/clinicians/${res.body.id}/resend-invitation`));
+    const resend = await as(admin.token)(
+      http().post(`/v1/clinicians/${res.body.id}/resend-invitation`),
+    );
     expect(resend.status).toBe(202);
     expect(ctx.mail.lastSetupUrlFor('unlucky@clinic.example')).toBeDefined();
   });
@@ -275,7 +274,10 @@ describe('Clinician lifecycle (e2e)', () => {
   it('the removed clinician-application routes are gone (404)', async () => {
     const id = missingId;
     const calls = [
-      () => http().post('/v1/clinician-applications').send({ name: 'x', email: 'x@y.example', context: 'c' }),
+      () =>
+        http()
+          .post('/v1/clinician-applications')
+          .send({ name: 'x', email: 'x@y.example', context: 'c' }),
       () => http().get('/v1/clinician-applications'),
       () => http().get(`/v1/clinician-applications/${id}`),
       () => http().post(`/v1/clinician-applications/${id}/approve`),

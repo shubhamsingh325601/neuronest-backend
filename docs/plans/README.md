@@ -34,3 +34,8 @@ Status values: **Proposed** (written, awaiting review/approval) · **Active** (i
 directory, authenticated change-password, and a fixed-shape admin summary. D2
 (ETag/conditional-GET) was deliberately left deferred, per the plan's own
 conditional-scope note — see the plan doc's closing summary.
+
+**Decision (2026-10-04): no IP-based rate limiting.** `TRUST_PROXY_HOPS` and all proxy-hop
+handling were removed (supersedes 0009 §3 rows 4/4a and step 2.4). Rate limits key on user
+id / email / token instead; see `src/common/throttler/app-throttler.guard.ts`. Revisit only
+if traffic requires an IP layer.

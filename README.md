@@ -30,7 +30,7 @@ The backend currently delivers the following production-grade capabilities:
 | **Validation** | `class-validator` & `class-transformer` | Global `ValidationPipe` with payload whitelisting and type coercion |
 | **Error Handling** | RFC 9457 Problem Details | Standardized `application/problem+json` error envelopes with stable error codes |
 | **Observability** | `nestjs-pino` & `@sentry/nestjs` | High-performance structured logging, request ID correlation, automated 5xx alerting |
-| **Rate Limiting** | `@nestjs/throttler` | Per-route throttling; sensitive auth routes constrained to 5 req/60s |
+| **Rate Limiting** | `@nestjs/throttler` | Identity-keyed (user / email / token, no client IP); sensitive auth routes constrained to 5 req/60s |
 | **API Documentation** | Scalar Reference (`@scalar/nestjs-api-reference`) | Interactive OpenAPI 3.0 docs rendered live at `/docs`, raw spec at `/openapi.json` |
 
 ---

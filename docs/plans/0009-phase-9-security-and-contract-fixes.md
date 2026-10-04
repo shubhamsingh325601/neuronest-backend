@@ -11,6 +11,15 @@ Last updated: 2026-10-04
 > against the code (2026-10-04). Plans 0009–0015 are a set; read
 > [README.md](README.md) for how they fit together.
 
+> **DECISION CHANGE (2026-10-04): no IP-based rate limiting.** The B-2 fix (`TRUST_PROXY_HOPS`,
+> `app.set(trust proxy)`, per-host hop measurement, row 4/4a, step 2.4) was **removed** because
+> client-IP handling differs per platform (Vercel, Render, Hostinger) and costs more than it
+> pays at this stage. The limiter now keys on **user id / body email / body token hash**
+> (`src/common/throttler/app-throttler.guard.ts`, registered after `JwtAuthGuard`), and requests
+> that identify nobody (health) are not limited. B-2 is therefore closed by removing its cause
+> (the shared-bucket problem cannot occur when no IP is used). Re-add an IP layer only if real
+> traffic needs it. Known gap: one client spraying many different emails is not capped.
+
 ---
 
 ## 1. Context
@@ -72,8 +81,8 @@ parent↔clinician chat, week/goal entities (D-5), timezone changes to Today's F
 | 1 | B-1: re-signup for an unverified **PARENT** replaces `passwordHash` + `name`, revokes all refresh tokens, re-issues the code, in **one transaction**. Response unchanged (`201 {id,email}`). Verified email → `409 EMAIL_ALREADY_REGISTERED` (unchanged). | The token service's `consumeOutstanding` already invalidates earlier codes. Update the "Deliberate idempotency on POST" paragraph in `docs/api-conventions.md` and the signup section of `docs/auth-flows.md`. |
 | 2 | X-5: any existing row whose `role !== PARENT` (INVITED clinician, ADMIN) → `409 EMAIL_ALREADY_REGISTERED`, no mutation, no email. | Prevents overwriting an invited clinician through the public signup route. |
 | 3 | B-1: a concurrent first-signup race (`P2002` on `users.email`) is caught and re-run through the "existing user" branch instead of surfacing `500`. | |
-| 4 | B-2: new env `TRUST_PROXY_HOPS` (integer ≥0, default `0`, **required in production**). `app.set('trust proxy', n)` is applied in a shared `configureApp(app)` used by **both** `main.ts` and `test/helpers/test-app.ts`. | Today `test-app.ts` re-implements `main.ts` by hand, so a `main.ts`-only fix would be untestable. The correct hop count is **verified on each deployed host** (Render, later Hostinger), never guessed. Never `trust proxy: true` (spoofable `X-Forwarded-For`). |
-| 4a | **How to find `TRUST_PROXY_HOPS` (measure, don't guess):** deploy a build that temporarily logs `req.headers['x-forwarded-for']` and `req.socket.remoteAddress` for one request, and call it from a device whose public IP you know (e.g. a phone on mobile data). Count the `X-Forwarded-For` entries **to the right of your own IP**, plus one for the connecting proxy: that is the hop count (Render appends rather than replaces, so a fake entry a client sends sits to the *left* and is ignored once the right count is set). Re-measure after any platform change (custom domain, Cloudflare). Hostinger shared hosting is not documented to forward the client IP; if the header is absent there, per-IP limiting cannot work, so use `TRUST_PROXY_HOPS=0` plus an account-keyed (email) limit on the auth routes. | Render reports range from 1 to 3 hops depending on routing. |
+| 4 | **SUPERSEDED 2026-10-04 (see banner)** — B-2: new env `TRUST_PROXY_HOPS` (integer ≥0, default `0`, **required in production**). `app.set('trust proxy', n)` is applied in a shared `configureApp(app)` used by **both** `main.ts` and `test/helpers/test-app.ts`. | Today `test-app.ts` re-implements `main.ts` by hand, so a `main.ts`-only fix would be untestable. The correct hop count is **verified on each deployed host** (Render, later Hostinger), never guessed. Never `trust proxy: true` (spoofable `X-Forwarded-For`). |
+| 4a | **SUPERSEDED (no longer needed)** — **How to find `TRUST_PROXY_HOPS` (measure, don't guess):** deploy a build that temporarily logs `req.headers['x-forwarded-for']` and `req.socket.remoteAddress` for one request, and call it from a device whose public IP you know (e.g. a phone on mobile data). Count the `X-Forwarded-For` entries **to the right of your own IP**, plus one for the connecting proxy: that is the hop count (Render appends rather than replaces, so a fake entry a client sends sits to the *left* and is ignored once the right count is set). Re-measure after any platform change (custom domain, Cloudflare). Hostinger shared hosting is not documented to forward the client IP; if the header is absent there, per-IP limiting cannot work, so use `TRUST_PROXY_HOPS=0` plus an account-keyed (email) limit on the auth routes. | Render reports range from 1 to 3 hops depending on routing. |
 | 5 | B-4: replace `MediaStorageService.verifyUpload(): boolean` with `inspectUpload(storageKey, type): Promise<UploadedAssetInfo \| null>` returning `{ bytes, format, mimeType, durationSeconds? }` from the Cloudinary Admin API response (`bytes`, `format`, `resource_type`, `duration`). `null` = not landed. | Confirm persists provider values and **ignores** the request's `mimeType`/`sizeBytes`/`durationSeconds` while still accepting them (compat; fields stay in the DTO, documented "ignored"). `mimeType` = lookup table for common formats (`mp4→video/mp4`, `mov→video/quicktime`, `jpg→image/jpeg` …), fallback `${resource_type}/${format}`. FAILED confirm still stores nulls. `Media.sizeBytes` is `Int` (2 GiB cap) — acceptable, noted in Risks. |
 | 6 | B-5: `RESEND_API_KEY` is required and non-empty when `NODE_ENV=production` (Joi `.when`). Dev/test unchanged (empty key still logs the rendered email). | Same pattern as the existing Cloudinary production-required block in `env.validation.ts`. |
 | 7 | B-6: partial unique index `plans_one_active_per_child` — `CREATE UNIQUE INDEX ... ON plans (child_id) WHERE status = 'ACTIVE'` — hand-written in the migration (Prisma cannot express partial indexes). `AssignPlanService` maps `P2002` to `409 PLAN_ALREADY_ACTIVE`; the pre-check stays as the friendly fast path. | Migration must **fail loudly** if duplicate ACTIVE plans already exist, with the diagnostic query in §4. After authoring, run `prisma migrate dev --create-only` once and confirm Prisma does **not** emit a DROP for the hand-written index (known drift risk). |
@@ -158,7 +167,7 @@ Shared DTO changes: `PlanDto` (audience-aware), new `PlanDetailDto` (`src/module
 - [x] **2.1** B-5 Joi production rule + unit/e2e-free check (env validation spec); `.env.example` comment.
 - [x] **2.2** B-2 extract `configureApp()`; add `TRUST_PROXY_HOPS`; wire `main.ts` + `test-app.ts`.
 - [x] **2.3** e2e: with hops=1, two `X-Forwarded-For` IPs have independent `/auth` buckets; six requests from one IP → 429 on the sixth without consuming the other's bucket; hops=0 ignores the header.
-- [ ] **2.4** **On the deployed host** (Render now, Hostinger later): send requests with distinct client IPs, confirm the hop count, set `TRUST_PROXY_HOPS`. Record the verified value in this file.
+- [x] **2.4 (cancelled 2026-10-04: no IP limiting, nothing to measure)** **On the deployed host** (Render now, Hostinger later): send requests with distinct client IPs, confirm the hop count, set `TRUST_PROXY_HOPS`. Record the verified value in this file.
 - [x] **2.5** Verify full suite.
 
 ### Batch 3 — Media metadata (B-4)
@@ -193,12 +202,12 @@ Shared DTO changes: `PlanDto` (audience-aware), new `PlanDetailDto` (`src/module
 
 ## Risks and open questions
 
-- **Proxy hops differ per host** and an incorrect value either shares one bucket (too low) or lets clients spoof their IP (too high). Verify on each deployment; Hostinger Business may add a different proxy chain than Render.
+- **(Superseded 2026-10-04 — IP limiting removed.)** **Proxy hops differ per host** and an incorrect value either shares one bucket (too low) or lets clients spoof their IP (too high). Verify on each deployment; Hostinger Business may add a different proxy chain than Render.
 - **Partial unique index drift** — Prisma may not understand the hand-written index; verify with `migrate dev --create-only`; keep the schema comment.
 - **DOB contract tightening** — frontend confirmed (2026-10-04) it sends a plain date, so date-only is safe.
 - **`Media.sizeBytes` is `Int`** — videos over ~2 GiB overflow; widen to `BigInt` only if D-6 allows files that large.
 - **Provider metadata lag** — Cloudinary may not report video `duration` immediately; if absent, store `null` rather than trusting the client.
-- **Proxy hop count — research result (2026-10-04):** see §3 row 4a. Public reports for Render conflict (1 to 3 hops), and nothing authoritative is published for Hostinger shared hosting, so the value **must be measured per host** (row 4a gives the procedure). Decision: default `0`, set per environment after measuring; never `true`.
+- **(Superseded 2026-10-04.)** **Proxy hop count — research result (2026-10-04):** see §3 row 4a. Public reports for Render conflict (1 to 3 hops), and nothing authoritative is published for Hostinger shared hosting, so the value **must be measured per host** (row 4a gives the procedure). Decision: default `0`, set per environment after measuring; never `true`.
 - D-1 stays "required" unless product says otherwise.
 
 ## 8. How to resume

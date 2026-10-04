@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '@app/app.module';
-import { configureApp, type ConfigureAppOptions } from '@common/bootstrap/configure-app';
+import { configureApp } from '@common/bootstrap/configure-app';
 import { EmailService } from '@common/email/email.service';
 import { JobQueueService } from '@common/jobs/job-queue.service';
 import { JobRunnerService, type RunSummary } from '@common/jobs/job-runner.service';
@@ -32,7 +32,7 @@ export interface TestContext {
  * media storage providers swapped for in-memory fakes. Also mounts the OpenAPI routes
  * so the docs test can hit /openapi.json.
  */
-export async function createTestApp(options: ConfigureAppOptions = {}): Promise<TestContext> {
+export async function createTestApp(): Promise<TestContext> {
   const mail = new FakeEmailService();
   const mediaStorage = new FakeMediaStorageService();
 
@@ -44,7 +44,7 @@ export async function createTestApp(options: ConfigureAppOptions = {}): Promise<
     .compile();
 
   const app = moduleRef.createNestApplication();
-  configureApp(app, { trustProxyHops: options.trustProxyHops });
+  configureApp(app);
 
   await app.init();
 
