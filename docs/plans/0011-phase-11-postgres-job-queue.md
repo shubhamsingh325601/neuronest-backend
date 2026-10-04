@@ -1,12 +1,12 @@
 # Plan 0011 — Phase 11: Postgres Job Queue, Async Email, Stale-Media Cleanup
 
-Status: **Proposed**
+Status: **Done**
 Owner: backend
-Last updated: 2026-10-04
+Last updated: 2026-10-04 (implemented)
 
 > This file is the single source of truth for this phase. It carries every decision,
 > convention, and the exact remaining checklist so work can resume cold. Read it top to
-> bottom before touching code. **Nothing in this phase has been implemented yet.**
+> bottom before touching code. **This phase is implemented — see §9 for the summary.**
 > Assumes plan 0010's `InvitationService` exists (it becomes a job handler here).
 
 ---
@@ -151,43 +151,43 @@ Behaviour changes with **no contract change**: `POST /v1/auth/signup`, `/resend-
 
 ## 7. Build order (ordered checklist — nothing started yet)
 
-### Batch 1 — Queue core
+### Batch 1 — Queue core (done)
 
-- [ ] **1.0** `npm i @nestjs/schedule`; confirm it resolves under the repo's path-alias/ts-jest setup.
-- [ ] **1.1** Migration + `Job` model + `truncateAll()`.
-- [ ] **1.2** `backoff.ts` (+ unit spec), `JobQueueService.enqueue` (tx-aware, dedupe), `JobHandlerRegistry`.
-- [ ] **1.3** `JobRunnerService.runDue()` — claim, run with timeout, fenced complete/fail, DEAD + Sentry; unit specs with mocked Prisma.
-- [ ] **1.4** Triggers: `kick()` (coalesced, inline mode), `@Cron` sweep, `OnApplicationBootstrap` catch-up, `OnApplicationShutdown` release, `run-due` route + guard.
-- [ ] **1.5** Config + `.env.example` + `setup-e2e.ts` (`JOBS_KICK_MODE=inline`, `JOBS_ENABLED=false`); `ctx.jobs.drain()` helper in `test-app.ts`.
-- [ ] **1.6** e2e `test/jobs.e2e-spec.ts`: dedupe, two concurrent runners process each job once, retry → backoff `runAt` moves, `maxAttempts` → DEAD, stale `RUNNING` reset, release-on-shutdown, run-due guard (404 unset, 401 bad token, 200 good).
-- [ ] **1.7** Verify: `npm run lint && npm test && npm run build && npm run test:e2e`.
+- [x] **1.0** `npm i @nestjs/schedule`; confirm it resolves under the repo's path-alias/ts-jest setup.
+- [x] **1.1** Migration + `Job` model + `truncateAll()`.
+- [x] **1.2** `backoff.ts` (+ unit spec), `JobQueueService.enqueue` (tx-aware, dedupe), `JobHandlerRegistry`.
+- [x] **1.3** `JobRunnerService.runDue()` — claim, run with timeout, fenced complete/fail, DEAD + Sentry; unit specs with mocked Prisma.
+- [x] **1.4** Triggers: `kick()` (coalesced, inline mode), `@Cron` sweep, `OnApplicationBootstrap` catch-up, `OnApplicationShutdown` release, `run-due` route + guard.
+- [x] **1.5** Config + `.env.example` + `setup-e2e.ts` (`JOBS_KICK_MODE=inline`, `JOBS_ENABLED=false`); `ctx.jobs.drain()` helper in `test-app.ts`.
+- [x] **1.6** e2e `test/jobs.e2e-spec.ts`: dedupe, two concurrent runners process each job once, retry → backoff `runAt` moves, `maxAttempts` → DEAD, stale `RUNNING` reset, release-on-shutdown, run-due guard (404 unset, 401 bad token, 200 good).
+- [x] **1.7** Verify: `npm run lint && npm test && npm run build && npm run test:e2e`.
 
-### Batch 2 — Admin surface
+### Batch 2 — Admin surface (done)
 
-- [ ] **2.1** Permissions `job:read`/`job:manage` + `rbac.md`.
-- [ ] **2.2** `list-jobs`, `get-job`, `requeue-job` feature slices; `deadJobs` in summary; `docs.e2e-spec.ts` rows.
-- [ ] **2.3** e2e: admin sees DEAD, requeue works, non-DEAD 409, non-admin 403.
-- [ ] **2.4** Verify full suite.
+- [x] **2.1** Permissions `job:read`/`job:manage` + `rbac.md`.
+- [x] **2.2** `list-jobs`, `get-job`, `requeue-job` feature slices; `deadJobs` in summary; `docs.e2e-spec.ts` rows.
+- [x] **2.3** e2e: admin sees DEAD, requeue works, non-DEAD 409, non-admin 403.
+- [x] **2.4** Verify full suite.
 
-### Batch 3 — Email onto the queue
+### Batch 3 — Email onto the queue (done)
 
-- [ ] **3.1** Handlers `email.verification-code`, `email.password-reset`, `email.account-setup` (call `VerificationTokenService` mint + `EmailService`; re-check state; no-op when stale).
-- [ ] **3.2** Rewire `signup` (user + job in one transaction), `resend-verification`, `forgot-password`, plan 0010's clinician flows (`InvitationService.issueAndSend` is now the handler body).
-- [ ] **3.3** Tests: unit specs per handler; e2e — provider throws → business row still committed → job retries → DEAD → requeue succeeds; **enumeration check:** `forgot-password` and `resend-verification` return identical `202` whether or not the provider fails and whether or not the account exists; signup never leaves a user without a queued job.
-- [ ] **3.4** Update existing e2e specs only where they depended on synchronous send (inline kick mode should make most untouched).
-- [ ] **3.5** Verify full suite.
+- [x] **3.1** Handlers `email.verification-code`, `email.password-reset`, `email.account-setup` (call `VerificationTokenService` mint + `EmailService`; re-check state; no-op when stale).
+- [x] **3.2** Rewire `signup` (user + job in one transaction), `resend-verification`, `forgot-password`, plan 0010's clinician flows (`InvitationService.issueAndSend` is now the handler body).
+- [x] **3.3** Tests: unit specs per handler; e2e — provider throws → business row still committed → job retries → DEAD → requeue succeeds; **enumeration check:** `forgot-password` and `resend-verification` return identical `202` whether or not the provider fails and whether or not the account exists; signup never leaves a user without a queued job.
+- [x] **3.4** Update existing e2e specs only where they depended on synchronous send (inline kick mode should make most untouched).
+- [x] **3.5** Verify full suite.
 
-### Batch 4 — Stale media (B-8)
+### Batch 4 — Stale media (B-8) (done)
 
-- [ ] **4.1** `MEDIA_PENDING_TTL_HOURS`; handler `media.expire-stale-pending`; sweep enqueues it with an hourly `dedupeKey`.
-- [ ] **4.2** e2e: stale vs recent `PENDING` rows (back-date `createdAt` via Prisma), only stale flip to FAILED; re-confirm FAILED idempotent; UPLOADED after FAILED → 409; running twice is a no-op.
-- [ ] **4.3** Verify full suite.
+- [x] **4.1** `MEDIA_PENDING_TTL_HOURS`; handler `media.expire-stale-pending`; sweep enqueues it with an hourly `dedupeKey`.
+- [x] **4.2** e2e: stale vs recent `PENDING` rows (back-date `createdAt` via Prisma), only stale flip to FAILED; re-confirm FAILED idempotent; UPLOADED after FAILED → 409; running twice is a no-op.
+- [x] **4.3** Verify full suite.
 
-### Batch 5 — Hardening and close
+### Batch 5 — Hardening and close (done)
 
-- [ ] **5.1** (Optional) earliest-`run_at` re-armed timer.
-- [ ] **5.2** Deployment notes: verify a boot catch-up after a redeploy/cold start on Render and Hostinger; set `JOBS_RUN_TOKEN` only if an external trigger is ever added; record results here.
-- [ ] **5.3** Docs pass (§6), flip Status to **Done**, update `docs/plans/README.md`, write the implementation summary (files, env vars, migration, new dependency, tests).
+- [ ] **5.1** (Optional) earliest-`run_at` re-armed timer — **not built** (optional; the sweep, kick, boot catch-up and admin button cover the accepted hosting trade-off).
+- [ ] **5.2** Deployment notes — **only the local half is done**: a boot catch-up was verified by starting the built app (`node dist/main.js`, `JOBS_ENABLED=true`) against the local throwaway Postgres, which enqueued and ran `media.expire-stale-pending` ~1 s after start. Verifying a redeploy/cold start on Render and Hostinger is **still to do on those hosts**; `JOBS_RUN_TOKEN` stays unset (no external trigger).
+- [x] **5.3** Docs pass (§6), flip Status to **Done**, update `docs/plans/README.md`, write the implementation summary (files, env vars, migration, new dependency, tests).
 
 ## Testing
 
@@ -207,10 +207,105 @@ Behaviour changes with **no contract change**: `POST /v1/auth/signup`, `/resend-
 
 ## 8. How to resume
 
-> Nothing is implemented yet. Start at Batch 1, step 1.0. Precedents: `Job` mirrors the
+> Implemented — see §9. Remaining: 5.1 (optional timer) and the on-host half of 5.2. Precedents: `Job` mirrors the
 > `VerificationToken` single-use semantics; handlers mirror the existing services they
 > replace (`forgot-password.service.ts`, `verify-email.service.ts`).
 >
 > Paste-ready prompt: *"Implement docs/plans/0011 batch by batch from Batch 1. Payloads
 > must never hold raw secrets. Use a single-statement SKIP LOCKED claim, no session
 > advisory locks. Verify after every batch and stop to report."*
+
+---
+
+## 9. Implementation summary
+
+Implemented 2026-10-04 in five batches (1 queue core → 2 admin surface → 3 email on the
+queue → 4 stale media → 5 docs/close), each verified with `npm run lint && npm test && npm
+run build && npm run test:e2e` before committing. Final: 332 unit tests / 65 suites, 230 e2e
+tests / 18 suites, all green.
+
+**Batch 1 — queue core (`src/common/jobs/`)**
+- `Job` model + `JobStatus` enum; `truncateAll()` includes `jobs`.
+- `backoff.ts` (equal-jitter, injectable RNG), `JobHandlerRegistry` (handlers + recurring
+  jobs), `JobQueueService` (`enqueue(tx, spec)` with `ON CONFLICT ("dedupeKey") DO NOTHING`;
+  `kick()` coalesced, inline in tests), `JobRunnerService` (single-statement `SKIP LOCKED`
+  claim, fenced complete/fail, per-job 60 s timeout, DEAD + Sentry, `reapStale`, prune,
+  `releaseHeld`/`onModuleDestroy`), `JobSweepService` (cron + boot catch-up),
+  `JobsModule` (global).
+- `POST /v1/jobs/run-due` (`@Public()` + `JobsTokenGuard`, `404` unless `JOBS_RUN_TOKEN`
+  is set, `401 INVALID_JOBS_TOKEN`). Built (not left deferred) because the plan's checklist
+  and `EXPECTED` list required it; it is off by default.
+- Test seams: `JOBS_ENABLED=false` / `JOBS_KICK_MODE=inline` in `setup-e2e.ts`,
+  `ctx.jobs.drain()` in `test-app.ts`.
+
+**Batch 2 — admin surface**
+- Permissions `job:read`, `job:manage` (ADMIN only; `rbac.md` note incl. the `@Public()`
+  token exception).
+- `GET /v1/admin/jobs` (`jobList`), `GET /v1/admin/jobs/{id}` (`jobGet`),
+  `POST /v1/admin/jobs/{id}/requeue` (`jobRequeue`), `POST /v1/admin/jobs/run-due`
+  (`jobRunDueAdmin`); `GET /v1/admin/summary` gained `deadJobs`.
+
+**Batch 3 — email on the queue**
+- Handlers `email.verification-code`, `email.password-reset` (`AuthEmailJobs`,
+  `src/modules/auth/jobs/`) and `email.account-setup` (`InvitationService`, now the handler
+  body; `sendBestEffort` removed). Payload is `{ userId }` only; handlers mint the
+  code/token at send time and no-op when stale (verified user, non-`INVITED` clinician).
+- `signup` (user + job in one transaction), `resend-verification`, `forgot-password`,
+  clinician create / update (email change) / resend all enqueue and kick after commit.
+  Status codes are unchanged. The X-3 enumeration oracle is gone.
+
+**Batch 4 — stale media (B-8)**
+- `MediaJobs` (`src/modules/media/jobs/`): handler + recurring registration for
+  `media.expire-stale-pending` (hourly `dedupeKey`); `MEDIA_PENDING_TTL_HOURS` (24).
+
+**Deviations from the plan text (all small; flagging for review)**
+1. **Signup re-claim bypasses the one-minute dedupe.** Row 9 keys verification emails by
+   minute bucket, but a signup that *replaces credentials of an unverified account* (plan
+   0009 B-1) must kill earlier codes immediately. The existing B-1 e2e test caught the
+   conflict (a same-minute re-signup would have collapsed into the first job and left the
+   old code valid). Fix: `enqueueVerificationCode(tx, id, { replaceOutstanding: true })`
+   consumes outstanding codes in the same transaction and uses a fresh key.
+2. **Clinician email change revokes the old setup link in the update transaction**
+   (`revokeAccountSetup(id, tx)`), instead of when the queued send eventually runs.
+3. **Password-reset jobs use the same minute-bucket key** as verification codes (the plan
+   listed keys for verification, account-setup and media only).
+4. **Plan §3 row 3 SQL uses snake_case column names** (`locked_at`, `run_at`); §4's schema
+   (no `@map`) and every other table here are camelCase, so the raw SQL quotes camelCase
+   columns. Timestamps in raw SQL are bound as UTC (`$iso::timestamp`), never `now()`.
+5. **Both run-due routes were built** (admin `jobRunDueAdmin` and machine `jobRunDue`), so
+   `docs.e2e-spec.ts` has five new `EXPECTED` rows, not four.
+6. **`@nestjs/schedule` is pinned to `6.1.3`**: v12 (what `npm i` resolves) is ESM-only and
+   cannot be loaded by the CommonJS Nest build / Jest. It pulls in `cron@4.4.0`, which
+   `JobSweepService` imports directly (dynamic cron expression from `JOBS_SWEEP_CRON`).
+7. **5.1 (re-armed timer) not built** — optional per the plan.
+
+**Migration** (apply with `npm run prisma:deploy`): `20261004111128_add_jobs` — additive
+(new table + enum). Authored with `prisma migrate dev` against the local throwaway test
+database, not the Neon dev DB; not applied to any shared DB.
+
+**New dependency:** `@nestjs/schedule@6.1.3`.
+
+**New env vars** (all optional, documented in `.env.example`): `JOBS_ENABLED`,
+`JOBS_SWEEP_CRON`, `JOBS_VISIBILITY_TIMEOUT_SEC`, `JOBS_BATCH_SIZE`,
+`JOBS_BACKOFF_BASE_SEC`, `JOBS_BACKOFF_CAP_SEC`, `JOBS_MAX_ATTEMPTS`,
+`JOBS_SUCCEEDED_RETENTION_DAYS`, `JOBS_SHUTDOWN_GRACE_SEC`, `JOBS_KICK_MODE`,
+`JOBS_RUN_TOKEN`, `MEDIA_PENDING_TTL_HOURS`.
+
+**Contract notes for the frontend**
+- `GET /v1/admin/summary` gained `deadJobs` (additive).
+- New admin routes under `/v1/admin/jobs`. Sending is now asynchronous: right after
+  `POST /v1/clinicians` / `…/resend-invitation` the mail may not have been sent yet when the
+  response is returned, so `invitationSentAt` on the create response can be `null` (it is
+  set once the job runs; `GET /v1/clinicians/{id}` reflects it).
+- A media ticket left `PENDING` for 24 h becomes `FAILED`; the parent must request a new ticket.
+
+**Notes**
+- Boot catch-up was verified locally (built app, local Postgres). Deploy-time verification
+  on Render and Hostinger is still outstanding (§7 step 5.2).
+- Shutdown release is covered by calling `releaseHeld()` in e2e and by a unit test of
+  `onModuleDestroy`; an actual SIGTERM was not exercised (Windows dev machine). On Nest's
+  shutdown order, `onModuleDestroy` may run after Prisma disconnects; the handler is wrapped
+  in try/catch and the 5-minute visibility timeout recovers the rows if so.
+- DB-default timestamps (`runAt` when a test inserts via Prisma) use the database clock,
+  which drifted ~1 s ahead of the host in local Docker and made a test flaky; tests now set
+  `runAt` explicitly (see `docs/testing.md`).

@@ -103,6 +103,10 @@ E2E tests execute HTTP requests against a fully booted NestJS application.
 - **Per-Suite Truncation**: Between test suites, database tables are truncated to guarantee total test isolation.
 - **App Factory (`test/helpers/test-app.ts`)**: The `createTestApp()` helper boots NestJS with the exact same middleware, pipes, exception filters, and security configurations used in production, replacing only `EmailService` with `FakeEmailService` (which records outgoing emails in memory for assertions).
 
+### Job queue in tests
+
+`test/helpers/setup-e2e.ts` sets `JOBS_KICK_MODE=inline` (the post-commit kick is awaited inside the request, so specs that read `ctx.mail` right after an HTTP call keep working) and `JOBS_ENABLED=false` (no cron / boot sweep). `ctx.jobs.drain()` runs due jobs until none remain; backoff is respected, so move a row's `runAt` back (`prisma.job.updateMany`) to make a retry due. `FakeEmailService.failSends = true` simulates a provider outage. Rows created through Prisma should set `runAt` explicitly when a test depends on them being due: the DB default uses the database clock, which can drift from the host's.
+
 ### Available E2E Suites
 
 | Suite | File | What it Validates |
@@ -110,6 +114,10 @@ E2E tests execute HTTP requests against a fully booted NestJS application.
 | **Auth Lifecycle** | `test/auth.e2e-spec.ts` | Complete flow: signup &rarr; email verify &rarr; login &rarr; refresh rotation &rarr; logout |
 | **Account Deactivation** | `test/deactivate.e2e-spec.ts` | User self-deactivation, token revocation, immediate session termination |
 | **Clinician Lifecycle** | `test/clinician-lifecycle.e2e-spec.ts` | Admin create → invitation mail → account setup → login, resend, email change, mail-provider outage, suspend/reactivate, removed application routes, non-admin 403 |
+| **Job Queue** | `test/jobs.e2e-spec.ts` | Dedupe, outbox atomicity, concurrent runners process each job once, retry/backoff, DEAD, stale-lock reset, prune, release-on-shutdown, fenced completion, `run-due` token guard |
+| **Admin Jobs** | `test/admin-jobs.e2e-spec.ts` | Admin list/get/requeue/run-now, 403 for non-admins, `deadJobs` in the summary |
+| **Async Email** | `test/email-queue.e2e-spec.ts` | Provider outage never fails/rolls back the request, retry → DEAD → requeue, enumeration-safe 202s, late jobs are no-ops |
+| **Stale Media Cleanup** | `test/media-cleanup.e2e-spec.ts` | Only stale PENDING tickets expire; hourly dedupe; confirm semantics after expiry |
 | **Error Shape** | `test/error-shape.e2e-spec.ts` | Verification that all errors conform to RFC 9457 `application/problem+json` |
 | **RBAC Route Coverage** | `test/rbac-route-coverage.e2e-spec.ts` | Asserts every route is explicitly protected or explicitly marked `@Public()` |
 | **OpenAPI Contract Drift** | `test/docs.e2e-spec.ts` | Live OpenAPI spec reflection matching expected paths and `operationId`s |

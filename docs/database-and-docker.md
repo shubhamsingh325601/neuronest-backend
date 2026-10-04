@@ -189,6 +189,10 @@ npm run db:seed
 > **Never run `prisma migrate dev` against pooled connections**:
 > Connection poolers (like Neon `-pooler` or PgBouncer in transaction pooling mode) do not support the session-level advisory locks and shadow databases required by `prisma migrate dev`. Always point to a direct connection or local Docker instance when authoring migrations. `prisma migrate deploy` doesn't create a shadow DB and has been observed working against Neon's pooled connection, but it's still undocumented/unsupported behavior on Neon's side — prefer the direct connection for it too now that `DATABASE_DIRECT_URL` is wired in (see below), rather than relying on it continuing to work.
 
+### No session advisory locks in application code
+
+The job queue (`@common/jobs`) claims work with one `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED) RETURNING` statement — no explicit transaction and no `pg_advisory_lock` — so it works through Neon's transaction-mode pooler. Do not introduce session-level advisory locks. Raw SQL on `jobs` binds timestamps as UTC (`${iso}::timestamp`) rather than using `now()`, which would render in the session time zone.
+
 ### `DATABASE_DIRECT_URL` (Neon pooled/unpooled split)
 
 `schema.prisma`'s `datasource` block declares both `url` (`DATABASE_URL`) and

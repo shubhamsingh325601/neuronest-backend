@@ -26,6 +26,7 @@ Shared infrastructure modules are marked `@Global()` when dependency injection i
 - `CryptoModule`: Cryptographic utilities, argon2id hashing, and SHA-256 token hashing (`@common/crypto`).
 - `AuthzModule`: Static RBAC permission mapping and guards (`@common/authz`).
 - `LoggingModule`: Structured Pino logging and request correlation (`@common/logging`).
+- `JobsModule`: Postgres-backed job queue / transactional outbox (`@common/jobs`) — see §7.4.
 
 ---
 
@@ -156,7 +157,17 @@ When request volume reaches thresholds requiring distributed caching:
 - Rate limiting can migrate from `@nestjs/throttler` in-memory storage to `@nest-lab/throttler-storage-redis`.
 - User permission caching can be layered into `PermissionsGuard` without altering domain services.
 
-### 4. Forward-Compatible Data Modeling
+### 4. Background Jobs: Postgres Queue Seam (Phase 11)
+
+Background work (async email, stale-media expiry) runs on a small custom queue — one `jobs` table that is both the **transactional outbox** (the job row commits in the same Prisma transaction as the business data) and the queue (claimed with a single `FOR UPDATE SKIP LOCKED` statement; no explicit transaction, no session advisory locks, so it is safe behind Neon's transaction-mode pooler). **No Redis/BullMQ**, deliberately (cost); pg-boss was rejected because its own schema/pool/advisory locks cannot join the Prisma business transaction.
+
+- **Semantics:** at-least-once, fenced completion (`WHERE status=RUNNING AND lockedAt=claimedAt`), equal-jitter exponential backoff, `DEAD` at `maxAttempts` (the admin error list: `GET /v1/admin/jobs?status=DEAD`, requeue with `POST /v1/admin/jobs/{id}/requeue`), Sentry only when a job turns `DEAD`.
+- **Payloads never hold secrets** — email jobs carry `{ userId }`; the handler mints the token/code at send time and re-checks state (a stale job completes as a no-op).
+- **One `JobRunnerService.runDue()`, several triggers** (overlap-safe): the post-commit **kick** (fire-and-forget, coalesced; awaited inline in tests via `JOBS_KICK_MODE=inline`), a **10-minute cron sweep** (retries, stale-lock reset, prune `SUCCEEDED`, enqueue recurring jobs), a **boot catch-up** shortly after startup, the admin **Run pending jobs now** button (`POST /v1/admin/jobs/run-due`) and an optional token-guarded machine route (`POST /v1/jobs/run-due`, disabled unless `JOBS_RUN_TOKEN` is set). Only `runAt` in Postgres is the source of truth — timers are never relied on.
+- **Hosting:** Render free and Hostinger shared do not keep Node alive between requests. Accepted: nothing is lost (jobs live in Postgres); work resumes at the next start/request or admin trigger. First emails are sent by the kick in the same request. On an always-on VPS the sweep simply becomes reliable — no code change.
+- **Adding a job type:** register a handler in the owning module's `onModuleInit` (`JobHandlerRegistry.register`) and enqueue with `JobQueueService.enqueue(tx, spec)` followed by a post-commit `kick()`. SMS/push notifications are just new job types.
+
+### 5. Forward-Compatible Data Modeling
 - **Relational Normalization (3NF)** ensures referential integrity as core data volume expands.
 - **PostgreSQL `jsonb`** is utilized for extensible schemas (clinical responses, flexible metadata, audit snapshots) without requiring disruptive schema migrations.
 

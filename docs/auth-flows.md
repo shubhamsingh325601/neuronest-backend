@@ -20,6 +20,8 @@ Issuing a new verification / reset / account-setup token for a user+type first
 
 ## Signup → verify → login → refresh → logout
 
+> **Email is asynchronous (plan 0011).** Signup, resend-verification, forgot-password and the clinician invitation do not call the mail provider in the request: they enqueue an `email.*` job (userId-only payload) in the same transaction as the business write and kick the queue after commit. The job handler mints the code/token at send time and sends it. HTTP statuses and the codes/links themselves are unchanged. A provider failure no longer changes any response (it used to `500` only when the account existed — an enumeration oracle); the job retries with backoff and lands in the admin DEAD list if the provider stays down. A duplicate send (crash between send and mark-done) mints a new code/link and invalidates the first — accepted. Resending verification twice within one minute collapses to one email; a signup that re-claims an unverified account revokes outstanding codes in its own transaction (so the pre-hijack guard of plan 0009 B-1 still holds).
+
 ```
 CLIENT                          API                                   DB / EMAIL
   │  POST /auth/signup           │                                        │

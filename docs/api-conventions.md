@@ -40,7 +40,8 @@ The rules every endpoint follows, so new ones don't each re-decide. The referenc
 - **202 Accepted** — accepted for processing, outcome not yet known / deliberately not
   disclosed. Example: `POST /v1/auth/resend-verification` and
   `POST /v1/auth/forgot-password` always return 202 (they must not reveal whether the
-  account exists).
+  account exists). Since plan 0011 the 202 is genuinely asynchronous: the email is a
+  queued job, so a mail-provider failure cannot change the response.
 - **204 No Content** — completed, nothing to return. Example: `POST /v1/auth/logout`.
 
 ### Deliberate idempotency on POST
