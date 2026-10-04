@@ -2,9 +2,8 @@ import { ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
 import { PasswordService } from '@common/crypto/password.service';
-import { EmailService } from '@common/email/email.service';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
+import { AuthEmailJobs } from '@modules/auth/jobs/auth-email.jobs';
 import { SignupService } from './signup.service';
 
 describe('SignupService', () => {
@@ -14,8 +13,7 @@ describe('SignupService', () => {
     $transaction: jest.fn(),
   };
   const passwords = { hash: jest.fn() };
-  const verificationTokens = { issueEmailVerificationCode: jest.fn() };
-  const email = { sendEmailVerificationCode: jest.fn() };
+  const emailJobs = { enqueueVerificationCode: jest.fn(), kick: jest.fn() };
   let service: SignupService;
 
   beforeEach(async () => {
@@ -26,18 +24,17 @@ describe('SignupService', () => {
         SignupService,
         { provide: PrismaService, useValue: prisma },
         { provide: PasswordService, useValue: passwords },
-        { provide: VerificationTokenService, useValue: verificationTokens },
-        { provide: EmailService, useValue: email },
+        { provide: AuthEmailJobs, useValue: emailJobs },
       ],
     }).compile();
     service = moduleRef.get(SignupService);
   });
 
-  it('creates a PARENT/ACTIVE user, hashes the password, and emails a code', async () => {
+  it('creates a PARENT/ACTIVE user, hashes the password, and queues a code email in the same transaction', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     passwords.hash.mockResolvedValue('hashed');
     prisma.user.create.mockResolvedValue({ id: 'u1', email: 'p@example.com' });
-    verificationTokens.issueEmailVerificationCode.mockResolvedValue('123456');
+    emailJobs.enqueueVerificationCode.mockResolvedValue(true);
 
     const result = await service.signup({
       email: 'P@Example.com',
@@ -58,7 +55,9 @@ describe('SignupService', () => {
         }),
       }),
     );
-    expect(email.sendEmailVerificationCode).toHaveBeenCalledWith('p@example.com', '123456');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(emailJobs.enqueueVerificationCode).toHaveBeenCalledWith(prisma, 'u1');
+    expect(emailJobs.kick).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ id: 'u1', email: 'p@example.com' });
   });
 
@@ -85,7 +84,6 @@ describe('SignupService', () => {
       emailVerifiedAt: null,
     });
     passwords.hash.mockResolvedValue('new-hash');
-    verificationTokens.issueEmailVerificationCode.mockResolvedValue('654321');
 
     const result = await service.signup({
       email: 'p@example.com',
@@ -103,8 +101,10 @@ describe('SignupService', () => {
       where: { userId: 'u1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
-    expect(verificationTokens.issueEmailVerificationCode).toHaveBeenCalledWith('u1', prisma);
-    expect(email.sendEmailVerificationCode).toHaveBeenCalledWith('p@example.com', '654321');
+    expect(emailJobs.enqueueVerificationCode).toHaveBeenCalledWith(prisma, 'u1', {
+      replaceOutstanding: true,
+    });
+    expect(emailJobs.kick).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ id: 'u1', email: 'p@example.com' });
   });
 
@@ -124,7 +124,7 @@ describe('SignupService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(prisma.user.update).not.toHaveBeenCalled();
       expect(prisma.user.create).not.toHaveBeenCalled();
-      expect(email.sendEmailVerificationCode).not.toHaveBeenCalled();
+      expect(emailJobs.enqueueVerificationCode).not.toHaveBeenCalled();
     },
   );
 
@@ -139,7 +139,6 @@ describe('SignupService', () => {
     prisma.user.create.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' }),
     );
-    verificationTokens.issueEmailVerificationCode.mockResolvedValue('111111');
 
     const result = await service.signup({
       email: 'p@example.com',

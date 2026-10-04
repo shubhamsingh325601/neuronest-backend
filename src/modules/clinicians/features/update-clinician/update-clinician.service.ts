@@ -3,6 +3,7 @@ import { Prisma, Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ClinicianDetailDto } from '@modules/clinicians/shared/clinician-detail.dto';
 import { findClinicianDetail } from '@modules/clinicians/shared/find-clinician-detail';
+import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
 import { InvitationService } from '@modules/clinicians/shared/invitation.service';
 import { UpdateClinicianDto } from '@modules/clinicians/shared/update-clinician.dto';
 
@@ -18,6 +19,7 @@ export class UpdateClinicianService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invitations: InvitationService,
+    private readonly verificationTokens: VerificationTokenService,
   ) {}
 
   async update(id: string, dto: UpdateClinicianDto): Promise<ClinicianDetailDto> {
@@ -51,19 +53,27 @@ export class UpdateClinicianService {
     }
 
     try {
-      await this.prisma.user.update({
-        where: { id },
-        data: {
-          ...(dto.name !== undefined ? { name: dto.name } : {}),
-          ...(emailChanged ? { email: newEmail } : {}),
-          ...(dto.profile
-            ? {
-                clinicianProfile: {
-                  upsert: { create: { ...dto.profile }, update: { ...dto.profile } },
-                },
-              }
-            : {}),
-        },
+      // An email change queues the new invitation in the same transaction as the update.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id },
+          data: {
+            ...(dto.name !== undefined ? { name: dto.name } : {}),
+            ...(emailChanged ? { email: newEmail } : {}),
+            ...(dto.profile
+              ? {
+                  clinicianProfile: {
+                    upsert: { create: { ...dto.profile }, update: { ...dto.profile } },
+                  },
+                }
+              : {}),
+          },
+        });
+        if (emailChanged) {
+          // The old address's link dies now, not when the queued send eventually runs.
+          await this.verificationTokens.revokeAccountSetup(id, tx);
+          await this.invitations.enqueue(tx, id);
+        }
       });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -73,7 +83,7 @@ export class UpdateClinicianService {
     }
 
     if (emailChanged) {
-      await this.invitations.sendBestEffort(id);
+      await this.invitations.kick();
     }
     return findClinicianDetail(this.prisma, id);
   }

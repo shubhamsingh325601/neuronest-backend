@@ -153,12 +153,23 @@ export class VerificationTokenService {
     return token;
   }
 
+  /** Kill every outstanding email-verification code for a user (e.g. credentials were replaced). */
+  async revokeEmailVerification(
+    userId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
+    await this.consumeOutstanding(userId, VerificationTokenType.EMAIL_VERIFICATION, db);
+  }
+
   /**
    * Kill every outstanding account-setup link for a user — called when an invitee is
    * suspended or deactivated so an old link cannot re-activate them.
    */
-  async revokeAccountSetup(userId: string): Promise<void> {
-    await this.consumeOutstanding(userId, VerificationTokenType.ACCOUNT_SETUP);
+  async revokeAccountSetup(
+    userId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
+    await this.consumeOutstanding(userId, VerificationTokenType.ACCOUNT_SETUP, db);
   }
 
   /** Resolve an account-setup token to its user id, consuming it. Null if invalid. */

@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { EmailService } from '@common/email/email.service';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { AuthEmailJobs } from '@modules/auth/jobs/auth-email.jobs';
 import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
 import {
   ResendVerificationDto,
@@ -13,7 +13,7 @@ export class VerifyEmailService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly verificationTokens: VerificationTokenService,
-    private readonly email: EmailService,
+    private readonly emailJobs: AuthEmailJobs,
   ) {}
 
   async verify(dto: VerifyEmailDto): Promise<VerifyEmailResponseDto> {
@@ -44,10 +44,11 @@ export class VerifyEmailService {
     const email = dto.email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (user && !user.emailVerifiedAt) {
-      const code = await this.verificationTokens.issueEmailVerificationCode(user.id);
-      await this.email.sendEmailVerificationCode(user.email, code);
+      await this.emailJobs.enqueueVerificationCode(this.prisma, user.id);
+      await this.emailJobs.kick();
     }
-    // Always resolves — response is 202 regardless, so callers cannot probe for accounts.
+    // Always resolves — response is 202 regardless (the send is async, so a provider failure
+    // cannot surface here either), so callers cannot probe for accounts.
   }
 
   private invalidCode(): BadRequestException {

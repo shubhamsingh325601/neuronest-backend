@@ -1,8 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { EmailService } from '@common/email/email.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
+import { AuthEmailJobs } from '@modules/auth/jobs/auth-email.jobs';
 import { VerifyEmailService } from './verify-email.service';
 
 describe('VerifyEmailService', () => {
@@ -11,7 +11,7 @@ describe('VerifyEmailService', () => {
     verifyEmailCode: jest.fn(),
     issueEmailVerificationCode: jest.fn(),
   };
-  const email = { sendEmailVerificationCode: jest.fn() };
+  const emailJobs = { enqueueVerificationCode: jest.fn(), kick: jest.fn() };
   let service: VerifyEmailService;
 
   beforeEach(async () => {
@@ -21,7 +21,7 @@ describe('VerifyEmailService', () => {
         VerifyEmailService,
         { provide: PrismaService, useValue: prisma },
         { provide: VerificationTokenService, useValue: verificationTokens },
-        { provide: EmailService, useValue: email },
+        { provide: AuthEmailJobs, useValue: emailJobs },
       ],
     }).compile();
     service = moduleRef.get(VerifyEmailService);
@@ -68,11 +68,11 @@ describe('VerifyEmailService', () => {
   it('resend never reveals whether the account exists', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     await expect(service.resend({ email: 'nobody@example.com' })).resolves.toBeUndefined();
-    expect(email.sendEmailVerificationCode).not.toHaveBeenCalled();
+    expect(emailJobs.enqueueVerificationCode).not.toHaveBeenCalled();
 
     prisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'p@example.com', emailVerifiedAt: null });
-    verificationTokens.issueEmailVerificationCode.mockResolvedValue('654321');
     await service.resend({ email: 'p@example.com' });
-    expect(email.sendEmailVerificationCode).toHaveBeenCalledWith('p@example.com', '654321');
+    expect(emailJobs.enqueueVerificationCode).toHaveBeenCalledWith(prisma, 'u1');
+    expect(emailJobs.kick).toHaveBeenCalled();
   });
 });

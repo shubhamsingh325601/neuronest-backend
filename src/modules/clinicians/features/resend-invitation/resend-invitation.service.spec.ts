@@ -5,12 +5,13 @@ import { InvitationService } from '@modules/clinicians/shared/invitation.service
 import { ResendInvitationService } from './resend-invitation.service';
 
 describe('ResendInvitationService', () => {
-  const prisma = { user: { findFirst: jest.fn() } };
-  const invitations = { issueAndSend: jest.fn() };
+  const prisma = { user: { findFirst: jest.fn() }, $transaction: jest.fn() };
+  const invitations = { enqueue: jest.fn(), kick: jest.fn() };
   let service: ResendInvitationService;
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prisma));
     const moduleRef = await Test.createTestingModule({
       providers: [
         ResendInvitationService,
@@ -35,16 +36,14 @@ describe('ResendInvitationService', () => {
       await expect(service.resend('c1')).rejects.toMatchObject({
         response: { code: 'CLINICIAN_NOT_INVITED' },
       });
-      expect(invitations.issueAndSend).not.toHaveBeenCalled();
+      expect(invitations.enqueue).not.toHaveBeenCalled();
     },
   );
 
-  it('re-sends to an INVITED clinician and surfaces a send failure', async () => {
+  it('queues a fresh invitation for an INVITED clinician and kicks after commit', async () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'c1', status: UserStatus.INVITED });
     await service.resend('c1');
-    expect(invitations.issueAndSend).toHaveBeenCalledWith('c1');
-
-    invitations.issueAndSend.mockRejectedValue(new Error('provider down'));
-    await expect(service.resend('c1')).rejects.toThrow('provider down');
+    expect(invitations.enqueue).toHaveBeenCalledWith(prisma, 'c1');
+    expect(invitations.kick).toHaveBeenCalledTimes(1);
   });
 });

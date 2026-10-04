@@ -8,9 +8,10 @@ import { InvitationService } from '@modules/clinicians/shared/invitation.service
 
 /**
  * Admin creates a clinician: an `INVITED` `User` (no password, email unverified) plus
- * an optional `ClinicianProfile`, in one transaction. The invitation email is sent only
- * *after* commit and is best-effort — a mail failure never rolls the clinician back
- * (the admin sees them still `INVITED` and can resend). An existing email is an
+ * an optional `ClinicianProfile`, in one transaction. The invitation is queued in the same
+ * transaction and sent after commit — a mail failure never rolls the clinician back (the
+ * job retries; if the provider stays down it lands in the admin DEAD list, and the admin
+ * can requeue it or resend). An existing email is an
  * admin-only disclosure (`409 EMAIL_ALREADY_REGISTERED`), not an enumeration surface.
  */
 @Injectable()
@@ -29,19 +30,23 @@ export class CreateClinicianService {
 
     let userId: string;
     try {
-      const user = await this.prisma.user.create({
-        data: {
-          email,
-          name: dto.name,
-          role: Role.CLINICIAN,
-          status: UserStatus.INVITED,
-          passwordHash: null,
-          emailVerifiedAt: null,
-          ...(dto.profile ? { clinicianProfile: { create: { ...dto.profile } } } : {}),
-        },
-        select: { id: true },
+      // The invitation job commits with the user row (outbox); it is sent after commit.
+      userId = await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email,
+            name: dto.name,
+            role: Role.CLINICIAN,
+            status: UserStatus.INVITED,
+            passwordHash: null,
+            emailVerifiedAt: null,
+            ...(dto.profile ? { clinicianProfile: { create: { ...dto.profile } } } : {}),
+          },
+          select: { id: true },
+        });
+        await this.invitations.enqueue(tx, user.id);
+        return user.id;
       });
-      userId = user.id;
     } catch (err) {
       // Lost a race against another create with the same email.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -50,7 +55,7 @@ export class CreateClinicianService {
       throw err;
     }
 
-    await this.invitations.sendBestEffort(userId);
+    await this.invitations.kick();
     return findClinicianDetail(this.prisma, userId);
   }
 }

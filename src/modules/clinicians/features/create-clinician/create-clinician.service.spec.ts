@@ -20,12 +20,16 @@ const detailRow = {
 };
 
 describe('CreateClinicianService', () => {
-  const prisma = { user: { findUnique: jest.fn(), create: jest.fn(), findFirst: jest.fn() } };
-  const invitations = { sendBestEffort: jest.fn() };
+  const prisma = {
+    user: { findUnique: jest.fn(), create: jest.fn(), findFirst: jest.fn() },
+    $transaction: jest.fn(),
+  };
+  const invitations = { enqueue: jest.fn(), kick: jest.fn() };
   let service: CreateClinicianService;
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prisma));
     const moduleRef = await Test.createTestingModule({
       providers: [
         CreateClinicianService,
@@ -36,7 +40,7 @@ describe('CreateClinicianService', () => {
     service = moduleRef.get(CreateClinicianService);
   });
 
-  it('creates an INVITED user (+ profile) with a normalised email, then invites after create', async () => {
+  it('creates an INVITED user (+ profile) with a normalised email, queues the invitation in the same transaction, then kicks after commit', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
     prisma.user.create.mockResolvedValue({ id: 'c1' });
     prisma.user.findFirst.mockResolvedValue(detailRow);
@@ -59,9 +63,11 @@ describe('CreateClinicianService', () => {
       },
       select: { id: true },
     });
-    expect(invitations.sendBestEffort).toHaveBeenCalledWith('c1');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(invitations.enqueue).toHaveBeenCalledWith(prisma, 'c1');
+    expect(invitations.kick).toHaveBeenCalledTimes(1);
     expect(prisma.user.create.mock.invocationCallOrder[0]).toBeLessThan(
-      invitations.sendBestEffort.mock.invocationCallOrder[0],
+      invitations.enqueue.mock.invocationCallOrder[0],
     );
     expect(result).toMatchObject({ id: 'c1', status: 'INVITED', assignedChildIds: [] });
   });
@@ -72,7 +78,8 @@ describe('CreateClinicianService', () => {
       ConflictException,
     );
     expect(prisma.user.create).not.toHaveBeenCalled();
-    expect(invitations.sendBestEffort).not.toHaveBeenCalled();
+    expect(invitations.enqueue).not.toHaveBeenCalled();
+    expect(invitations.kick).not.toHaveBeenCalled();
   });
 
   it('maps a unique-violation race to the same 409', async () => {

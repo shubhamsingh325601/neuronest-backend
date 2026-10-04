@@ -6,8 +6,8 @@ import { InvitationService } from '@modules/clinicians/shared/invitation.service
 /**
  * Admin re-sends the invitation to a clinician who has not activated yet. No new user
  * is created; earlier links die because issuing a token consumes outstanding ones.
- * Unlike create/update this is an explicit admin action, so a mail failure is *not*
- * swallowed — the admin should see it fail rather than assume the mail went out.
+ * The send is queued (202 stays accurate): a provider failure retries and, if it persists,
+ * shows up as a DEAD job the admin can requeue.
  */
 @Injectable()
 export class ResendInvitationService {
@@ -33,6 +33,7 @@ export class ResendInvitationService {
         message: 'Only a clinician who has not yet activated can be re-invited.',
       });
     }
-    await this.invitations.issueAndSend(id);
+    await this.prisma.$transaction((tx) => this.invitations.enqueue(tx, id));
+    await this.invitations.kick();
   }
 }

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthEmailJobs } from './jobs/auth-email.jobs';
 import { RefreshTokenService } from './shared/refresh-token.service';
 import { VerificationTokenService } from './shared/verification-token.service';
 import { SignupController } from './features/signup/signup.controller';
@@ -36,6 +37,7 @@ import { ChangePasswordService } from './features/change-password/change-passwor
     // shared within the auth module
     RefreshTokenService,
     VerificationTokenService,
+    AuthEmailJobs,
     // per-feature
     SignupService,
     VerifyEmailService,

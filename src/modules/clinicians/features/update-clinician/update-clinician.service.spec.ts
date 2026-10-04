@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
 import { InvitationService } from '@modules/clinicians/shared/invitation.service';
 import { UpdateClinicianService } from './update-clinician.service';
 
@@ -19,8 +20,12 @@ const detailRow = {
 };
 
 describe('UpdateClinicianService', () => {
-  const prisma = { user: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() } };
-  const invitations = { sendBestEffort: jest.fn() };
+  const prisma = {
+    user: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+    $transaction: jest.fn(),
+  };
+  const invitations = { enqueue: jest.fn(), kick: jest.fn() };
+  const verificationTokens = { revokeAccountSetup: jest.fn() };
   let service: UpdateClinicianService;
 
   const givenClinician = (status: UserStatus) =>
@@ -30,11 +35,13 @@ describe('UpdateClinicianService', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prisma));
     const moduleRef = await Test.createTestingModule({
       providers: [
         UpdateClinicianService,
         { provide: PrismaService, useValue: prisma },
         { provide: InvitationService, useValue: invitations },
+        { provide: VerificationTokenService, useValue: verificationTokens },
       ],
     }).compile();
     service = moduleRef.get(UpdateClinicianService);
@@ -59,10 +66,11 @@ describe('UpdateClinicianService', () => {
         clinicianProfile: { upsert: { create: { bio: 'hi' }, update: { bio: 'hi' } } },
       },
     });
-    expect(invitations.sendBestEffort).not.toHaveBeenCalled();
+    expect(invitations.enqueue).not.toHaveBeenCalled();
+    expect(invitations.kick).not.toHaveBeenCalled();
   });
 
-  it('changes the email while INVITED and re-invites the new address', async () => {
+  it('changes the email while INVITED, revokes the old link, and queues an invitation to the new address', async () => {
     givenClinician(UserStatus.INVITED);
     prisma.user.findUnique.mockResolvedValue(null);
 
@@ -72,7 +80,9 @@ describe('UpdateClinicianService', () => {
       where: { id: 'c1' },
       data: { email: 'new@clinic.example' },
     });
-    expect(invitations.sendBestEffort).toHaveBeenCalledWith('c1');
+    expect(verificationTokens.revokeAccountSetup).toHaveBeenCalledWith('c1', prisma);
+    expect(invitations.enqueue).toHaveBeenCalledWith(prisma, 'c1');
+    expect(invitations.kick).toHaveBeenCalledTimes(1);
   });
 
   it.each([UserStatus.ACTIVE, UserStatus.SUSPENDED, UserStatus.DEACTIVATED])(
@@ -89,7 +99,7 @@ describe('UpdateClinicianService', () => {
   it('treats re-sending the unchanged email as a no-op even after activation', async () => {
     givenClinician(UserStatus.ACTIVE);
     await service.update('c1', { email: 'SAM@clinic.example' });
-    expect(invitations.sendBestEffort).not.toHaveBeenCalled();
+    expect(invitations.enqueue).not.toHaveBeenCalled();
   });
 
   it('409s EMAIL_ALREADY_REGISTERED when the new email is taken', async () => {
