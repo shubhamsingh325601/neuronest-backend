@@ -90,6 +90,8 @@ model User {
   planNotesAuthored      PlanNote[]                 @relation("PlanNotesAuthored")
   monthlyCallLogsLogged  MonthlyCallLog[]           @relation("MonthlyCallLogsLogged")
   clinicianProfile       ClinicianProfile?          @relation("ClinicianProfileUser")
+  mediaConsentsGranted   MediaConsent[]             @relation("MediaConsentsGranted")
+  coachingTipsAuthored   CoachingTip[]              @relation("CoachingTipsAuthored")
 
   @@map("users")
 }
@@ -154,6 +156,8 @@ model Child {
   media                Media[]
   plans                Plan[]
   monthlyCallLogs      MonthlyCallLog[]
+  mediaConsents        MediaConsent[]
+  coachingTips         CoachingTip[]
 
   @@map("children")
 }
@@ -251,9 +255,10 @@ model Plan {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  notes    PlanNote[]
-  days     PlanDay[]
-  sections PlanSection[]
+  notes        PlanNote[]
+  days         PlanDay[]
+  sections     PlanSection[]
+  coachingTips CoachingTip[]
 
   @@index([childId])
   @@map("plans")
@@ -345,4 +350,45 @@ model Job {
 
   @@index([status, priority(sort: Desc), runAt])
   @@map("jobs")
+}
+
+/// Append-only parent media-consent history (plan 0012). The open row (neither withdrawn nor
+/// superseded) is the current consent; a partial unique index (hand-written in the
+/// migration) allows at most one open row per child. `consentVersion` is opaque — wording
+/// lives in the frontend (D-2).
+model MediaConsent {
+  id             String    @id @default(uuid()) @db.Uuid
+  childId        String    @db.Uuid
+  child          Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  grantedById    String    @db.Uuid
+  grantedBy      User      @relation("MediaConsentsGranted", fields: [grantedById], references: [id], onDelete: Restrict)
+  consentVersion String
+  grantedAt      DateTime  @default(now())
+  withdrawnAt    DateTime?
+  supersededAt   DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([childId, grantedAt])
+  @@map("media_consents")
+}
+
+/// Manually authored weekly coaching tip, per child + plan + week (plan 0012).
+model CoachingTip {
+  id         String   @id @default(uuid()) @db.Uuid
+  childId    String   @db.Uuid
+  child      Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  planId     String   @db.Uuid
+  plan       Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  weekNumber Int
+  position   Int
+  title      String
+  body       String
+  authorId   String   @db.Uuid
+  author     User     @relation("CoachingTipsAuthored", fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([planId, weekNumber, position])
+  @@index([childId, weekNumber])
+  @@map("coaching_tips")
 }

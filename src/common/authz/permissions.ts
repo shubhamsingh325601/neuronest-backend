@@ -50,6 +50,12 @@ export const PERMISSIONS = [
   // are the error list); `job:manage` requeues a DEAD job and triggers a run-now pass.
   'job:read',
   'job:manage',
+  // Media consent record + manual weekly coaching (Phase 12). Scoping is service-level —
+  // see docs/rbac.md §6 (clinician excluded from consent; coaching author redaction).
+  'consent:read',
+  'consent:manage:self',
+  'coaching:manage',
+  'coaching:read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -68,6 +74,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'media:create:self',
     'media:read',
     'plan:read',
+    'consent:read',
+    'consent:manage:self',
+    'coaching:read',
   ],
   [Role.CLINICIAN]: [
     ...SELF_PERMISSIONS,
@@ -80,6 +89,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'plan-note:read',
     'monthly-call:create',
     'monthly-call:read',
+    'coaching:manage',
+    'coaching:read',
   ],
   [Role.ADMIN]: [...PERMISSIONS],
 };

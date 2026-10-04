@@ -1,12 +1,11 @@
 # Plan 0012 — Phase 12: Media Consent Record and Manual Weekly Coaching
 
-Status: **Proposed**
+Status: **Done**
 Owner: backend
 Last updated: 2026-10-04
 
 > This file is the single source of truth for this phase. It carries every decision,
-> convention, and the exact remaining checklist so work can resume cold. Read it top to
-> bottom before touching code. **Nothing in this phase has been implemented yet.**
+> convention, and the exact remaining checklist so work can resume cold. **Implemented — see §9.**
 > Independent of plans 0010/0011; can be built any time after 0009.
 
 ---
@@ -89,7 +88,7 @@ model CoachingTip {
 }
 ```
 
-Hand-written in the migration: `CREATE UNIQUE INDEX media_consents_one_open_per_child ON media_consents (child_id) WHERE withdrawn_at IS NULL AND superseded_at IS NULL;` — verify `migrate dev --create-only` shows no drift.
+Hand-written in the migration (columns are camelCase in this repo — no `@map` on columns; decided 2026-10-04): `CREATE UNIQUE INDEX "media_consents_one_open_per_child" ON "media_consents" ("childId") WHERE "withdrawnAt" IS NULL AND "supersededAt" IS NULL;` — verify `migrate dev --create-only` shows no drift.
 
 - **Migration** `…_add_media_consent_and_coaching` — additive, safe on existing data.
 - **`truncateAll()`**: add `'coaching_tips'` and `'media_consents'` (before `plans`/`children`; both cascade anyway).
@@ -115,25 +114,25 @@ Hand-written in the migration: `CREATE UNIQUE INDEX media_consents_one_open_per_
 
 ## 7. Build order (ordered checklist — nothing started yet)
 
-### Batch 1 — Consent
+### Batch 1 — Consent (done)
 
-- [ ] **1.0** Re-confirm with product that wording/retention/gating stay out (D-2); confirm clinician read (Open Q).
-- [ ] **1.1** Migration (both tables + partial index), `truncateAll()`, `prisma generate`.
-- [ ] **1.2** Permissions + `rbac.md` notes.
-- [ ] **1.3** `children`-adjacent module `consents/` (or `children/features/…`): get, grant, withdraw slices + DTOs + unit specs.
-- [ ] **1.4** e2e `test/consent.e2e-spec.ts`: grant persists version + time; same version idempotent; new version supersedes; withdraw records time and is idempotent; parent reads only own; other parent 403; clinician 403; admin reads; concurrent grants → one open row.
-- [ ] **1.5** `docs.e2e-spec.ts` rows; verify `npm run lint && npm test && npm run build && npm run test:e2e`.
+- [x] **1.0** Re-confirm with product that wording/retention/gating stay out (D-2); confirm clinician read (Open Q).
+- [x] **1.1** Migration (both tables + partial index), `truncateAll()`, `prisma generate`.
+- [x] **1.2** Permissions + `rbac.md` notes.
+- [x] **1.3** `children`-adjacent module `consents/` (or `children/features/…`): get, grant, withdraw slices + DTOs + unit specs.
+- [x] **1.4** e2e `test/consent.e2e-spec.ts`: grant persists version + time; same version idempotent; new version supersedes; withdraw records time and is idempotent; parent reads only own; other parent 403; clinician 403; admin reads; concurrent grants → one open row.
+- [x] **1.5** `docs.e2e-spec.ts` rows; verify `npm run lint && npm test && npm run build && npm run test:e2e`.
 
-### Batch 2 — Weekly coaching
+### Batch 2 — Weekly coaching (done)
 
-- [ ] **2.0** Confirm per-plan vs per-template authoring (Open Q) **before** building.
-- [ ] **2.1** Permissions + notes; `coaching` slices (`replace`, `list`), week-resolution helper reusing `computeDayNumber`.
-- [ ] **2.2** e2e `test/coaching.e2e-spec.ts`: admin replace is idempotent (twice → same rows); manual tip appears in the right week; current-week resolution; out-of-range → empty; parent isolation; clinician assigned reads / unassigned 403; non-admin 403 on PUT; `authorId` absent for parent.
-- [ ] **2.3** `docs.e2e-spec.ts` rows; verify full suite.
+- [x] **2.0** Confirm per-plan vs per-template authoring (Open Q) **before** building.
+- [x] **2.1** Permissions + notes; `coaching` slices (`replace`, `list`), week-resolution helper reusing `computeDayNumber`.
+- [x] **2.2** e2e `test/coaching.e2e-spec.ts`: admin replace is idempotent (twice → same rows); manual tip appears in the right week; current-week resolution; out-of-range → empty; parent isolation; clinician assigned reads / unassigned 403; non-admin 403 on PUT; `authorId` absent for parent.
+- [x] **2.3** `docs.e2e-spec.ts` rows; verify full suite.
 
-### Batch 3 — Close
+### Batch 3 — Close (done)
 
-- [ ] **3.1** Docs pass; Status → **Done**; update `docs/plans/README.md`; implementation summary.
+- [x] **3.1** Docs pass; Status → **Done**; update `docs/plans/README.md`; implementation summary.
 
 ## Testing
 
@@ -150,8 +149,43 @@ Unit specs per slice (mocked Prisma); e2e as above; `docs.e2e` EXPECTED rows: `c
 
 ## 8. How to resume
 
-> Nothing implemented yet. Start at Batch 1, step 1.0. Precedents: `list-media.service.ts`
+> Implemented — see §9. Precedents: `list-media.service.ts`
 > (ownership shape), `create-plan-template.service.ts` (admin authoring).
 >
 > Paste-ready prompt: *"Implement docs/plans/0012 from Batch 1. Do not invent consent
 > wording, retention or upload gating. Ask me the Batch 2.0 question before building coaching."*
+
+---
+
+## 9. Implementation summary
+
+Implemented 2026-10-04 in three batches (consent → coaching → close). Final: 361 unit tests /
+72 suites, 270 e2e tests / 21 suites, lint and build clean.
+
+**Plan deviations / decisions made while building**
+- **Column naming.** The plan's partial-index SQL used snake_case columns, but every table in
+  this repo has camelCase columns (no `@map` on columns; only `@@map` on tables). Decided
+  with the owner: keep camelCase, fix the plan SQL, and correct the docs that claimed
+  snake_case columns (`docs/database-and-docker.md`, `prisma-migration` skill).
+- **Two migrations.** `…_add_media_consent_and_coaching` (Prisma-generated tables) and
+  `…_media_consent_one_open_index` (hand-written partial unique index). `migrate dev` shows
+  no drift afterwards.
+- **Module layout.** New `consents/` and `coaching/` domain modules (not under `children/`).
+- **ADMIN and consent writes.** ADMIN gets `consent:manage:self` via the `...PERMISSIONS`
+  spread, but grant/withdraw reject anyone who is not the child's own parent (`403`); admin
+  can read consent. Noted in `docs/rbac.md` §6.
+- **Withdraw response** returns the full consent state (same shape as `GET`), not a bare row.
+- **Coaching response** is `{ weekNumber, tips[] }`; `weekNumber` is `null` when the child has
+  no active plan or the plan has not started. `authorId` is returned to CLINICIAN/ADMIN only.
+- Replace works on any plan status (a completed plan's tips stay editable by plan id); the
+  parent `week=current` view only resolves the child's ACTIVE plan.
+
+**Files**
+- Schema + migrations: `MediaConsent`, `CoachingTip`; `truncateAll()` updated.
+- Permissions: `consent:read`, `consent:manage:self`, `coaching:manage`, `coaching:read`.
+- `src/modules/consents/` — `get-consent`, `grant-consent`, `withdraw-consent` (+ specs, shared DTO/state helper).
+- `src/modules/coaching/` — `replace-coaching`, `list-coaching` (+ specs, `weekOfDay`).
+- Tests: `test/consent.e2e-spec.ts`, `test/coaching.e2e-spec.ts`, 5 new `docs.e2e` rows.
+- Docs: `rbac.md`, `schema-decisions.md`, `testing.md`, `database-and-docker.md`.
+
+**Not built (per plan):** consent wording catalogue, retention/deletion, upload gating, AI tips, delivery channels.

@@ -25,7 +25,7 @@ All schema definitions live in `prisma/schema.prisma`. Adhere to the following c
 
 ### Naming Conventions
 - **Database Tables**: Plural `snake_case` mapped via `@@map("table_name")` (e.g. `@@map("users")`, `@@map("refresh_tokens")`).
-- **Database Columns**: `snake_case` mapped via `@map("column_name")` where column names diverge from TypeScript defaults (e.g. `passwordHash String? @map("password_hash")`).
+- **Database Columns**: `camelCase`, identical to the Prisma field name — **no `@map` on columns** (e.g. `"passwordHash"`, `"createdAt"`). Only tables (`@@map`) and constraint/index names are `snake_case`. Hand-written SQL must quote camelCase columns (`"childId"`). Converting columns to snake_case would be a dedicated phase (rename every column, update raw SQL in `src/common/jobs`, health and `truncateAll`).
 - **Prisma Models**: Singular `PascalCase` (e.g. `User`, `RefreshToken`, `ClinicianProfile`).
 - **Prisma Fields**: `camelCase` (e.g. `emailVerifiedAt`, `passwordHash`).
 - **Enums**: `PascalCase` names with `UPPER_SNAKE_CASE` values (e.g. `enum UserStatus { ACTIVE, SUSPENDED, DEACTIVATED, INVITED }`).
@@ -38,15 +38,15 @@ All schema definitions live in `prisma/schema.prisma`. Adhere to the following c
   UUIDv4 avoids sequential ID enumeration attacks, allows client/service-side ID generation where beneficial, and simplifies distributed data operations.
 - **Foreign Keys**: Explicit relation fields paired with an underlying UUID column:
   ```prisma
-  userId String @map("user_id") @db.Uuid
+  userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   ```
 
 ### Timestamps & Auditability
 Every core table must track lifecycle timestamps:
 ```prisma
-createdAt DateTime @default(now()) @map("created_at")
-updatedAt DateTime @updatedAt @map("updated_at")
+createdAt DateTime @default(now())
+updatedAt DateTime @updatedAt
 ```
 
 ### Indexing Strategy

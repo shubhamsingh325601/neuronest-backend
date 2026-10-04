@@ -21,6 +21,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     }
     const tables = [
       'jobs',
+      'coaching_tips',
+      'media_consents',
       'monthly_call_logs',
       'plan_notes',
       'plan_days',

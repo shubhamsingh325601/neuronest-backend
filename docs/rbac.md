@@ -392,6 +392,20 @@ the `X-Jobs-Token` header to `JOBS_RUN_TOKEN` in constant time. There is no user
 authenticate. Unset `JOBS_RUN_TOKEN` (the default) → the route returns `404`; a wrong or
 missing header → `401 INVALID_JOBS_TOKEN`. The global throttler still applies.
 
+### `consent:*` and `coaching:*` (Phase 12)
+
+- `consent:read` (PARENT, ADMIN) and `consent:manage:self` (PARENT). **Clinicians are
+  deliberately excluded** from consent (least privilege; add later if a screen needs it).
+  Scoping is in the service: a PARENT must be the child's own parent. `ADMIN` holds
+  `consent:manage:self` through the `...PERMISSIONS` spread, but the grant/withdraw
+  services reject any caller who is not the child's parent (`403 FORBIDDEN`) — consent is
+  the parent's own record, so admin can read but not alter it.
+- `coaching:manage` (CLINICIAN, ADMIN) and `coaching:read` (PARENT, CLINICIAN, ADMIN).
+  Scoping is the `child:read` shape: parent-own, clinician-assigned (via the plan's child),
+  admin-any. Authoring is open to the assigned clinician as well as admin (plan 0012,
+  resolved 2026-10-04) — easy to narrow later. The parent-facing coaching response is
+  redacted: no `authorId`.
+
 ## 7. Future Migration Path to `@casl/ability`
 
 The static map is intentionally designed as a strict subset of CASL. When business rules require **dynamic attribute-based conditions** (e.g., *"A clinician may read a session report only if the child is in their active caseload"*):

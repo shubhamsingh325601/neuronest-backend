@@ -79,3 +79,9 @@ To maintain a lean context window, **do not read the entire `docs/` directory**.
 | `npm run prisma:deploy` | Apply pending migrations via `prisma migrate deploy` (CI / prod) |
 | `npm run prisma:generate` | Regenerate `@prisma/client` types |
 | `npm run db:seed` | Run idempotent database seed script (`prisma/seed.ts`) |
+
+---
+
+## 5. Commit & PR Attribution
+
+Commits and PR descriptions are authored by the logged-in git user only. Never add `Co-Authored-By: Claude …`, "Generated with Claude Code", or any Claude/Anthropic author or committer override. Enforced by `.claude/settings.json` (`attribution` blank) and the `PreToolUse` hook `.claude/hooks/block-claude-attribution.js`, which rejects such commands.

@@ -118,6 +118,8 @@ E2E tests execute HTTP requests against a fully booted NestJS application.
 | **Admin Jobs** | `test/admin-jobs.e2e-spec.ts` | Admin list/get/requeue/run-now, 403 for non-admins, `deadJobs` in the summary |
 | **Async Email** | `test/email-queue.e2e-spec.ts` | Provider outage never fails/rolls back the request, retry → DEAD → requeue, enumeration-safe 202s, late jobs are no-ops |
 | **Stale Media Cleanup** | `test/media-cleanup.e2e-spec.ts` | Only stale PENDING tickets expire; hourly dedupe; confirm semantics after expiry |
+| **Media Consent** | `test/consent.e2e-spec.ts` | Grant persists version/time, same version idempotent, new version supersedes, withdraw idempotent, parent-only writes, clinician/other-parent 403, concurrent grants → one open row |
+| **Coaching** | `test/coaching.e2e-spec.ts` | Idempotent per-week replace, current-week resolution, out-of-range → empty, parent isolation + `authorId` redaction, clinician assignment scoping, completed plan hidden from parent |
 | **Error Shape** | `test/error-shape.e2e-spec.ts` | Verification that all errors conform to RFC 9457 `application/problem+json` |
 | **RBAC Route Coverage** | `test/rbac-route-coverage.e2e-spec.ts` | Asserts every route is explicitly protected or explicitly marked `@Public()` |
 | **OpenAPI Contract Drift** | `test/docs.e2e-spec.ts` | Live OpenAPI spec reflection matching expected paths and `operationId`s |

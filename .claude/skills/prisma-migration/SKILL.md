@@ -18,14 +18,14 @@ This skill guides you through schema modeling, creating migrations, regenerating
 Before creating a migration, ensure changes in `prisma/schema.prisma` follow these standards:
 - **Primary Keys**: Always `id String @id @default(uuid()) @db.Uuid`.
 - **Table Naming**: Plural `snake_case` using `@@map("table_names")`.
-- **Column Naming**: Multi-word fields mapped to `snake_case` using `@map("column_name")`.
+- **Column Naming**: camelCase, same as the Prisma field — **no `@map` on columns** (only tables use `@@map`). Quote camelCase columns in hand-written SQL (`"childId"`).
 - **Foreign Keys**: Explicit relation fields paired with UUID scalar:
   ```prisma
-  userId String @map("user_id") @db.Uuid
+  userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   ```
 - **Indexes**: Add explicit `@unique` or `@@index` on columns used in queries or joins.
-- **Timestamps**: Always include `createdAt DateTime @default(now()) @map("created_at")` and `updatedAt DateTime @updatedAt @map("updated_at")`.
+- **Timestamps**: Always include `createdAt DateTime @default(now())` and `updatedAt DateTime @updatedAt`.
 
 ## Procedure
 
