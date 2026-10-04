@@ -14,8 +14,21 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0006 | Phase 6 — Plan Domain (Templates, Assignment, Clinician Notes) | Done | [0006-phase-6-plan-domain.md](0006-phase-6-plan-domain.md) |
 | 0007 | Phase 7 — Monthly Call Log | Done | [0007-phase-7-monthly-call-log.md](0007-phase-7-monthly-call-log.md) |
 | 0008 | Phase 8 — Backend API Completion | Done | [0008-phase-8-backend-api-completion.md](0008-phase-8-backend-api-completion.md) |
+| 0009 | Phase 9 — Security Fixes, Contract Fixes, Parent Plan Read | Proposed | [0009-phase-9-security-and-contract-fixes.md](0009-phase-9-security-and-contract-fixes.md) |
+| 0010 | Phase 10 — Clinician Lifecycle (Admin-Created) | Proposed | [0010-phase-10-clinician-lifecycle.md](0010-phase-10-clinician-lifecycle.md) |
+| 0011 | Phase 11 — Postgres Job Queue, Async Email, Stale-Media Cleanup | Proposed | [0011-phase-11-postgres-job-queue.md](0011-phase-11-postgres-job-queue.md) |
+| 0012 | Phase 12 — Media Consent Record and Manual Weekly Coaching | Proposed | [0012-phase-12-consent-and-coaching.md](0012-phase-12-consent-and-coaching.md) |
+| 0013 | Phase 13 — Child Progress Tracking and Weekly Summary | Proposed | [0013-phase-13-progress-tracking.md](0013-phase-13-progress-tracking.md) |
+| 0014 | Phase 14 — Monthly Call Appointments | Proposed | [0014-phase-14-monthly-call-appointments.md](0014-phase-14-monthly-call-appointments.md) |
+| 0015 | Phase 15 — Escalation Lifecycle (owner/notification blocked on D-3/D-16) | Proposed | [0015-phase-15-escalation-lifecycle.md](0015-phase-15-escalation-lifecycle.md) |
+| 0016 | Phase 16 — Plan Content Model (Template → Per-Child Plan) | Proposed | [0016-phase-16-plan-content-model.md](0016-phase-16-plan-content-model.md) |
 
-Status values: **Active** (in progress) · **Done** · **Superseded** · **Parked**. Phase
+Plans 0009–0015 come from the frontend's V1 backend handoff
+(`docs/NeuroNest_Backend_V1_Developer_Handoff.docx`), audited against the code on
+2026-10-04. AI work and parent↔clinician chat are deliberately excluded. Suggested order:
+0009 → 0010 → 0011, then 0016 (after a product walk-through), then 0012/0013/0014 (independent of each other); 0015 waits on D-3/D-16 for owner/notification.
+
+Status values: **Proposed** (written, awaiting review/approval) · **Active** (in progress) · **Done** · **Superseded** · **Parked**. Phase
 8 closed the API-surface gaps found by a post-Phase-7 audit — access-lifecycle
 (revoke/suspend), plan history, a secure media playback contract, an admin user
 directory, authenticated change-password, and a fixed-shape admin summary. D2
