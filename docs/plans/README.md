@@ -18,8 +18,8 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0010 | Phase 10 — Clinician Lifecycle (Admin-Created) | Done | [0010-phase-10-clinician-lifecycle.md](0010-phase-10-clinician-lifecycle.md) |
 | 0011 | Phase 11 — Postgres Job Queue, Async Email, Stale-Media Cleanup | Done | [0011-phase-11-postgres-job-queue.md](0011-phase-11-postgres-job-queue.md) |
 | 0012 | Phase 12 — Media Consent Record and Manual Weekly Coaching | Done | [0012-phase-12-consent-and-coaching.md](0012-phase-12-consent-and-coaching.md) |
-| 0013 | Phase 13 — Child Progress Tracking and Weekly Summary | Proposed | [0013-phase-13-progress-tracking.md](0013-phase-13-progress-tracking.md) |
-| 0014 | Phase 14 — Monthly Call Appointments | Proposed | [0014-phase-14-monthly-call-appointments.md](0014-phase-14-monthly-call-appointments.md) |
+| 0013 | Phase 13 — Child Progress Tracking and Weekly Summary | Done | [0013-phase-13-progress-tracking.md](0013-phase-13-progress-tracking.md) |
+| 0014 | Phase 14 — Monthly Call Appointments | Done | [0014-phase-14-monthly-call-appointments.md](0014-phase-14-monthly-call-appointments.md) |
 | 0015 | Phase 15 — Escalation Lifecycle (owner/notification blocked on D-3/D-16) | Proposed | [0015-phase-15-escalation-lifecycle.md](0015-phase-15-escalation-lifecycle.md) |
 | 0016 | Phase 16 — Plan Content Model (Template → Per-Child Plan) | Done | [0016-phase-16-plan-content-model.md](0016-phase-16-plan-content-model.md) |
 

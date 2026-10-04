@@ -1,12 +1,12 @@
 # Plan 0014 — Phase 14: Monthly Call Appointments
 
-Status: **Proposed**
+Status: **Done**
 Owner: backend
-Last updated: 2026-10-04
+Last updated: 2026-10-05
 
 > This file is the single source of truth for this phase. It carries every decision,
 > convention, and the exact remaining checklist so work can resume cold. Read it top to
-> bottom before touching code. **Nothing in this phase has been implemented yet.**
+> bottom before touching code. **All three batches are implemented; see §9 for the summary.**
 
 ---
 
@@ -107,22 +107,22 @@ model Appointment {
 
 ### Batch 1 — Availability
 
-- [ ] **1.0** Confirm Open Qs (booking cap; deactivated-clinician appointments).
-- [ ] **1.1** Migration + models + `truncateAll()`.
-- [ ] **1.2** Permissions + `rbac.md`.
-- [ ] **1.3** `call-slots` slices: `create-slot`, `list-slots` + DTOs + unit specs (overlap, duration, past, clinician status).
-- [ ] **1.4** e2e `test/appointment.e2e-spec.ts` part 1: clinician publishes own slot; admin publishes for a clinician; clinician cannot publish for another; overlap 409; past 400; parent lists only assigned clinicians' free slots; unassigned/unrelated parent sees none.
-- [ ] **1.5** Verify `npm run lint && npm test && npm run build && npm run test:e2e`.
+- [x] **1.0** Confirm Open Qs — answered in the closing "Naming and deferred notifications" section (cap: one upcoming per child; deactivated clinician: leave as is).
+- [x] **1.1** Migration (`20261005100000_add_appointment_slots_and_appointments`, generated offline with `prisma migrate diff`; applied to the e2e test DB by `global-setup`) + models + `truncateAll()`.
+- [x] **1.2** Permissions + `rbac.md`.
+- [x] **1.3** `src/modules/appointments` (`create-slot`, `list-slots`; the plan's `call-slots` name is superseded by the `appointment*` naming decision) slices: `create-slot`, `list-slots` + DTOs + unit specs (overlap, duration, past, clinician status).
+- [x] **1.4** e2e `test/appointment.e2e-spec.ts` part 1: clinician publishes own slot; admin publishes for a clinician; clinician cannot publish for another; overlap 409; past 400; parent lists only assigned clinicians' free slots; unassigned/unrelated parent sees none.
+- [x] **1.5** Verify `npm run lint && npm test && npm run build && npm run test:e2e`.
 
 ### Batch 2 — Appointments
 
-- [ ] **2.1** `create-appointment`, `list-child-appointments`, `list-appointments` slices + DTOs (embed clinician name).
-- [ ] **2.2** e2e part 2: parent books assigned clinician's slot; booked slot disappears from the free list; **concurrent `Promise.all` booking → one 201, one 409**; unassigned clinician slot → 404; other parent cannot book/read; parent sees booking + clinician name; clinician sees booked call; other clinician sees nothing; admin sees all; past/upcoming filter.
-- [ ] **2.3** `docs.e2e-spec.ts` rows; verify full suite.
+- [x] **2.1** `create-appointment`, `list-child-appointments`, `list-appointments` slices + DTOs (embed clinician name).
+- [x] **2.2** e2e part 2: parent books assigned clinician's slot; booked slot disappears from the free list; **concurrent `Promise.all` booking → one 201, one 409**; unassigned clinician slot → 404; other parent cannot book/read; parent sees booking + clinician name; clinician sees booked call; other clinician sees nothing; admin sees all; past/upcoming filter.
+- [x] **2.3** `docs.e2e-spec.ts` rows; verify full suite.
 
 ### Batch 3 — Close
 
-- [ ] **3.1** Docs pass; Status → **Done**; update `docs/plans/README.md`; summary (note D-9 join data still pending).
+- [x] **3.1** Docs pass; Status → **Done**; update `docs/plans/README.md`; summary (note D-9 join data still pending).
 
 ## Testing
 
@@ -137,7 +137,7 @@ Unit: slot rules, booking guard, scoping. E2E as above. `docs.e2e` rows: `appoin
 
 ## 8. How to resume
 
-> Nothing implemented yet. Start at Batch 1, step 1.0. Precedents: `log-call.service.ts`
+> Phase complete. Remaining work is the follow-ups listed in §9. Precedents: `log-call.service.ts`
 > (assignment check), `list-children.service.ts` (query-filter scoping).
 >
 > Paste-ready prompt: *"Implement docs/plans/0014 from Batch 1. The unique slotId is the
@@ -151,3 +151,52 @@ Unit: slot rules, booking guard, scoping. E2E as above. `docs.e2e` rows: `appoin
 - **Product answers recorded:** appointment cap and deactivated-clinician handling are decided by engineering below.
   - Cap: **one upcoming appointment per child** (service check inside the creating transaction; `409 APPOINTMENT_ALREADY_UPCOMING`). Reason: the signed scope says *monthly* call with a human coach; allowing unlimited bookings lets one family hoard slots.
   - Deactivated clinician: future appointments stay visible and admin must reassign manually; no auto-cancel (cancellation is out of scope).
+
+---
+
+## 9. Implementation summary
+
+Implemented 2026-10-05 in three batches (availability → appointments → close). Final: 446 unit
+tests / 86 suites, 318 e2e tests / 23 suites (new `test/appointment.e2e-spec.ts`), lint and
+build clean.
+
+**Plan deviations / decisions made while building**
+- **Module naming.** Slices live in `src/modules/appointments/` (`create-slot`, `list-slots`,
+  `create-appointment`, `list-child-appointments`, `list-appointments`), not `call-slots`, per the
+  naming decision.
+- **Free-slot list and booking both require an ACTIVE clinician.** Not in the plan; added so a
+  suspended/deactivated clinician cannot be booked. Their already-booked appointments are left
+  untouched (decision 11).
+- **Another family's child → `403 FORBIDDEN`** (the `child:read` shape), not an empty list.
+- **Booking is parent-only.** ADMIN holds `appointment:create:self` via the spread; the service
+  returns `403` for any caller who is not the child's own parent.
+- **One-upcoming-per-child cap** (`409 APPOINTMENT_ALREADY_UPCOMING`) runs inside an interactive
+  transaction that first takes `SELECT … FOR UPDATE` on the child row, so concurrent bookings by
+  one family serialise and the cap has no race. "Upcoming" means the slot has not ended. The
+  already-booked check runs before the cap check, so a same-slot race returns
+  `409 SLOT_ALREADY_BOOKED`. The unique `slotId` remains the cross-family guard (`P2002` is mapped
+  to the same code).
+- **`?when=`** is optional: `upcoming` (slot not ended, soonest first), `past` (ended, newest
+  first); omitted returns all, newest first. Cursor pagination is by id over that ordering.
+- **`GET /v1/appointments` for PARENT** is scoped to their own child's appointments (the plan
+  only specified CLINICIAN and ADMIN, but PARENT holds `appointment:read`).
+- **Slot validation** error codes (new): `INVALID_SLOT_RANGE`, `SLOT_TOO_LONG`, `SLOT_IN_PAST`,
+  `CLINICIAN_ID_REQUIRED`, `CLINICIAN_NOT_FOUND`. `startsAt`/`endsAt` must be full ISO date-times.
+- Migration `20261005100000_add_appointment_slots_and_appointments` was generated with
+  `prisma migrate diff` (the configured dev DB is a pooled Neon URL, so `migrate dev` was not
+  used). It is applied to the e2e test database by `global-setup`; **run `npm run prisma:deploy`
+  against other environments**.
+
+**Files**
+- Schema + migration: `AppointmentSlot`, `Appointment`; `truncateAll()` updated.
+- Permissions: `appointment-slot:manage`, `appointment-slot:read`, `appointment:create:self`,
+  `appointment:read`.
+- `src/modules/appointments/` with unit specs for every service.
+- Tests: `test/appointment.e2e-spec.ts`, 5 new `docs.e2e` rows.
+- Docs: `rbac.md`, `schema-decisions.md`, `testing.md`.
+
+**Not built (per plan):** join links/provider (D-9 — **join data still pending**), cancellation,
+rescheduling, reminders and confirmation emails/push, timezone handling (D-15).
+**Still open / risks:** two simultaneous publishers can create overlapping non-identical slots
+(accepted); a mistaken booking cannot be undone via the API; the 2-hour slot cap is an
+engineering default.

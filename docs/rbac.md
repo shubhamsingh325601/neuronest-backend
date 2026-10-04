@@ -42,6 +42,11 @@ export const PERMISSIONS = [
   // Background job queue (Phase 11):
   'job:read',                      // GET  /v1/admin/jobs(/:id) — ADMIN only
   'job:manage',                    // POST /v1/admin/jobs/:id/requeue, /v1/admin/jobs/run-due — ADMIN only
+  // Monthly call appointments (Phase 14):
+  'appointment-slot:manage',       // POST /v1/appointment-slots — CLINICIAN(own)/ADMIN
+  'appointment-slot:read',         // GET  /v1/children/:childId/appointment-slots — PARENT(own)/CLINICIAN(assigned)/ADMIN
+  'appointment:create:self',       // POST /v1/children/:childId/appointments — PARENT (own child) only in practice
+  'appointment:read',              // GET  /v1/children/:childId/appointments, /v1/appointments — PARENT(own)/CLINICIAN(assigned/own)/ADMIN
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -412,6 +417,34 @@ missing header → `401 INVALID_JOBS_TOKEN`. The global throttler still applies.
   admin-any. Authoring is open to the assigned clinician as well as admin (plan 0012,
   resolved 2026-10-04) — easy to narrow later. The parent-facing coaching response is
   redacted: no `authorId`.
+
+### `progress:*` (Phase 13)
+
+- `progress:write:self` (PARENT) and `progress:read` (PARENT, CLINICIAN, ADMIN). Scoping is
+  the `media:read` shape, enforced by `assertChildProgressAccess` in the service: parent-own,
+  clinician-assigned, admin-any for reads. **Clinicians and admins are read-only**: ADMIN
+  holds `progress:write:self` through the `...PERMISSIONS` spread, but the upsert service
+  rejects any caller who is not the child's own parent (`403 FORBIDDEN`) — progress is the
+  parent's own log, same stance as consent.
+
+### `appointment-slot:*` / `appointment:*` (Phase 14)
+
+- `appointment-slot:manage` (CLINICIAN, ADMIN). A CLINICIAN publishes **only their own** slots
+  (`clinicianId` omitted or equal to the caller, else `403 FORBIDDEN`); an ADMIN must name the
+  clinician (`400 CLINICIAN_ID_REQUIRED`). The target must be an ACTIVE clinician
+  (`409 CLINICIAN_NOT_ACTIVE`). Enforced in `CreateSlotService`.
+- `appointment-slot:read` (PARENT, CLINICIAN, ADMIN). Access is the `child:read` shape
+  (`assertChildAppointmentReadAccess`: parent-own, clinician-assigned, admin-any). The result is then
+  a **query filter** (the `GET /v1/children` shape): free, future slots whose clinician is ACTIVE
+  and assigned to this child. A slot of an unassigned clinician is therefore simply absent.
+- `appointment:create:self` (PARENT). ADMIN holds it through the `...PERMISSIONS` spread, so
+  `CreateAppointmentService` restricts booking to the child's own parent (`403 FORBIDDEN` for
+  anyone else, admin included — same stance as `progress:write:self`). A slot whose clinician is not
+  assigned to the child (or is not ACTIVE, or is already in the past) is `404 SLOT_NOT_FOUND`, so slot
+  existence is not disclosed across care teams.
+- `appointment:read` (PARENT, CLINICIAN, ADMIN). `GET /v1/children/{childId}/appointments` is the
+  `child:read` shape (parent-own, clinician-assigned, admin-any). `GET /v1/appointments` is a query
+  filter: CLINICIAN → appointments on their **own** slots, PARENT → their own child's, ADMIN → all.
 
 ## 7. Future Migration Path to `@casl/ability`
 

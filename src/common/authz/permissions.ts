@@ -56,6 +56,18 @@ export const PERMISSIONS = [
   'consent:manage:self',
   'coaching:manage',
   'coaching:read',
+  // Child progress tracking (Phase 13). Write is PARENT-only and enforced in the service
+  // (ADMIN spreads every permission but must not write); read is parent-own /
+  // clinician-assigned / admin-any, same shape as `media:read`.
+  'progress:write:self',
+  'progress:read',
+  // Monthly call appointments (Phase 14). Scoping is service-level — see docs/rbac.md §6
+  // (clinician publishes only own slots; unassigned clinician slot → 404; `appointment:create:self`
+  // reaches ADMIN via the spread, so the service restricts booking to the child's PARENT).
+  'appointment-slot:manage',
+  'appointment-slot:read',
+  'appointment:create:self',
+  'appointment:read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -77,6 +89,11 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'consent:read',
     'consent:manage:self',
     'coaching:read',
+    'progress:write:self',
+    'progress:read',
+    'appointment-slot:read',
+    'appointment:create:self',
+    'appointment:read',
   ],
   [Role.CLINICIAN]: [
     ...SELF_PERMISSIONS,
@@ -91,6 +108,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'monthly-call:read',
     'coaching:manage',
     'coaching:read',
+    'progress:read',
+    'appointment-slot:manage',
+    'appointment-slot:read',
+    'appointment:read',
   ],
   [Role.ADMIN]: [...PERMISSIONS],
 };

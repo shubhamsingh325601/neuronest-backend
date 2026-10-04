@@ -20,6 +20,8 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { CallLogsModule } from '@modules/call-logs/call-logs.module';
 import { ChildrenModule } from '@modules/children/children.module';
 import { CoachingModule } from '@modules/coaching/coaching.module';
+import { ProgressModule } from '@modules/progress/progress.module';
+import { AppointmentsModule } from '@modules/appointments/appointments.module';
 import { ConsentsModule } from '@modules/consents/consents.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
 import { JobsHttpModule } from '@modules/jobs/jobs.module';
@@ -60,6 +62,8 @@ import { UsersModule } from '@modules/users/users.module';
     ChildrenModule,
     ConsentsModule,
     CoachingModule,
+    ProgressModule,
+    AppointmentsModule,
     MediaModule,
     PlansModule,
     CallLogsModule,

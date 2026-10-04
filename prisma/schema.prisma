@@ -79,19 +79,23 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  refreshTokens          RefreshToken[]
-  verificationTokens     VerificationToken[]
-  child                  Child?                     @relation("ChildParent")
-  clinicianAssignments   ClinicianChildAssignment[] @relation("ClinicianAssignments")
-  assignmentsMadeAsAdmin ClinicianChildAssignment[] @relation("AssignmentsMadeByAdmin")
-  uploadedMedia          Media[]                    @relation("UploadedMedia")
-  planTemplatesCreated   PlanTemplate[]             @relation("PlanTemplatesCreated")
-  plansCreated           Plan[]                     @relation("PlansCreated")
-  planNotesAuthored      PlanNote[]                 @relation("PlanNotesAuthored")
-  monthlyCallLogsLogged  MonthlyCallLog[]           @relation("MonthlyCallLogsLogged")
-  clinicianProfile       ClinicianProfile?          @relation("ClinicianProfileUser")
-  mediaConsentsGranted   MediaConsent[]             @relation("MediaConsentsGranted")
-  coachingTipsAuthored   CoachingTip[]              @relation("CoachingTipsAuthored")
+  refreshTokens           RefreshToken[]
+  verificationTokens      VerificationToken[]
+  child                   Child?                     @relation("ChildParent")
+  clinicianAssignments    ClinicianChildAssignment[] @relation("ClinicianAssignments")
+  assignmentsMadeAsAdmin  ClinicianChildAssignment[] @relation("AssignmentsMadeByAdmin")
+  uploadedMedia           Media[]                    @relation("UploadedMedia")
+  planTemplatesCreated    PlanTemplate[]             @relation("PlanTemplatesCreated")
+  plansCreated            Plan[]                     @relation("PlansCreated")
+  planNotesAuthored       PlanNote[]                 @relation("PlanNotesAuthored")
+  monthlyCallLogsLogged   MonthlyCallLog[]           @relation("MonthlyCallLogsLogged")
+  clinicianProfile        ClinicianProfile?          @relation("ClinicianProfileUser")
+  mediaConsentsGranted    MediaConsent[]             @relation("MediaConsentsGranted")
+  coachingTipsAuthored    CoachingTip[]              @relation("CoachingTipsAuthored")
+  progressEntriesCreated  ProgressEntry[]            @relation("ProgressEntriesCreated")
+  appointmentSlotsOwned   AppointmentSlot[]          @relation("AppointmentSlotsOwned")
+  appointmentSlotsCreated AppointmentSlot[]          @relation("AppointmentSlotsCreated")
+  appointmentsMade        Appointment[]              @relation("AppointmentsMade")
 
   @@map("users")
 }
@@ -158,6 +162,8 @@ model Child {
   monthlyCallLogs      MonthlyCallLog[]
   mediaConsents        MediaConsent[]
   coachingTips         CoachingTip[]
+  progressEntries      ProgressEntry[]
+  appointments         Appointment[]
 
   @@map("children")
 }
@@ -241,11 +247,11 @@ model PlanTemplateDay {
   @@map("plan_template_days")
 }
 
-model Plan {
-  id             String       @id @default(uuid()) @db.Uuid
 /// At most one ACTIVE plan per child: a partial unique index `plans_one_active_per_child`
 /// ("childId" WHERE status = 'ACTIVE'), hand-written in migration
 /// 20261004180000_plans_one_active_per_child. Prisma cannot model it - do NOT drop it.
+model Plan {
+  id             String       @id @default(uuid()) @db.Uuid
   childId        String       @db.Uuid
   child          Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
   planTemplateId String       @db.Uuid
@@ -258,10 +264,11 @@ model Plan {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  notes        PlanNote[]
-  days         PlanDay[]
-  sections     PlanSection[]
-  coachingTips CoachingTip[]
+  notes           PlanNote[]
+  days            PlanDay[]
+  sections        PlanSection[]
+  coachingTips    CoachingTip[]
+  progressEntries ProgressEntry[]
 
   @@index([childId])
   @@map("plans")
@@ -394,4 +401,63 @@ model CoachingTip {
   @@unique([planId, weekNumber, position])
   @@index([childId, weekNumber])
   @@map("coaching_tips")
+}
+
+/// Per-child daily progress (plan 0013). Plan-independent: `planId` is only a nullable
+/// stamp of the ACTIVE plan at first write. Range CHECK constraints (mood/behaviour 1-5,
+/// sleepMinutes 0-1440, note <= 1000) are hand-written in migration
+/// add_progress_entries - Prisma cannot model them, do NOT drop them.
+model ProgressEntry {
+  id           String   @id @default(uuid()) @db.Uuid
+  childId      String   @db.Uuid
+  child        Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  planId       String?  @db.Uuid
+  plan         Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  entryDate    DateTime @db.Date
+  mood         Int?
+  behaviour    Int?
+  sleepMinutes Int?
+  note         String?
+  createdById  String   @db.Uuid
+  createdBy    User     @relation("ProgressEntriesCreated", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([childId, entryDate])
+  @@index([childId, entryDate(sort: Desc)])
+  @@map("progress_entries")
+}
+
+/// Published availability of one clinician (plan 0014). Bookable by at most one
+/// Appointment (Appointment.slotId is UNIQUE).
+model AppointmentSlot {
+  id          String   @id @default(uuid()) @db.Uuid
+  clinicianId String   @db.Uuid
+  clinician   User     @relation("AppointmentSlotsOwned", fields: [clinicianId], references: [id], onDelete: Restrict)
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String   @db.Uuid
+  createdBy   User     @relation("AppointmentSlotsCreated", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  appointment Appointment?
+
+  @@unique([clinicianId, startsAt])
+  @@index([clinicianId, startsAt])
+  @@map("appointment_slots")
+}
+
+/// A parent's booking of a slot. `slotId` UNIQUE is the database-enforced double-booking guard.
+model Appointment {
+  id         String          @id @default(uuid()) @db.Uuid
+  slotId     String          @unique @db.Uuid
+  slot       AppointmentSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  childId    String          @db.Uuid
+  child      Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
+  bookedById String          @db.Uuid
+  bookedBy   User            @relation("AppointmentsMade", fields: [bookedById], references: [id], onDelete: Restrict)
+  createdAt  DateTime        @default(now())
+
+  @@index([childId])
+  @@map("appointments")
 }

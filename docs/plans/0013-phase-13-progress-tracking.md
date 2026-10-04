@@ -1,12 +1,12 @@
 # Plan 0013 — Phase 13: Child Progress Tracking and Weekly Summary
 
-Status: **Proposed** (scales/units still need D-7 — see §3 row 1)
+Status: **Done** (scales/units remain provisional until D-7 — see §3 row 1)
 Owner: backend
 Last updated: 2026-10-04
 
 > This file is the single source of truth for this phase. It carries every decision,
 > convention, and the exact remaining checklist so work can resume cold. Read it top to
-> bottom before touching code. **Nothing in this phase has been implemented yet.**
+> bottom before touching code. **Implemented — see §9.**
 > Revised 2026-10-04 after product input: progress is tracked **per child, independent of
 > any plan**, with a computed weekly summary for parent, clinician and admin.
 
@@ -97,15 +97,15 @@ model ProgressEntry {
 - **Notifications** — deferred (no reminders now).
 - **OpenAPI/tests** — 3 new `EXPECTED` rows; `rbac-route-coverage` unchanged logic.
 
-## 7. Build order (ordered checklist — nothing started yet)
+## 7. Build order (ordered checklist — complete)
 
-- [ ] **1.0** Re-read §3 rows 1 and 4 (provisional ranges/window); adjust if product has answered D-7.
-- [ ] **1.1** Migration + model + `CHECK`s + `truncateAll()`.
-- [ ] **1.2** Permissions + `rbac.md`.
-- [ ] **1.3** `progress/` module: `upsert-progress`, `list-progress`, `weekly-summary` slices; DTOs; unit specs (ranges, plan association, aggregates, trend, empty week).
-- [ ] **1.4** e2e `test/progress.e2e-spec.ts`: new child with **no plan** can log; upsert same date → one row; `planId` set when a plan is active and kept after the plan completes; history order/pagination; weekly summary maths and empty week; clinician assigned reads / unassigned 403 / cannot write; other parent 403; admin reads; future/too-old date 400; out-of-range value 400.
-- [ ] **1.5** `docs.e2e-spec.ts` rows; verify `npm run lint && npm test && npm run build && npm run test:e2e`.
-- [ ] **2.1** Docs pass; Status → **Done**; update `docs/plans/README.md`; summary.
+- [x] **1.0** Re-read §3 rows 1 and 4 (provisional ranges/window); adjust if product has answered D-7.
+- [x] **1.1** Migration + model + `CHECK`s + `truncateAll()`.
+- [x] **1.2** Permissions + `rbac.md`.
+- [x] **1.3** `progress/` module: `upsert-progress`, `list-progress`, `weekly-summary` slices; DTOs; unit specs (ranges, plan association, aggregates, trend, empty week).
+- [x] **1.4** e2e `test/progress.e2e-spec.ts`: new child with **no plan** can log; upsert same date → one row; `planId` set when a plan is active and kept after the plan completes; history order/pagination; weekly summary maths and empty week; clinician assigned reads / unassigned 403 / cannot write; other parent 403; admin reads; future/too-old date 400; out-of-range value 400.
+- [x] **1.5** `docs.e2e-spec.ts` rows; verify `npm run lint && npm test && npm run build && npm run test:e2e`.
+- [x] **2.1** Docs pass; Status → **Done**; update `docs/plans/README.md`; summary.
 
 ## Testing
 
@@ -119,8 +119,48 @@ Unit: upsert, scoping, aggregates/trend. E2E as above. `docs.e2e` rows: `progres
 
 ## 8. How to resume
 
-> Nothing implemented yet. Start at Batch 1, step 1.0. Precedents: `list-media.service.ts`
+> Implemented — see §9. Precedents: `list-media.service.ts`
 > (ownership shape), `create-plan-note.service.ts` (actor stamp).
 >
 > Paste-ready prompt: *"Implement docs/plans/0013 from step 1.0. Progress is per child and
 > must work with no plan. The weekly summary is computed (no AI, no free text)."*
+
+---
+
+## 9. Implementation summary
+
+Implemented 2026-10-04 in two batches (build → docs/close). Final: 415 unit tests / 81
+suites, 289 e2e tests / 22 suites (+ new `test/progress.e2e-spec.ts`), lint and build clean.
+
+**Plan deviations / decisions made while building**
+- **Date validator.** Plan 0009's `IsDateOnlyNotFuture` (`src/common/validation/`) is reused
+  for `entryDate`, `from`, `to` and `weekStart`. The 30-day back-dating limit is checked in
+  the upsert service (`400 VALIDATION_ERROR`); a path-param DTO validates the date.
+- **PUT = replace.** Omitted fields are stored as null; an empty body is
+  `400 VALIDATION_ERROR` (no new error codes). `201` created / `200` replaced via a
+  passthrough `@Res`; a unique-violation race on create falls back to an update.
+- **`planId`** is stamped from the ACTIVE plan on first write only and never changed.
+- **`weekStart`** may be any date; it is normalised to that week's Monday and the response
+  echoes the Monday. Default is the previous full Monday–Sunday UTC week.
+- **`trend`** compares the combined mood+behaviour average to the prior week (±0.25 → FLAT;
+  sleep excluded; null if either week lacks mood/behaviour data).
+- **One query, not a grouped query.** The summary fetches the requested + prior week
+  (≤14 rows) with one `findMany` and aggregates in code (needed for min/max/trend anyway).
+- **`activePlan.title`** comes from the plan's template (`Plan` has no title column).
+- **ADMIN** holds `progress:write:self` via the spread but the service rejects non-parent
+  writers; documented in `docs/rbac.md`.
+- Migration `20261004190000_add_progress_entries` is hand-assembled from `migrate diff`
+  output plus the `CHECK`s (the configured dev DB is a pooled Neon URL, so `migrate dev` was
+  not used); `migrate diff` reports no drift.
+
+**Files**
+- Schema + migration: `ProgressEntry`; `truncateAll()` updated.
+- Permissions: `progress:write:self`, `progress:read`.
+- `src/modules/progress/` — `upsert-progress`, `list-progress`, `weekly-summary` (+ specs;
+  shared access check, date util, week summariser, constants).
+- Tests: `test/progress.e2e-spec.ts`, 3 new `docs.e2e` rows.
+- Docs: `rbac.md`, `schema-decisions.md`, `testing.md`.
+
+**Not built (per plan):** AI summaries, notifications/reminders, clinician free-text summary
+(`ProgressNote`), plan-day completion tracking, brain-growth graphs/clinical scoring.
+**Still open:** confirm the provisional scales and 30-day window with product (D-7) before production.
