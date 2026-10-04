@@ -42,7 +42,7 @@ export class GetPlanService {
     }
     // ADMIN: no check.
 
-    return PlanDetailDto.fromWithContent(plan);
+    return PlanDetailDto.fromWithContent(plan, { audience: caller.role });
   }
 
   private forbidden(): ForbiddenException {

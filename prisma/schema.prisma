@@ -243,6 +243,9 @@ model PlanTemplateDay {
 
 model Plan {
   id             String       @id @default(uuid()) @db.Uuid
+/// At most one ACTIVE plan per child: a partial unique index `plans_one_active_per_child`
+/// ("childId" WHERE status = 'ACTIVE'), hand-written in migration
+/// 20261004180000_plans_one_active_per_child. Prisma cannot model it - do NOT drop it.
   childId        String       @db.Uuid
   child          Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
   planTemplateId String       @db.Uuid

@@ -61,7 +61,7 @@ export class ListPlansService {
     });
 
     const page = toCursorPage(rows, limit, (row) => row.id);
-    return { data: page.data.map(PlanDto.from), nextCursor: page.nextCursor };
+    return { data: page.data.map((row) => PlanDto.from(row, { audience: caller.role })), nextCursor: page.nextCursor };
   }
 
   private forbidden(): ForbiddenException {

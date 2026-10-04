@@ -27,7 +27,9 @@ CLIENT                          API                                   DB / EMAIL
   │  POST /auth/signup           │                                        │
   │  {name,email,password}       │                                        │
   │─────────────────────────────>│  email exists & verified?  ──> 409 EMAIL_ALREADY_REGISTERED
-  │                              │  email exists, unverified? ──> re-issue code, 201
+  │                              │  exists, unverified PARENT? ──> replace pw+name, revoke sessions,
+  │                              │                                 re-issue code (one txn), 201
+  │                              │  exists, non-PARENT?       ──> 409 EMAIL_ALREADY_REGISTERED
   │                              │  else: hash pw (argon2id), create User │
   │                              │        role=PARENT status=ACTIVE       │
   │                              │        emailVerifiedAt=null            │
@@ -196,3 +198,5 @@ above — only the envelope changed. Stable `code` values used by these flows:
 `INVALID_CREDENTIALS` · `EMAIL_NOT_VERIFIED` · `ACCOUNT_NOT_ACTIVE` · `INVALID_REFRESH_TOKEN` ·
 `INVALID_RESET_TOKEN` · `INVALID_SETUP_TOKEN` · `VALIDATION_ERROR` (DTO) ·
 `RATE_LIMITED` (throttler) · `UNAUTHORIZED` (missing/invalid bearer).
+
+> **Single-use under concurrency (plan 0009).** Refresh rotation, password-reset and account-setup tokens are claimed with a conditional `updateMany` (`revokedAt`/`consumedAt` still null); of two concurrent requests with one secret exactly one succeeds and the other gets `401 INVALID_REFRESH_TOKEN` / `400 INVALID_RESET_TOKEN` / `INVALID_SETUP_TOKEN`. Losing a rotation race does not revoke the family (reuse of an already-revoked token still does). Rotation also refuses a non-`ACTIVE` user.

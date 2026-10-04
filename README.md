@@ -59,7 +59,7 @@ cp .env.example .env
 Edit `.env` with your settings:
 - `DATABASE_URL`: Connection string for your development PostgreSQL database (Neon branch or local Docker).
 - `JWT_ACCESS_SECRET`: Any secure random secret (&ge; 16 characters).
-- *(Optional)*: `RESEND_API_KEY` (if unset, outgoing emails are logged to stdout).
+- `RESEND_API_KEY`: required (non-empty) when `NODE_ENV=production`; in development/test, if unset, outgoing emails are logged to stdout.
 - *(Optional)*: `SENTRY_DSN` (if unset, error tracking is a no-op).
 
 ### Step 3: Start Local Database (if using Docker)

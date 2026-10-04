@@ -21,7 +21,7 @@ This document serves as the **Architecture Decision Record (ADR)** explaining th
 | `MediaStatus` | `PENDING`, `UPLOADED`, `FAILED` | `PENDING` on ticket creation; `confirm` moves it to a terminal state — see `Media` below. |
 | `MediaProvider` | `CLOUDINARY` | Single value today — the column exists so a second storage backend (e.g. S3) is a value, not a migration, per the provider-agnostic `MediaStorageService` abstraction (`src/common/media-storage/`). |
 | `PlanTemplateStatus` | `DRAFT`, `PUBLISHED`, `ARCHIVED` | `DRAFT` while admin is authoring days; `PUBLISHED` is a one-way gate — only a `PUBLISHED` template can be assigned to a child; `ARCHIVED` is a future "retire this template" state, not yet reachable via any endpoint this phase. |
-| `PlanStatus` | `ACTIVE`, `COMPLETED`, `ARCHIVED` | At most one `ACTIVE` `Plan` per child, enforced in the service (no partial unique index — see `Plan` below). `COMPLETED`/`ARCHIVED` are both terminal; transitioning between them is `409 PLAN_ALREADY_FINAL`. |
+| `PlanStatus` | `ACTIVE`, `COMPLETED`, `ARCHIVED` | At most one `ACTIVE` `Plan` per child, enforced by a partial unique index (see `Plan` below). `COMPLETED`/`ARCHIVED` are both terminal; transitioning between them is `409 PLAN_ALREADY_FINAL`. |
 | `PlanOrigin` | `MANUAL`, `AI` | Always `MANUAL` this milestone — the column exists so a future AI-generated-plan pipeline is a value, not a migration. No `AI`-origin code path exists yet. |
 
 ## `PlanTemplate` / `PlanTemplateDay` (`plan_templates` / `plan_template_days`) — Phase 6
@@ -63,10 +63,14 @@ deletion flow (hence `Plan.planTemplateId`'s `Restrict` FK below).
 ## `Plan` (`plans`) — Phase 6
 
 A `PlanTemplate` assigned to a specific child, tracking its lifecycle. "At most one
-`ACTIVE` `Plan` per child" is a **service-layer invariant only** — checked on create
-(`409 PLAN_ALREADY_ACTIVE` if one already exists), not a partial unique index, per the
-same deliberate-simplification call as `ClinicianChildAssignment`'s "no unassign"
-decision.
+`ACTIVE` `Plan` per child" is enforced by the partial unique index
+`plans_one_active_per_child` (`"childId" WHERE status = 'ACTIVE'`), hand-written in
+migration `20261004180000_plans_one_active_per_child` because Prisma cannot express
+partial indexes (plan 0009 B-6). The service's pre-check is the friendly fast path;
+a concurrent assign that loses the race hits `P2002`, mapped to
+`409 PLAN_ALREADY_ACTIVE`. The migration aborts if duplicate ACTIVE plans already exist.
+Do not drop the index when authoring later migrations (the comment on `model Plan`
+says so); `prisma migrate diff` against the schema stays empty.
 
 | Field | Type | Notes |
 |-------|------|-------|

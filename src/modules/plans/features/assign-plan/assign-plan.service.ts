@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PlanStatus, PlanTemplateStatus, Role } from '@prisma/client';
+import { Plan, Prisma, PlanStatus, PlanTemplateStatus, Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { PlanDto } from '@modules/plans/shared/plan.dto';
@@ -71,18 +71,31 @@ export class AssignPlanService {
       });
     }
 
-    const plan = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.plan.create({
-        data: {
-          childId,
-          planTemplateId: dto.planTemplateId,
-          startDate: new Date(dto.startDate),
-          createdById: caller.id,
-        },
+    let plan: Plan;
+    try {
+      plan = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.plan.create({
+          data: {
+            childId,
+            planTemplateId: dto.planTemplateId,
+            startDate: new Date(dto.startDate),
+            createdById: caller.id,
+          },
+        });
+        await snapshotTemplateIntoPlan(tx, dto.planTemplateId, created.id);
+        return created;
       });
-      await snapshotTemplateIntoPlan(tx, dto.planTemplateId, created.id);
-      return created;
-    });
+    } catch (error) {
+      // The partial unique index plans_one_active_per_child is the real guard; the
+      // pre-check above is only the friendly fast path.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException({
+          code: 'PLAN_ALREADY_ACTIVE',
+          message: 'This child already has an active plan — complete or archive it first.',
+        });
+      }
+      throw error;
+    }
     return PlanDto.from(plan);
   }
 

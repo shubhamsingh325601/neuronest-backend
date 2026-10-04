@@ -55,7 +55,7 @@ export class TodayFocusService {
     const day = plan.days.find((d) => d.dayNumber === dayNumber) ?? null;
 
     return {
-      plan: PlanDto.from(plan),
+      plan: PlanDto.from(plan, { audience: caller.role }),
       day: day ? PlanDayDto.from(day) : null,
     };
   }

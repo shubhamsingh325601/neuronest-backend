@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { Role, UserStatus } from '@prisma/client';
+import { Prisma, Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { AssignPlanService } from './assign-plan.service';
@@ -128,5 +128,20 @@ describe('AssignPlanService', () => {
         { planId: 'plan-1', sectionId: undefined, dayNumber: 2, title: 'Day 2', instructions: 'B' },
       ],
     });
+  });
+
+  it("maps a unique-index violation from a concurrent assign to 409 PLAN_ALREADY_ACTIVE (B-6)", async () => {
+    prisma.$transaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "x" }),
+    );
+    await expect(service.assign("child-1", asUser("admin-1", Role.ADMIN), dto)).rejects.toMatchObject({
+      response: { code: "PLAN_ALREADY_ACTIVE" },
+      status: 409,
+    });
+  });
+
+  it("rethrows unrelated database errors", async () => {
+    prisma.$transaction.mockRejectedValue(new Error("boom"));
+    await expect(service.assign("child-1", asUser("admin-1", Role.ADMIN), dto)).rejects.toThrow("boom");
   });
 });

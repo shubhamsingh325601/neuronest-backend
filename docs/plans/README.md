@@ -14,7 +14,7 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0006 | Phase 6 — Plan Domain (Templates, Assignment, Clinician Notes) | Done | [0006-phase-6-plan-domain.md](0006-phase-6-plan-domain.md) |
 | 0007 | Phase 7 — Monthly Call Log | Done | [0007-phase-7-monthly-call-log.md](0007-phase-7-monthly-call-log.md) |
 | 0008 | Phase 8 — Backend API Completion | Done | [0008-phase-8-backend-api-completion.md](0008-phase-8-backend-api-completion.md) |
-| 0009 | Phase 9 — Security Fixes, Contract Fixes, Parent Plan Read | Proposed | [0009-phase-9-security-and-contract-fixes.md](0009-phase-9-security-and-contract-fixes.md) |
+| 0009 | Phase 9 — Security Fixes, Contract Fixes, Parent Plan Read | Done | [0009-phase-9-security-and-contract-fixes.md](0009-phase-9-security-and-contract-fixes.md) |
 | 0010 | Phase 10 — Clinician Lifecycle (Admin-Created) | Done | [0010-phase-10-clinician-lifecycle.md](0010-phase-10-clinician-lifecycle.md) |
 | 0011 | Phase 11 — Postgres Job Queue, Async Email, Stale-Media Cleanup | Done | [0011-phase-11-postgres-job-queue.md](0011-phase-11-postgres-job-queue.md) |
 | 0012 | Phase 12 — Media Consent Record and Manual Weekly Coaching | Done | [0012-phase-12-consent-and-coaching.md](0012-phase-12-consent-and-coaching.md) |

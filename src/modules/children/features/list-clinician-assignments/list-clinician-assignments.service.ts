@@ -52,7 +52,7 @@ export class ListClinicianAssignmentsService {
       where: { childId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    return rows.map(ClinicianChildAssignmentDto.from);
+    return rows.map((row) => ClinicianChildAssignmentDto.from(row, { audience: caller.role }));
   }
 
   private forbidden(): ForbiddenException {

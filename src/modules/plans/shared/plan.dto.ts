@@ -1,6 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { Plan, PlanDay, PlanOrigin, PlanSection, PlanStatus } from '@prisma/client';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Plan, PlanDay, PlanOrigin, PlanSection, PlanStatus, Role } from '@prisma/client';
 import { PlanSectionDto } from './plan-template.dto';
+
+/** Who is reading — `PARENT` gets the redacted shape; omitted means the full shape. */
+export interface PlanAudience {
+  audience?: Role;
+}
 
 /** Full representation of a plan, as returned to the child's own parent, an assigned clinician, or admin. */
 export class PlanDto {
@@ -22,8 +27,8 @@ export class PlanDto {
   @ApiProperty({ type: String, format: 'date' })
   startDate!: Date;
 
-  @ApiProperty()
-  createdById!: string;
+  @ApiPropertyOptional({ description: 'Omitted for the PARENT audience.' })
+  createdById?: string;
 
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: Date;
@@ -31,8 +36,8 @@ export class PlanDto {
   @ApiProperty({ type: String, format: 'date-time' })
   updatedAt!: Date;
 
-  static from(row: Plan): PlanDto {
-    return {
+  static from(row: Plan, { audience }: PlanAudience = {}): PlanDto {
+    const dto: PlanDto = {
       id: row.id,
       childId: row.childId,
       planTemplateId: row.planTemplateId,
@@ -43,6 +48,11 @@ export class PlanDto {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+    // Parents see what their child's plan is, not which staff member authored it.
+    if (audience === Role.PARENT) {
+      delete dto.createdById;
+    }
+    return dto;
   }
 }
 
@@ -86,9 +96,12 @@ export class PlanDetailDto extends PlanDto {
   @ApiProperty({ type: [PlanSectionDto] })
   sections!: PlanSectionDto[];
 
-  static fromWithContent(row: Plan & { days: PlanDay[]; sections: PlanSection[] }): PlanDetailDto {
+  static fromWithContent(
+    row: Plan & { days: PlanDay[]; sections: PlanSection[] },
+    options: PlanAudience = {},
+  ): PlanDetailDto {
     return {
-      ...PlanDto.from(row),
+      ...PlanDto.from(row, options),
       days: [...row.days].sort((a, b) => a.dayNumber - b.dayNumber).map(PlanDayDto.from),
       sections: [...row.sections].sort((a, b) => a.position - b.position).map(PlanSectionDto.from),
     };

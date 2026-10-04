@@ -11,7 +11,7 @@ import { createTestApp, type TestContext } from './helpers/test-app';
  * applied through `Plan.childId`. All actors are created once in `beforeAll` and
  * reused across every `it`.
  */
-describe('Plan domain: templates → assignment → today\'s focus → notes (e2e)', () => {
+describe("Plan domain: templates → assignment → today's focus → notes (e2e)", () => {
   let ctx: TestContext;
   const http = () => request(ctx.app.getHttpServer());
   const password = 'a-strong-passphrase';
@@ -117,7 +117,7 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
       expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
     });
 
-    it("GET /v1/plan-templates as a clinician never returns a DRAFT row", async () => {
+    it('GET /v1/plan-templates as a clinician never returns a DRAFT row', async () => {
       const draft = await asToken(admin.token)(
         http().post('/v1/plan-templates').send({ title: 'Still draft', days: templateDays }),
       );
@@ -129,7 +129,9 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
 
     it('admin sees DRAFT rows in the list', async () => {
       const draft = await asToken(admin.token)(
-        http().post('/v1/plan-templates').send({ title: 'Admin visible draft', days: templateDays }),
+        http()
+          .post('/v1/plan-templates')
+          .send({ title: 'Admin visible draft', days: templateDays }),
       );
       const list = await asToken(admin.token)(http().get('/v1/plan-templates'));
       expect(list.status).toBe(200);
@@ -272,7 +274,11 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
           .send({ planTemplateId: templateId, startDate: '2026-09-22' }),
       );
       expect(assigned.status).toBe(201);
-      expect(assigned.body).toMatchObject({ childId, planTemplateId: templateId, status: 'ACTIVE' });
+      expect(assigned.body).toMatchObject({
+        childId,
+        planTemplateId: templateId,
+        status: 'ACTIVE',
+      });
       const planId = assigned.body.id as string;
 
       const secondTemplateId = await createPublishedTemplate('Second program');
@@ -292,6 +298,29 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
       expect(archived.body.status).toBe('ARCHIVED');
     });
 
+    it('B-6: two concurrent assignments for one child — exactly one 201, the other 409 PLAN_ALREADY_ACTIVE', async () => {
+      const [t1, t2] = [
+        await createPublishedTemplate('Race program A'),
+        await createPublishedTemplate('Race program B'),
+      ];
+      const assign = (templateId: string) =>
+        asToken(admin.token)(
+          http()
+            .post(`/v1/children/${childId}/plans`)
+            .send({ planTemplateId: templateId, startDate: '2026-09-22' }),
+        );
+
+      const [a, b] = await Promise.all([assign(t1), assign(t2)]);
+      expect([a.status, b.status].sort()).toEqual([201, 409]);
+      const [winner, loser] = a.status === 201 ? [a, b] : [b, a];
+      expect(loser.body.code).toBe('PLAN_ALREADY_ACTIVE');
+
+      const archived = await asToken(admin.token)(
+        http().post(`/v1/plans/${winner.body.id as string}/archive`),
+      );
+      expect(archived.status).toBe(200);
+    });
+
     it('completing/archiving is idempotent, and cross-terminal-transition is 409', async () => {
       const templateId = await createPublishedTemplate('Lifecycle program');
       const assigned = await asToken(admin.token)(
@@ -301,9 +330,7 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
       );
       const planId = assigned.body.id as string;
 
-      const completedOnce = await asToken(admin.token)(
-        http().post(`/v1/plans/${planId}/complete`),
-      );
+      const completedOnce = await asToken(admin.token)(http().post(`/v1/plans/${planId}/complete`));
       expect(completedOnce.status).toBe(200);
       expect(completedOnce.body.status).toBe('COMPLETED');
 
@@ -362,7 +389,7 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
       await asToken(admin.token)(http().post(`/v1/plans/${assigned.body.id}/archive`));
     });
 
-    it('a non-owning parent cannot read today\'s focus', async () => {
+    it("a non-owning parent cannot read today's focus", async () => {
       const res = await asToken(parentOther.token)(
         http().get(`/v1/children/${childId}/plans/today`),
       );
@@ -370,7 +397,7 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
       expect(res.body.code).toBe('FORBIDDEN');
     });
 
-    it('a non-assigned clinician cannot read today\'s focus', async () => {
+    it("a non-assigned clinician cannot read today's focus", async () => {
       const res = await asToken(clinicianOther.token)(
         http().get(`/v1/children/${childId}/plans/today`),
       );
@@ -400,6 +427,41 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
       const res = await asToken(parentOwner.token)(http().get(`/v1/plans/${historyPlanId}`));
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ id: historyPlanId, status: 'ARCHIVED' });
+    });
+
+    it('B/G: the owning parent gets the plan content (title, days) and no createdById, even for an ARCHIVED template', async () => {
+      const templateId = await createPublishedTemplate('Archived-later program');
+      const assigned = await asToken(admin.token)(
+        http()
+          .post(`/v1/children/${childId}/plans`)
+          .send({ planTemplateId: templateId, startDate: '2026-09-22' }),
+      );
+      const planId = assigned.body.id as string;
+      expect(assigned.body.createdById).toBe(admin.id);
+      await asToken(admin.token)(http().post(`/v1/plan-templates/${templateId}/archive`));
+
+      const asParent = await asToken(parentOwner.token)(http().get(`/v1/plans/${planId}`));
+      expect(asParent.status).toBe(200);
+      expect(asParent.body.days.map((d: { dayNumber: number }) => d.dayNumber)).toEqual([1, 2, 3]);
+      expect(asParent.body.days[0]).toMatchObject({ title: 'Day 1', instructions: 'Say hello' });
+      expect(asParent.body).not.toHaveProperty('createdById');
+
+      const asOtherParent = await asToken(parentOther.token)(http().get(`/v1/plans/${planId}`));
+      expect(asOtherParent.status).toBe(403);
+
+      const asClinician = await asToken(clinicianAssigned.token)(http().get(`/v1/plans/${planId}`));
+      expect(asClinician.body.createdById).toBe(admin.id);
+      expect(asClinician.body.days).toHaveLength(3);
+
+      const list = await asToken(parentOwner.token)(http().get(`/v1/children/${childId}/plans`));
+      expect(list.body.data.length).toBeGreaterThan(0);
+      for (const row of list.body.data) {
+        expect(row).not.toHaveProperty('createdById');
+      }
+      const adminList = await asToken(admin.token)(http().get(`/v1/children/${childId}/plans`));
+      expect(adminList.body.data[0].createdById).toEqual(expect.any(String));
+
+      await asToken(admin.token)(http().post(`/v1/plans/${planId}/archive`));
     });
 
     it('a non-existent plan id is a 404', async () => {
@@ -432,9 +494,7 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
     });
 
     it('a non-assigned clinician cannot list the plan history', async () => {
-      const res = await asToken(clinicianOther.token)(
-        http().get(`/v1/children/${childId}/plans`),
-      );
+      const res = await asToken(clinicianOther.token)(http().get(`/v1/children/${childId}/plans`));
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('FORBIDDEN');
     });
@@ -504,9 +564,7 @@ describe('Plan domain: templates → assignment → today\'s focus → notes (e2
     });
 
     it('a parent cannot read plan notes (role lacks the permission)', async () => {
-      const res = await asToken(parentOwner.token)(
-        http().get(`/v1/plans/${notesPlanId}/notes`),
-      );
+      const res = await asToken(parentOwner.token)(http().get(`/v1/plans/${notesPlanId}/notes`));
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
     });

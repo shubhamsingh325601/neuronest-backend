@@ -1,6 +1,6 @@
 # Plan 0009 — Phase 9: Security Fixes, Contract Fixes, Parent Plan Read
 
-Status: **Proposed**
+Status: **Done**
 Owner: backend
 Last updated: 2026-10-04
 
@@ -179,18 +179,18 @@ Shared DTO changes: `PlanDto` (audience-aware), new `PlanDetailDto` (`src/module
 
 ### Batch 4 — Data and contracts
 
-- [ ] **4.0** Run the §4 diagnostic against dev and prod databases; resolve duplicates first.
-- [ ] **4.1** B-6 migration (§4) + `AssignPlanService` `P2002` mapping; `npx prisma migrate dev --create-only` drift check; comment in `schema.prisma`.
-- [ ] **4.2** B-9 date validator + `CreateChildDto`; unit spec.
-- [ ] **4.3** B-10/X-7 audience-aware DTOs; update all plan/assignment call sites.
-- [ ] **4.4** B/G `PlanDetailDto` + `GetPlanService`.
-- [ ] **4.5** e2e: `plan-domain` (parent gets title + all days; other parent 403; archived template still readable; clinician/admin shape additive; `createdById` absent for parent), concurrent `planAssign` (one 201, one 409 `PLAN_ALREADY_ACTIVE`), `child-care-domain` (parent care-team response has no `assignedByAdminId`; admin/clinician still do), child DOB (future 400, today OK, past OK, datetime 400).
-- [ ] **4.6** Verify full suite.
+- [x] **4.0** Run the §4 diagnostic against dev and prod databases; resolve duplicates first.
+- [x] **4.1** B-6 migration (§4) + `AssignPlanService` `P2002` mapping; `npx prisma migrate dev --create-only` drift check; comment in `schema.prisma`.
+- [x] **4.2** B-9 date validator + `CreateChildDto`; unit spec.
+- [x] **4.3** B-10/X-7 audience-aware DTOs; update all plan/assignment call sites.
+- [x] **4.4** B/G `PlanDetailDto` + `GetPlanService`.
+- [x] **4.5** e2e: `plan-domain` (parent gets title + all days; other parent 403; archived template still readable; clinician/admin shape additive; `createdById` absent for parent), concurrent `planAssign` (one 201, one 409 `PLAN_ALREADY_ACTIVE`), `child-care-domain` (parent care-team response has no `assignedByAdminId`; admin/clinician still do), child DOB (future 400, today OK, past OK, datetime 400).
+- [x] **4.6** Verify full suite.
 
 ### Batch 5 — Docs and close
 
-- [ ] **5.1** Update `docs/api-conventions.md` (signup paragraph), `docs/auth-flows.md`, `docs/rbac.md` note, `docs/schema-decisions.md`, `.env.example`, README env table.
-- [ ] **5.2** Flip this file's Status to **Done**, update `docs/plans/README.md`, write the implementation summary (files, env vars, migration name, tests, verified proxy hop count).
+- [x] **5.1** Update `docs/api-conventions.md` (signup paragraph), `docs/auth-flows.md`, `docs/rbac.md` note, `docs/schema-decisions.md`, `.env.example`, README env table.
+- [x] **5.2** Flip this file's Status to **Done**, update `docs/plans/README.md`, write the implementation summary (files, env vars, migration name, tests, verified proxy hop count).
 
 ## Testing
 
@@ -220,3 +220,47 @@ Shared DTO changes: `PlanDto` (audience-aware), new `PlanDetailDto` (`src/module
 > Paste-ready prompt: *"Implement docs/plans/0009 batch by batch starting at Batch 1.
 > Re-confirm each bug with a failing test before fixing. Follow AGENTS.md cardinal rules.
 > Run lint, unit, build and e2e after every batch and stop to report at each verify step."*
+
+## 9. Implementation summary
+
+Delivered in two sittings (Batches 1–3, then Batch 4–5) on 2026-10-04. Final verification:
+`npm run lint`, `npm test` (393), `npm run build`, `npm run test:e2e` (277) all green.
+
+**What shipped**
+
+| Item | Where |
+|---|---|
+| B-1 / X-5 signup re-claim, non-PARENT → 409, `P2002` race | `auth/features/signup/signup.service.ts` |
+| X-4 single-use link tokens | `auth/shared/verification-token.service.ts` (`claim`) |
+| B-7 / X-8 atomic rotation, non-ACTIVE refused | `auth/shared/refresh-token.service.ts` |
+| B-5 `RESEND_API_KEY` required in production | `common/config/env.validation.ts` (+ spec) |
+| B-4 provider-verified media metadata | `MediaStorageService.inspectUpload`, `mime-type.util.ts`, `confirm-upload.service.ts` |
+| B-6 one ACTIVE plan per child | migration `20261004180000_plans_one_active_per_child`; `P2002` → `409 PLAN_ALREADY_ACTIVE` in `assign-plan.service.ts` |
+| B-9 date-only, not-future DOB | `common/validation/is-date-only-not-future.decorator.ts`, `CreateChildDto` |
+| B-10 / X-7 parent redaction | `ClinicianChildAssignmentDto.from(row, { audience })`, `PlanDto.from(row, { audience })` |
+| B/G parent plan read | delivered by plan 0016 (`PlanDetailDto` with `days[]`/`sections[]`); 0009 added the parent-safe redaction and the e2e proof |
+
+**Deviations from the plan as written**
+
+- **B-2 / `TRUST_PROXY_HOPS` (§3 rows 4/4a, steps 2.2–2.4) was superseded** by the
+  2026-10-04 decision in `docs/plans/README.md`: no IP-based rate limiting; limits key on
+  user id / email / token. The `configureApp()` extraction from this plan stayed and is
+  used by `main.ts` and the e2e test app. No hop count was ever measured.
+- **Migration SQL used `"childId"`, not `child_id`.** The plan's SQL assumed a snake_case
+  column, but `Plan.childId` has no `@map`. Corrected in the migration and the operator
+  diagnostic (§4 text above still shows the original; use `"childId"`).
+- **Step 4.0 diagnostic** ran against the dev database only (zero duplicate ACTIVE plans).
+  **It has not been run against production** — run
+  `SELECT "childId", count(*) FROM plans WHERE status = 'ACTIVE' GROUP BY "childId" HAVING count(*) > 1;`
+  there before deploying, because the migration aborts on duplicates.
+- `prisma migrate diff` (migrations vs schema) against the local test database was empty
+  after the hand-written index, so Prisma will not emit a DROP for it.
+- The B-7 race is not reliably reproducible over HTTP on a fast local database, so the
+  deterministic regression guard is the `refresh-token.service` unit spec; the e2e keeps
+  an "exactly one of two succeeds" assertion. B-6 and X-4 races did reproduce at e2e level.
+- Provider-reported `duration` is rounded to whole seconds (the column is `Int`).
+
+**Env:** `RESEND_API_KEY` now required in production. No other variables added or kept
+(`TRUST_PROXY_HOPS` removed by the later throttle refactor).
+
+**Not done / parked as planned:** B-3 playback expiry (D-2), D-1, D-6, D-15, B-8 (plan 0011).

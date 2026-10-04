@@ -64,6 +64,30 @@ describe('Core Care Domain: Child + Clinician↔Child isolation (e2e)', () => {
     childId = res.body.id as string;
   });
 
+  describe('B-9: dateOfBirth validation', () => {
+    const create = (dateOfBirth: string) =>
+      asToken(parentOther.token)(http().post('/v1/children').send({ name: 'Sam', dateOfBirth }));
+    const day = (offset: number) =>
+      new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
+    it.each([
+      ['a future date', () => day(2)],
+      ['a datetime', () => '2019-05-14T00:00:00.000Z'],
+      ['a non-existent calendar date', () => '2019-02-30'],
+    ])('rejects %s with 400 VALIDATION_ERROR', async (_label, value) => {
+      const res = await create(value());
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('accepts today (and a past date, already covered above)', async () => {
+      const res = await create(day(0));
+      expect(res.status).toBe(201);
+      // Remove it so this parent has no child for the isolation tests below.
+      await ctx.prisma.child.delete({ where: { id: res.body.id as string } });
+    });
+  });
+
   it('a second create by the same parent is a 409', async () => {
     const res = await asToken(parentOwner.token)(
       http().post('/v1/children').send({ name: 'Sam', dateOfBirth: '2020-01-01' }),
@@ -106,9 +130,7 @@ describe('Core Care Domain: Child + Clinician↔Child isolation (e2e)', () => {
 
   it('admin assigns a clinician; that clinician can then read the child', async () => {
     const assign = await asToken(admin.token)(
-      http()
-        .post(`/v1/children/${childId}/clinicians`)
-        .send({ clinicianId: clinicianAssigned.id }),
+      http().post(`/v1/children/${childId}/clinicians`).send({ clinicianId: clinicianAssigned.id }),
     );
     expect(assign.status).toBe(201);
     expect(assign.body).toMatchObject({
@@ -129,9 +151,7 @@ describe('Core Care Domain: Child + Clinician↔Child isolation (e2e)', () => {
 
   it('assigning the same clinician again is a 409', async () => {
     const res = await asToken(admin.token)(
-      http()
-        .post(`/v1/children/${childId}/clinicians`)
-        .send({ clinicianId: clinicianAssigned.id }),
+      http().post(`/v1/children/${childId}/clinicians`).send({ clinicianId: clinicianAssigned.id }),
     );
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('CLINICIAN_ALREADY_ASSIGNED');
@@ -139,9 +159,7 @@ describe('Core Care Domain: Child + Clinician↔Child isolation (e2e)', () => {
 
   it('assigning a non-clinician user id is a 404', async () => {
     const res = await asToken(admin.token)(
-      http()
-        .post(`/v1/children/${childId}/clinicians`)
-        .send({ clinicianId: parentOwner.id }),
+      http().post(`/v1/children/${childId}/clinicians`).send({ clinicianId: parentOwner.id }),
     );
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('CLINICIAN_NOT_FOUND');
@@ -186,9 +204,7 @@ describe('Core Care Domain: Child + Clinician↔Child isolation (e2e)', () => {
 
   it('non-admin roles cannot assign a clinician', async () => {
     const res = await asToken(parentOwner.token)(
-      http()
-        .post(`/v1/children/${childId}/clinicians`)
-        .send({ clinicianId: clinicianOther.id }),
+      http().post(`/v1/children/${childId}/clinicians`).send({ clinicianId: clinicianOther.id }),
     );
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('INSUFFICIENT_PERMISSIONS');
@@ -196,10 +212,26 @@ describe('Core Care Domain: Child + Clinician↔Child isolation (e2e)', () => {
 
   describe('A1: care-team listing', () => {
     it('the owning parent sees the full care team', async () => {
-      const res = await asToken(parentOwner.token)(http().get(`/v1/children/${childId}/clinicians`));
+      const res = await asToken(parentOwner.token)(
+        http().get(`/v1/children/${childId}/clinicians`),
+      );
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(1);
       expect(res.body[0]).toMatchObject({ clinicianId: clinicianAssigned.id, childId });
+    });
+
+    it('B-10: the parent view omits assignedByAdminId; clinician and admin still see it', async () => {
+      const asParent = await asToken(parentOwner.token)(
+        http().get(`/v1/children/${childId}/clinicians`),
+      );
+      expect(asParent.body[0]).not.toHaveProperty('assignedByAdminId');
+
+      const asClinician = await asToken(clinicianAssigned.token)(
+        http().get(`/v1/children/${childId}/clinicians`),
+      );
+      expect(asClinician.body[0].assignedByAdminId).toEqual(expect.any(String));
+      const asAdmin = await asToken(admin.token)(http().get(`/v1/children/${childId}/clinicians`));
+      expect(asAdmin.body[0].assignedByAdminId).toEqual(expect.any(String));
     });
 
     it('an assigned clinician sees the full care team, not just their own row', async () => {

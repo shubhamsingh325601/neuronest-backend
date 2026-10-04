@@ -48,10 +48,13 @@ The rules every endpoint follows, so new ones don't each re-decide. The referenc
 
 `POST` is not idempotent by default, but a specific endpoint may choose to behave
 idempotently — document it where it happens. Current example: `POST /v1/auth/signup`
-called again for an email that exists **but was never verified** re-issues a fresh
-verification code and returns **201**, indistinguishable from a first signup. This is
-intentional: it doubles as "resend my code" and it does not leak that the address is
-taken. (Signup for an already-*verified* email is a real conflict → **409**.)
+called again for an email that exists **but was never verified** returns **201**,
+indistinguishable from a first signup. It **replaces** the stored password and name with
+the new request's, revokes every refresh token, and issues a fresh code, all in one
+transaction — so whoever verifies the latest code owns the account, and an earlier
+squatter's password stops working (plan 0009 B-1). It does not leak that the address is
+taken. Signup for an already-*verified* email, or for any row that is not a `PARENT`
+(an invited clinician, an admin), is a real conflict → **409**, with no change made.
 
 ## Status codes in use
 

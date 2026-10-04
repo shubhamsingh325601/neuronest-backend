@@ -208,6 +208,13 @@ Same existence-check precedent as `child:read`/`media:read` above, walked from a
 Still a single row-existence check, same as `child:read` — does not trigger the
 `@casl/ability` migration note in §7.
 
+**Parent reads (plan 0009).** `GET /v1/plans/{id}` returns the plan's own content
+(`days[]`, `sections[]`) to the child's parent, but `PARENT` is still not granted
+`plan-template:read`, so the template stays unreachable by id; the plan endpoint is the
+only door. The parent audience also gets redacted shapes: `PlanDto.createdById` and
+`ClinicianChildAssignmentDto.assignedByAdminId` are omitted for `PARENT` (clinician and
+admin shapes are unchanged).
+
 ### `plan-template:read` (Phase 6) — a new scoping *shape*: query filter, not existence check
 
 Every ownership check so far (`child:read`, `media:read`, `plan:manage`/`plan:read`
