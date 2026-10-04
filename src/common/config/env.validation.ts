@@ -89,6 +89,22 @@ export const envValidationSchema = Joi.object({
   THROTTLE_TTL_SEC: Joi.number().integer().positive().default(60),
   THROTTLE_LIMIT: Joi.number().integer().positive().default(100),
 
+  // Background jobs (plan 0011). JOBS_ENABLED=false turns off the cron sweep and boot
+  // catch-up (tests); the post-commit kick and admin trigger still work.
+  JOBS_ENABLED: Joi.boolean().default(true),
+  JOBS_SWEEP_CRON: Joi.string().default('0 */10 * * * *'),
+  JOBS_VISIBILITY_TIMEOUT_SEC: Joi.number().integer().min(60).default(300),
+  JOBS_BATCH_SIZE: Joi.number().integer().min(1).max(100).default(10),
+  JOBS_BACKOFF_BASE_SEC: Joi.number().integer().min(1).default(30),
+  JOBS_BACKOFF_CAP_SEC: Joi.number().integer().min(1).default(3600),
+  JOBS_MAX_ATTEMPTS: Joi.number().integer().min(1).default(5),
+  JOBS_SUCCEEDED_RETENTION_DAYS: Joi.number().integer().min(1).default(14),
+  JOBS_SHUTDOWN_GRACE_SEC: Joi.number().integer().min(0).default(20),
+  JOBS_KICK_MODE: Joi.string().valid('async', 'inline').default('async'),
+  // Optional shared secret for the machine trigger POST /v1/jobs/run-due. Unset = route
+  // disabled (404). When set it must be a long random value.
+  JOBS_RUN_TOKEN: Joi.string().min(32).allow('').default(''),
+
   SENTRY_DSN: Joi.string().allow('').default(''),
   LOG_LEVEL: Joi.string()
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')

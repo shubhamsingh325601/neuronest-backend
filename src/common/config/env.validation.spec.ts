@@ -37,7 +37,9 @@ describe('envValidationSchema', () => {
     });
 
     it('may be empty in development and test', () => {
-      expect(validate({ ...base, NODE_ENV: 'development', RESEND_API_KEY: '' }).error).toBeUndefined();
+      expect(
+        validate({ ...base, NODE_ENV: 'development', RESEND_API_KEY: '' }).error,
+      ).toBeUndefined();
       expect(validate({ ...base, NODE_ENV: 'test' }).error).toBeUndefined();
     });
   });

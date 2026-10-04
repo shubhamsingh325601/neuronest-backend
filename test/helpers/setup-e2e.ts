@@ -12,4 +12,9 @@ if (process.env.TEST_DATABASE_URL) {
 process.env.ARGON2_MEMORY_KIB = '8192';
 process.env.ARGON2_TIME_COST = '1';
 
+// Background jobs: no cron/boot sweep in tests; the post-commit kick runs inside the request
+// so specs that read `ctx.mail` right after an HTTP call keep working (plan 0011 §3 row 17).
+process.env.JOBS_ENABLED = 'false';
+process.env.JOBS_KICK_MODE = 'inline';
+
 jest.setTimeout(30000);

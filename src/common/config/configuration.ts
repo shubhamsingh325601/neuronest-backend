@@ -48,6 +48,20 @@ export interface AppConfig {
   sentry: {
     dsn: string;
   };
+  jobs: {
+    enabled: boolean;
+    sweepCron: string;
+    visibilityTimeoutSec: number;
+    batchSize: number;
+    backoffBaseSec: number;
+    backoffCapSec: number;
+    maxAttempts: number;
+    succeededRetentionDays: number;
+    shutdownGraceSec: number;
+    kickMode: 'async' | 'inline';
+    /** Empty = the machine trigger `POST /v1/jobs/run-due` is disabled (404). */
+    runToken: string;
+  };
   logLevel: string;
   admin: {
     email: string;
@@ -98,6 +112,19 @@ export const configuration = (): AppConfig => ({
   },
   sentry: {
     dsn: process.env.SENTRY_DSN ?? '',
+  },
+  jobs: {
+    enabled: process.env.JOBS_ENABLED !== 'false',
+    sweepCron: process.env.JOBS_SWEEP_CRON ?? '0 */10 * * * *',
+    visibilityTimeoutSec: parseInt(process.env.JOBS_VISIBILITY_TIMEOUT_SEC ?? '300', 10),
+    batchSize: parseInt(process.env.JOBS_BATCH_SIZE ?? '10', 10),
+    backoffBaseSec: parseInt(process.env.JOBS_BACKOFF_BASE_SEC ?? '30', 10),
+    backoffCapSec: parseInt(process.env.JOBS_BACKOFF_CAP_SEC ?? '3600', 10),
+    maxAttempts: parseInt(process.env.JOBS_MAX_ATTEMPTS ?? '5', 10),
+    succeededRetentionDays: parseInt(process.env.JOBS_SUCCEEDED_RETENTION_DAYS ?? '14', 10),
+    shutdownGraceSec: parseInt(process.env.JOBS_SHUTDOWN_GRACE_SEC ?? '20', 10),
+    kickMode: process.env.JOBS_KICK_MODE === 'inline' ? 'inline' : 'async',
+    runToken: process.env.JOBS_RUN_TOKEN ?? '',
   },
   logLevel: process.env.LOG_LEVEL ?? 'info',
   admin: {

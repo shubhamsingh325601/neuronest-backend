@@ -162,6 +162,7 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     path: '/v1/admin/summary',
     operationId: 'adminSummaryGet',
   },
+  { method: 'post', path: '/v1/jobs/run-due', operationId: 'jobRunDue' },
 ];
 
 describe('OpenAPI spec (e2e)', () => {

@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '@common/authz/jwt-auth.guard';
 import { PermissionsGuard } from '@common/authz/permissions.guard';
 import { CryptoModule } from '@common/crypto/crypto.module';
 import { EmailModule } from '@common/email/email.module';
+import { JobsModule } from '@common/jobs/jobs.module';
 import { LoggingModule } from '@common/logging/logging.module';
 import { MediaStorageModule } from '@common/media-storage/media-storage.module';
 import { PrismaModule } from '@common/prisma/prisma.module';
@@ -18,6 +19,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { CallLogsModule } from '@modules/call-logs/call-logs.module';
 import { ChildrenModule } from '@modules/children/children.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
+import { JobsHttpModule } from '@modules/jobs/jobs.module';
 import { HealthModule } from '@modules/health/health.module';
 import { MediaModule } from '@modules/media/media.module';
 import { PlansModule } from '@modules/plans/plans.module';
@@ -45,6 +47,7 @@ import { UsersModule } from '@modules/users/users.module';
     PrismaModule,
     CryptoModule,
     EmailModule,
+    JobsModule,
     MediaStorageModule,
     AuthzModule,
 
@@ -56,6 +59,7 @@ import { UsersModule } from '@modules/users/users.module';
     PlansModule,
     CallLogsModule,
     HealthModule,
+    JobsHttpModule,
     AdminModule,
   ],
   providers: [
