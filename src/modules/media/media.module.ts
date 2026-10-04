@@ -5,6 +5,7 @@ import { ConfirmUploadController } from './features/confirm-upload/confirm-uploa
 import { ConfirmUploadService } from './features/confirm-upload/confirm-upload.service';
 import { ListMediaController } from './features/list-media/list-media.controller';
 import { ListMediaService } from './features/list-media/list-media.service';
+import { MediaJobs } from './jobs/media.jobs';
 
 /**
  * Media upload (Phase 5): photos/videos a parent captures of their child. Depends on
@@ -13,6 +14,6 @@ import { ListMediaService } from './features/list-media/list-media.service';
  */
 @Module({
   controllers: [CreateUploadTicketController, ConfirmUploadController, ListMediaController],
-  providers: [CreateUploadTicketService, ConfirmUploadService, ListMediaService],
+  providers: [CreateUploadTicketService, ConfirmUploadService, ListMediaService, MediaJobs],
 })
 export class MediaModule {}

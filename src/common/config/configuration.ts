@@ -62,6 +62,10 @@ export interface AppConfig {
     /** Empty = the machine trigger `POST /v1/jobs/run-due` is disabled (404). */
     runToken: string;
   };
+  media: {
+    /** A media row still PENDING after this many hours is flipped to FAILED by the sweep. */
+    pendingTtlHours: number;
+  };
   logLevel: string;
   admin: {
     email: string;
@@ -125,6 +129,9 @@ export const configuration = (): AppConfig => ({
     shutdownGraceSec: parseInt(process.env.JOBS_SHUTDOWN_GRACE_SEC ?? '20', 10),
     kickMode: process.env.JOBS_KICK_MODE === 'inline' ? 'inline' : 'async',
     runToken: process.env.JOBS_RUN_TOKEN ?? '',
+  },
+  media: {
+    pendingTtlHours: parseInt(process.env.MEDIA_PENDING_TTL_HOURS ?? '24', 10),
   },
   logLevel: process.env.LOG_LEVEL ?? 'info',
   admin: {

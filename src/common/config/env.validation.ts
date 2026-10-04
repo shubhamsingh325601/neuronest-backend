@@ -105,6 +105,10 @@ export const envValidationSchema = Joi.object({
   // disabled (404). When set it must be a long random value.
   JOBS_RUN_TOKEN: Joi.string().min(32).allow('').default(''),
 
+  // A media upload ticket still PENDING after this long is expired to FAILED (plan 0011 B-8).
+  // Generous so a slow upload is never failed under the parent.
+  MEDIA_PENDING_TTL_HOURS: Joi.number().integer().min(1).default(24),
+
   SENTRY_DSN: Joi.string().allow('').default(''),
   LOG_LEVEL: Joi.string()
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')

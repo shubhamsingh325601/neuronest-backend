@@ -151,7 +151,12 @@ describe('Admin jobs (e2e)', () => {
   it('run-due (admin) processes due jobs and returns counts', async () => {
     shouldFail = false;
     await ctx.prisma.job.create({
-      data: { type: 'test.flaky', payload: {}, status: JobStatus.PENDING },
+      data: {
+        type: 'test.flaky',
+        payload: {},
+        status: JobStatus.PENDING,
+        runAt: new Date(Date.now() - 60_000),
+      },
     });
     const res = await as(admin, http().post('/v1/admin/jobs/run-due'));
     expect(res.status).toBe(200);
