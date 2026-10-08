@@ -118,6 +118,20 @@ describe('AllExceptionsFilter', () => {
     });
   });
 
+  it('keeps a deliberate 503 out of Sentry and the error log, but still reports a real 500', () => {
+    const captureException = jest.requireMock('@sentry/nestjs').captureException as jest.Mock;
+    captureException.mockClear();
+
+    const { status } = caught(
+      new HttpException({ code: 'AI_DISABLED', message: 'off' }, HttpStatus.SERVICE_UNAVAILABLE),
+    );
+    expect(status).toBe(503);
+    expect(captureException).not.toHaveBeenCalled();
+
+    caught(new Error('boom'));
+    expect(captureException).toHaveBeenCalledTimes(1);
+  });
+
   it('nulls requestId when neither req.id nor the header is present', () => {
     filter.catch(new UnauthorizedException({ code: 'MISSING_TOKEN', message: 'x' }), {
       switchToHttp: () => ({

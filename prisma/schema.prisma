@@ -96,6 +96,8 @@ model User {
   appointmentSlotsOwned   AppointmentSlot[]          @relation("AppointmentSlotsOwned")
   appointmentSlotsCreated AppointmentSlot[]          @relation("AppointmentSlotsCreated")
   appointmentsMade        Appointment[]              @relation("AppointmentsMade")
+  aiRuns                  AiRun[]                    @relation("AiRunsByUser")
+  aiOutputsRequested      AiOutput[]                 @relation("AiOutputsRequested")
 
   @@map("users")
 }
@@ -164,6 +166,8 @@ model Child {
   coachingTips         CoachingTip[]
   progressEntries      ProgressEntry[]
   appointments         Appointment[]
+  aiRuns               AiRun[]
+  aiOutputs            AiOutput[]
 
   @@map("children")
 }
@@ -460,4 +464,75 @@ model Appointment {
 
   @@index([childId])
   @@map("appointments")
+}
+
+enum AiRunStatus {
+  SUCCEEDED
+  INVALID_OUTPUT // schema/parse failure or post-check failure
+  BLOCKED // provider content filter or our safety filter
+  RATE_LIMITED // provider 429
+  TIMEOUT
+  PROVIDER_ERROR // 4xx/5xx other than 429
+  REJECTED_BUDGET // refused by our own budget; no provider request was made
+}
+
+/// One row per provider ATTEMPT (primary = 1, fallback = 2). Metadata only: never a prompt,
+/// input, output, or error message (plan 0018 Q7). COUNT(*) of non-REJECTED_BUDGET rows per
+/// Pacific day is the provider-request budget.
+model AiRun {
+  id                   String      @id @default(uuid()) @db.Uuid
+  capability           String
+  promptId             String
+  promptVersion        Int
+  provider             String
+  model                String
+  attempt              Int
+  status               AiRunStatus
+  errorClass           String? // class name only, e.g. "APICallError"
+  httpStatus           Int?
+  inputTokens          Int?
+  outputTokens         Int?
+  latencyMs            Int
+  costEstimateMicroUsd Int? // null for unknown models; the free tier still records the paid-equivalent
+  userId               String?     @db.Uuid
+  user                 User?       @relation("AiRunsByUser", fields: [userId], references: [id], onDelete: SetNull)
+  childId              String?     @db.Uuid
+  child                Child?      @relation(fields: [childId], references: [id], onDelete: SetNull)
+  createdAt            DateTime    @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("ai_runs")
+}
+
+enum AiOutputStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+/// Validated parent-facing output + idempotency/in-flight record. One row per
+/// (child, capability, UTC day). `content` is the already-validated structured output only.
+model AiOutput {
+  id            String         @id @default(uuid()) @db.Uuid
+  childId       String         @db.Uuid
+  child         Child          @relation(fields: [childId], references: [id], onDelete: Cascade)
+  capability    String
+  forDate       DateTime       @db.Date
+  status        AiOutputStatus @default(PENDING)
+  generation    Int            @default(1) // regeneration cap: at most 2 per day
+  inputHash     String // sha256(minimized context + promptVersion)
+  promptVersion Int
+  provider      String?
+  model         String?
+  content       Json? // { headline, body, tryThis[] } when READY
+  failureReason String? // enum-like code, never provider text
+  requestedById String         @db.Uuid
+  requestedBy   User           @relation("AiOutputsRequested", fields: [requestedById], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([childId, capability, forDate])
+  @@index([createdAt])
+  @@map("ai_outputs")
 }

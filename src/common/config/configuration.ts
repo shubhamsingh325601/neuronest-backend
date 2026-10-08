@@ -32,8 +32,18 @@ export interface AppConfig {
     accountSetupTtlHours: number;
   };
   email: {
+    /** Which {@link EmailService} implementation is bound at boot. */
+    provider: 'resend' | 'smtp';
     resendApiKey: string;
     from: string;
+    smtp: {
+      host: string;
+      port: number;
+      /** Implicit TLS (port 465). False = STARTTLS upgrade (port 587). */
+      secure: boolean;
+      user: string;
+      password: string;
+    };
   };
   cloudinary: {
     cloudName: string;
@@ -64,6 +74,20 @@ export interface AppConfig {
   media: {
     /** A media row still PENDING after this many hours is flipped to FAILED by the sweep. */
     pendingTtlHours: number;
+  };
+  ai: {
+    enabled: boolean;
+    /** `provider:model`, e.g. `google:gemini-3.5-flash-lite`. */
+    model: string;
+    /** Optional second attempt, same shape as `model`. Empty = none. */
+    fallbackModel: string;
+    /** Operator attestation that the provider account may receive real child-related data (gate G1). */
+    allowRealData: boolean;
+    timeoutMs: number;
+    maxOutputTokens: number;
+    userDailyLimit: number;
+    dailyRequestBudget: number;
+    outputRetentionDays: number;
   };
   logLevel: string;
   admin: {
@@ -100,8 +124,18 @@ export const configuration = (): AppConfig => ({
     accountSetupTtlHours: parseInt(process.env.ACCOUNT_SETUP_TTL_HOURS ?? '72', 10),
   },
   email: {
+    provider: process.env.EMAIL_PROVIDER === 'smtp' ? 'smtp' : 'resend',
     resendApiKey: process.env.RESEND_API_KEY ?? '',
     from: process.env.EMAIL_FROM as string,
+    smtp: {
+      host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT ?? '465', 10),
+      secure: process.env.SMTP_SECURE
+        ? process.env.SMTP_SECURE === 'true'
+        : parseInt(process.env.SMTP_PORT ?? '465', 10) === 465,
+      user: process.env.SMTP_USER ?? '',
+      password: process.env.SMTP_PASSWORD ?? '',
+    },
   },
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? '',
@@ -130,6 +164,17 @@ export const configuration = (): AppConfig => ({
   },
   media: {
     pendingTtlHours: parseInt(process.env.MEDIA_PENDING_TTL_HOURS ?? '24', 10),
+  },
+  ai: {
+    enabled: process.env.AI_ENABLED === 'true',
+    model: process.env.AI_MODEL ?? 'google:gemini-3.5-flash-lite',
+    fallbackModel: process.env.AI_FALLBACK_MODEL ?? '',
+    allowRealData: process.env.AI_ALLOW_REAL_DATA === 'true',
+    timeoutMs: parseInt(process.env.AI_TIMEOUT_MS ?? '10000', 10),
+    maxOutputTokens: parseInt(process.env.AI_MAX_OUTPUT_TOKENS ?? '700', 10),
+    userDailyLimit: parseInt(process.env.AI_USER_DAILY_LIMIT ?? '3', 10),
+    dailyRequestBudget: parseInt(process.env.AI_DAILY_REQUEST_BUDGET ?? '400', 10),
+    outputRetentionDays: parseInt(process.env.AI_OUTPUT_RETENTION_DAYS ?? '14', 10),
   },
   logLevel: process.env.LOG_LEVEL ?? 'info',
   admin: {

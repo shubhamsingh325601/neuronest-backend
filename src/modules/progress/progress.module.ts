@@ -12,5 +12,6 @@ import { WeeklySummaryService } from './features/weekly-summary/weekly-summary.s
   // shadowed by the `progress/:entryDate` route.
   controllers: [UpsertProgressController, WeeklySummaryController, ListProgressController],
   providers: [UpsertProgressService, ListProgressService, WeeklySummaryService],
+  exports: [WeeklySummaryService],
 })
 export class ProgressModule {}

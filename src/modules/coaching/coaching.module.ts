@@ -8,5 +8,6 @@ import { ReplaceCoachingService } from './features/replace-coaching/replace-coac
 @Module({
   controllers: [ReplaceCoachingController, ListCoachingController],
   providers: [ReplaceCoachingService, ListCoachingService],
+  exports: [ListCoachingService],
 })
 export class CoachingModule {}

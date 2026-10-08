@@ -47,6 +47,10 @@ export const PERMISSIONS = [
   'appointment-slot:read',         // GET  /v1/children/:childId/appointment-slots — PARENT(own)/CLINICIAN(assigned)/ADMIN
   'appointment:create:self',       // POST /v1/children/:childId/appointments — PARENT (own child) only in practice
   'appointment:read',              // GET  /v1/children/:childId/appointments, /v1/appointments — PARENT(own)/CLINICIAN(assigned/own)/ADMIN
+  // AI coaching tip (Phase 18):
+  'ai-coaching:generate:self',     // POST /v1/children/:childId/ai-coaching-tips — PARENT (own child) only in practice
+  'ai-coaching:read',              // GET  /v1/children/:childId/ai-coaching-tips/today — PARENT(own)/CLINICIAN(assigned)/ADMIN
+  'ai-run:read',                   // GET  /v1/admin/ai/usage — ADMIN only
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -445,6 +449,22 @@ missing header → `401 INVALID_JOBS_TOKEN`. The global throttler still applies.
 - `appointment:read` (PARENT, CLINICIAN, ADMIN). `GET /v1/children/{childId}/appointments` is the
   `child:read` shape (parent-own, clinician-assigned, admin-any). `GET /v1/appointments` is a query
   filter: CLINICIAN → appointments on their **own** slots, PARENT → their own child's, ADMIN → all.
+
+### `ai-coaching:*` / `ai-run:read` (Phase 18)
+
+- `ai-coaching:generate:self` (PARENT). ADMIN holds it through the `...PERMISSIONS` spread, so
+  `AiAccessService.assertCanGenerate` rejects any caller who is not the child's own parent
+  (`403 FORBIDDEN`) — same stance as `progress:write:self`. Admin and clinician *read* what the
+  parent was told (clinician audit) but cannot trigger provider spend.
+- `ai-coaching:read` (PARENT, CLINICIAN, ADMIN). The `child:read` shape, enforced by calling
+  `GetChildService.getById` with the real caller (parent-own, clinician-assigned, admin-any,
+  `404 CHILD_NOT_FOUND`). No new ownership code: any future fix to those rules applies to AI too.
+- `ai-run:read` (ADMIN only, via the spread — no role list names it). Aggregate usage and cost
+  for the current Pacific day; never prompts, inputs or outputs.
+- `AiAccessService.assertCanGenerate` is the single choke point for the `AI_ENABLED` flag, role and
+  ownership, and where a parental AI-processing consent check would go (plan 0018 O-1).
+- The background job re-checks authorization at run time, as the requesting user, and aborts if
+  that user is no longer `ACTIVE`: access is never trusted from enqueue time.
 
 ## 7. Future Migration Path to `@casl/ability`
 

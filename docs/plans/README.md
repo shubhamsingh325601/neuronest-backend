@@ -22,6 +22,7 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0014 | Phase 14 — Monthly Call Appointments | Done | [0014-phase-14-monthly-call-appointments.md](0014-phase-14-monthly-call-appointments.md) |
 | 0015 | Phase 15 — Escalation Lifecycle (owner/notification blocked on D-3/D-16) | Proposed | [0015-phase-15-escalation-lifecycle.md](0015-phase-15-escalation-lifecycle.md) |
 | 0016 | Phase 16 — Plan Content Model (Template → Per-Child Plan) | Done | [0016-phase-16-plan-content-model.md](0016-phase-16-plan-content-model.md) |
+| 0018 | Phase 18 — AI Foundation (Vercel AI SDK, Gemini-first) and Parent AI Coaching Tip | Proposed | [0018-phase-18-ai-foundation.md](0018-phase-18-ai-foundation.md) |
 
 Plans 0009–0015 come from the frontend's V1 backend handoff
 (`docs/NeuroNest_Backend_V1_Developer_Handoff.docx`), audited against the code on

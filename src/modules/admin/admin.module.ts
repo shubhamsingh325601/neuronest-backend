@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { GetAiUsageController } from './features/get-ai-usage/get-ai-usage.controller';
+import { GetAiUsageService } from './features/get-ai-usage/get-ai-usage.service';
 import { GetJobController } from './features/get-job/get-job.controller';
 import { GetJobService } from './features/get-job/get-job.service';
 import { GetSummaryController } from './features/get-summary/get-summary.controller';
@@ -18,11 +20,18 @@ import { RunJobsNowController } from './features/run-jobs-now/run-jobs-now.contr
 @Module({
   controllers: [
     GetSummaryController,
+    GetAiUsageController,
     ListJobsController,
     GetJobController,
     RequeueJobController,
     RunJobsNowController,
   ],
-  providers: [GetSummaryService, ListJobsService, GetJobService, RequeueJobService],
+  providers: [
+    GetSummaryService,
+    GetAiUsageService,
+    ListJobsService,
+    GetJobService,
+    RequeueJobService,
+  ],
 })
 export class AdminModule {}

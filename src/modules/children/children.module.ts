@@ -34,5 +34,7 @@ import { RevokeClinicianAssignmentService } from './features/revoke-clinician-as
     ListClinicianAssignmentsService,
     RevokeClinicianAssignmentService,
   ],
+  // Exported for the AI coaching module, which authorises through the same ownership rules.
+  exports: [GetChildService],
 })
 export class ChildrenModule {}

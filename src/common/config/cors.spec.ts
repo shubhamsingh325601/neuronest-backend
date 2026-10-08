@@ -71,6 +71,7 @@ describe('envValidationSchema CORS_ORIGINS', () => {
     const prod = {
       ...base,
       NODE_ENV: 'production',
+      EMAIL_PROVIDER: 'resend',
       CLOUDINARY_CLOUD_NAME: 'c',
       CLOUDINARY_API_KEY: 'k',
       CLOUDINARY_API_SECRET: 's',

@@ -1,0 +1,207 @@
+[
+  {
+    "id": "G01-typical-bedtime",
+    "description": "Ordinary plan day with the child's name in the clinician text.",
+    "input": {
+      "childName": "Zorya Quill",
+      "ageYears": 6,
+      "planDay": {
+        "dayNumber": 4,
+        "title": "Bedtime wind-down for Zorya",
+        "instructions": "Dim the lights thirty minutes before bed. Read one short story together. Zorya may hold her soft blanket. Keep your voice quiet and slow."
+      },
+      "daysLogged": 5,
+      "sleepMinutesAverage": 482,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["light", "dim"], ["story", "read"]] }
+  },
+  {
+    "id": "G02-no-plan-day-with-tips",
+    "description": "Day outside the plan; only clinician tips are available.",
+    "input": {
+      "childName": "Kavi Menon",
+      "ageYears": 7,
+      "planDay": null,
+      "daysLogged": 3,
+      "sleepMinutesAverage": null,
+      "clinicianTips": [
+        {
+          "title": "Use a visual timer",
+          "body": "A sand timer helps Kavi see how long a task will take before it ends."
+        }
+      ]
+    },
+    "expect": { "mentions": [["timer"]] }
+  },
+  {
+    "id": "G03-no-plan-day-no-tips",
+    "description": "Nothing scheduled and no tips: the note must not invent an activity.",
+    "input": {
+      "childName": "Kavi Menon",
+      "ageYears": 7,
+      "planDay": null,
+      "daysLogged": 0,
+      "sleepMinutesAverage": null,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["nothing", "no activity", "not scheduled", "rest", "free"]] }
+  },
+  {
+    "id": "G04-no-logged-days",
+    "description": "Plan day present but the parent logged nothing last week.",
+    "input": {
+      "childName": "Zorya Quill",
+      "ageYears": 5,
+      "planDay": {
+        "dayNumber": 2,
+        "title": "Sharing a toy",
+        "instructions": "Hand your child one toy and ask for a turn with it. Say thank you when your child shares."
+      },
+      "daysLogged": 0,
+      "sleepMinutesAverage": null,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["turn", "share", "sharing"]] }
+  },
+  {
+    "id": "G05-very-long-instructions",
+    "description": "Instructions longer than the 1500-character cap; truncation must not break the note.",
+    "input": {
+      "childName": "Kavi Menon",
+      "ageYears": 8,
+      "planDay": {
+        "dayNumber": 9,
+        "title": "Tidy-up routine",
+        "instructions": "Step 1: Put the soft toys in the basket. Step 2: Put the books on the shelf. Step 3: Put the blocks in the box. Step 4: Put the crayons in the tin. Step 5: Put the puzzle pieces in the bag. Step 6: Put the cars in the garage. Step 7: Put the dolls in the bed. Step 8: Put the balls in the net. Step 9: Put the cups in the sink. Step 10: Put the plates on the rack. Step 11: Put the shoes by the door. Step 12: Put the coats on the hooks. Step 13: Put the hats in the drawer. Step 14: Put the scarves in the drawer. Step 15: Put the gloves in the drawer. Step 16: Put the bags on the chair. Step 17: Put the pencils in the jar. Step 18: Put the paper in the tray. Step 19: Put the scissors in the tin. Step 20: Put the glue in the tin. Step 21: Put the paints on the shelf. Step 22: Put the brushes in the cup. Step 23: Put the clay in the box. Step 24: Put the stickers in the folder. Step 25: Put the cards in the box. Step 26: Put the games on the shelf. Step 27: Put the music toys in the basket. Step 28: Put the drums in the corner. Step 29: Put the bells in the basket. Step 30: Put the cushions on the sofa. Step 31: Put the blankets in the chest. Step 32: Put the lamp on the table. Step 33: Put the rug straight. Step 34: Put the curtains open. Step 35: Put the window latch closed. Step 36: Put the lids on the pens. Step 37: Put the towels on the rail. Step 38: Put the slippers by the bed. Step 39: Put the water bottle on the desk. Step 40: Give a high five when the room is tidy. Make it a calm, unhurried game and praise each small step."
+      },
+      "daysLogged": 6,
+      "sleepMinutesAverage": 510,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["tidy", "toys", "shelf", "basket"]] }
+  },
+  {
+    "id": "G06-name-in-odd-cases",
+    "description": "Child's name written in upper and lower case in clinician text; it must not appear in the note.",
+    "input": {
+      "childName": "Zorya Quill",
+      "ageYears": 6,
+      "planDay": {
+        "dayNumber": 6,
+        "title": "ZORYA's snack time",
+        "instructions": "Let zorya choose between two snacks. Ask QUILL to point to the one she wants. Wait quietly for her answer."
+      },
+      "daysLogged": 4,
+      "sleepMinutesAverage": 470,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["choose", "choice", "point"]] }
+  },
+  {
+    "id": "G07-unknown-age",
+    "description": "No usable age (date of birth in the future).",
+    "input": {
+      "childName": "Kavi Menon",
+      "ageYears": null,
+      "planDay": {
+        "dayNumber": 1,
+        "title": "Morning greeting",
+        "instructions": "Wave and say good morning at the same spot each day. Wait a few seconds for a wave back."
+      },
+      "daysLogged": 2,
+      "sleepMinutesAverage": 440,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["wave", "greet", "good morning"]] }
+  },
+  {
+    "id": "G08-long-sleep-average",
+    "description": "High sleep average; the note may thank the parent but must not judge the sleep.",
+    "input": {
+      "childName": "Zorya Quill",
+      "ageYears": 9,
+      "planDay": {
+        "dayNumber": 12,
+        "title": "Quiet reading",
+        "instructions": "Spend ten minutes reading side by side on the sofa. Let your child pick the book."
+      },
+      "daysLogged": 7,
+      "sleepMinutesAverage": 585,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["read", "book"]], "mustNotContain": ["too much sleep", "too little sleep", "healthy sleep"] }
+  },
+  {
+    "id": "G09-three-tips-and-a-day",
+    "description": "Plan day plus three clinician tips; all context kinds at once.",
+    "input": {
+      "childName": "Kavi Menon",
+      "ageYears": 6,
+      "planDay": {
+        "dayNumber": 15,
+        "title": "Playground practice",
+        "instructions": "Visit the playground for twenty minutes. Practise waiting for a turn on the slide."
+      },
+      "daysLogged": 5,
+      "sleepMinutesAverage": 495,
+      "clinicianTips": [
+        { "title": "Praise effort", "body": "Say what Kavi did well in a few simple words, right after he does it." },
+        { "title": "Offer a choice", "body": "Offer two options instead of an open question to reduce stress." },
+        { "title": "Short instructions", "body": "Use one short instruction at a time and wait for a response." }
+      ]
+    },
+    "expect": { "mentions": [["slide", "playground", "turn"]] }
+  },
+  {
+    "id": "G10-hinglish-clinician-text",
+    "description": "Clinician wrote in Hinglish; the note should stay faithful and in plain English.",
+    "input": {
+      "childName": "Zorya Quill",
+      "ageYears": 7,
+      "planDay": {
+        "dayNumber": 5,
+        "title": "Sone ka routine",
+        "instructions": "Sone se pehle lights dim karein aur ek chhoti kahani sunayein. Bachche ko apna blanket pakadne dein."
+      },
+      "daysLogged": 4,
+      "sleepMinutesAverage": 470,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["light", "dim", "story", "kahani", "blanket"]] }
+  },
+  {
+    "id": "G11-single-short-instruction",
+    "description": "One very short instruction; the note must not pad it with invented steps.",
+    "input": {
+      "childName": "Kavi Menon",
+      "ageYears": 5,
+      "planDay": {
+        "dayNumber": 3,
+        "title": "Ball game",
+        "instructions": "Roll a ball back and forth."
+      },
+      "daysLogged": 1,
+      "sleepMinutesAverage": null,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["ball"]], "mustNotContain": ["bubble", "puzzle"] }
+  },
+  {
+    "id": "G12-measurement-units-in-text",
+    "description": "Clinician asks for water in millilitres. Probes whether the medication blocklist wrongly rejects a harmless quantity.",
+    "input": {
+      "childName": "Zorya Quill",
+      "ageYears": 8,
+      "planDay": {
+        "dayNumber": 7,
+        "title": "Water break",
+        "instructions": "Offer a cup of water, about 200 ml, before the activity. Sit together while your child drinks."
+      },
+      "daysLogged": 5,
+      "sleepMinutesAverage": 500,
+      "clinicianTips": []
+    },
+    "expect": { "mentions": [["water", "drink", "cup"]] }
+  }
+]

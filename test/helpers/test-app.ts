@@ -1,12 +1,14 @@
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '@app/app.module';
+import { AiService } from '@common/ai/ai.service';
 import { configureApp } from '@common/bootstrap/configure-app';
 import { EmailService } from '@common/email/email.service';
 import { JobQueueService } from '@common/jobs/job-queue.service';
 import { JobRunnerService, type RunSummary } from '@common/jobs/job-runner.service';
 import { MediaStorageService } from '@common/media-storage/media-storage.service';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { FakeAiService } from './fake-ai.service';
 import { FakeEmailService } from './fake-email.service';
 import { FakeMediaStorageService } from './fake-media-storage.service';
 
@@ -23,6 +25,7 @@ export interface TestContext {
   prisma: PrismaService;
   jobs: TestJobs;
   mail: FakeEmailService;
+  ai: FakeAiService;
   mediaStorage: FakeMediaStorageService;
   close: () => Promise<void>;
 }
@@ -35,12 +38,15 @@ export interface TestContext {
 export async function createTestApp(): Promise<TestContext> {
   const mail = new FakeEmailService();
   const mediaStorage = new FakeMediaStorageService();
+  const ai = new FakeAiService();
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(EmailService)
     .useValue(mail)
     .overrideProvider(MediaStorageService)
     .useValue(mediaStorage)
+    .overrideProvider(AiService)
+    .useValue(ai)
     .compile();
 
   const app = moduleRef.createNestApplication();
@@ -75,6 +81,7 @@ export async function createTestApp(): Promise<TestContext> {
     prisma,
     jobs,
     mail,
+    ai,
     mediaStorage,
     close: async () => {
       await prisma.truncateAll();

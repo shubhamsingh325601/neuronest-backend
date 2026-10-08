@@ -59,7 +59,7 @@ cp .env.example .env
 Edit `.env` with your settings:
 - `DATABASE_URL`: Connection string for your development PostgreSQL database (Neon branch or local Docker).
 - `JWT_ACCESS_SECRET`: Any secure random secret (&ge; 16 characters).
-- `RESEND_API_KEY`: required (non-empty) when `NODE_ENV=production`; in development/test, if unset, outgoing emails are logged to stdout.
+- `EMAIL_PROVIDER`, `EMAIL_FROM` and the provider's credentials: see [Email setup](#email-setup). In development/test, with no credentials, outgoing emails are logged to stdout.
 - *(Optional)*: `SENTRY_DSN` (if unset, error tracking is a no-op).
 
 ### Step 3: Start Local Database (if using Docker)
@@ -81,6 +81,21 @@ npm run dev
 - API server runs at: `http://localhost:3000`
 - Interactive API Documentation (Scalar): `http://localhost:3000/docs`
 - Health check: `http://localhost:3000/health` &rarr; `{"status":"ok","db":"up"}`
+
+### Email setup
+
+Email goes through the provider-agnostic `EmailService`; `EMAIL_PROVIDER` picks the implementation (`resend` default, or `smtp`). In production the app **refuses to boot** if the selected provider's credentials are missing or `EMAIL_FROM` is an example/test domain (`*.example`, `example.com`, …).
+
+| Stage | Provider | `EMAIL_FROM` | Who can receive |
+|---|---|---|---|
+| **1 — no domain** | `resend` | `NeuroNest <onboarding@resend.dev>` | Only the Resend account owner's address (403 `validation_error` otherwise) |
+| **1 — no domain** | `smtp` (Gmail App Password) | `NeuroNest <you@gmail.com>` (must equal `SMTP_USER`) | Anyone; ~500 messages/day on a personal Gmail |
+| **2 — verified domain** | `resend` | `NeuroNest <no-reply@mail.yourdomain.com>` | Anyone |
+
+- **Resend rules** (from the [Resend error reference](https://resend.com/docs/api-reference/errors)): an unverified `from` domain returns 403 `validation_error` ("domain is not verified"); without a verified domain you can only send test emails to your own address. Stage 2: add the domain in Resend, publish its SPF/DKIM DNS records, wait for "Verified", then change `EMAIL_FROM`.
+- **Gmail SMTP**: enable 2-Step Verification, create an App Password, then set `EMAIL_PROVIDER=smtp`, `SMTP_USER`, `SMTP_PASSWORD` (the 16-character app password), `EMAIL_FROM`. Defaults are `smtp.gmail.com:465` (implicit TLS); use `SMTP_PORT=587` for STARTTLS. Gmail rewrites a `From` that is not the authenticated mailbox.
+- **Render**: free web services block outbound SMTP ports 25/465/587 ([changelog](https://render.com/changelog/free-web-services-will-no-longer-allow-outbound-traffic-to-smtp-ports)); SMTP needs a paid instance there. Resend uses HTTPS and is unaffected.
+- **Failures are not silent**: the auth emails are queue jobs. A provider error is logged with its reason (status/code, masked recipient — never credentials), the job retries with backoff, and after `JOBS_MAX_ATTEMPTS` it goes `DEAD` and is reported to Sentry. The signup/forgot-password request itself still returns `202` (no account enumeration), so watch the logs or `jobs` table for `DEAD` rows.
 
 ---
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import type { AppConfig } from '@common/config/configuration';
+import { maskEmail } from './email-address.util';
 import { EmailService } from './email.service';
 import { accountSetupEmail } from './templates/account-setup.template';
 import { passwordResetEmail } from './templates/password-reset.template';
@@ -63,7 +64,17 @@ export class ResendEmailService extends EmailService {
       text: message.text,
     });
     if (error) {
-      this.logger.error({ to, err: error }, 'Resend send failed');
+      // Log the reason (e.g. 403 "domain is not verified" / "can only send testing emails to your
+      // own address", 422 invalid field) so a misconfigured sender is diagnosable from the logs.
+      this.logger.error(
+        {
+          to: maskEmail(to),
+          statusCode: error.statusCode,
+          name: error.name,
+          reason: error.message,
+        },
+        'Resend send failed',
+      );
       throw new Error(`Failed to send email: ${error.message}`);
     }
   }

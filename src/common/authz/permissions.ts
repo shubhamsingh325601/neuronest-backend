@@ -68,6 +68,12 @@ export const PERMISSIONS = [
   'appointment-slot:read',
   'appointment:create:self',
   'appointment:read',
+  // AI coaching tip (Phase 18). Generate is the child's own PARENT only (ADMIN reaches it through
+  // the `...PERMISSIONS` spread, so the service rejects it); read is the `child:read` shape.
+  // `ai-run:read` is the ADMIN-only usage view. See docs/rbac.md §6.
+  'ai-coaching:generate:self',
+  'ai-coaching:read',
+  'ai-run:read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -94,6 +100,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'appointment-slot:read',
     'appointment:create:self',
     'appointment:read',
+    'ai-coaching:generate:self',
+    'ai-coaching:read',
   ],
   [Role.CLINICIAN]: [
     ...SELF_PERMISSIONS,
@@ -112,6 +120,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'appointment-slot:manage',
     'appointment-slot:read',
     'appointment:read',
+    'ai-coaching:read',
   ],
   [Role.ADMIN]: [...PERMISSIONS],
 };

@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { configuration, type AppConfig } from '@common/config/configuration';
 import { envValidationSchema } from '@common/config/env.validation';
+import { AiModule } from '@common/ai/ai.module';
 import { AuthzModule } from '@common/authz/authz.module';
 import { JwtAuthGuard } from '@common/authz/jwt-auth.guard';
 import { PermissionsGuard } from '@common/authz/permissions.guard';
@@ -22,6 +23,7 @@ import { ChildrenModule } from '@modules/children/children.module';
 import { CoachingModule } from '@modules/coaching/coaching.module';
 import { ProgressModule } from '@modules/progress/progress.module';
 import { AppointmentsModule } from '@modules/appointments/appointments.module';
+import { AiCoachingModule } from '@modules/ai-coaching/ai-coaching.module';
 import { ConsentsModule } from '@modules/consents/consents.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
 import { JobsHttpModule } from '@modules/jobs/jobs.module';
@@ -52,6 +54,7 @@ import { UsersModule } from '@modules/users/users.module';
     PrismaModule,
     CryptoModule,
     EmailModule,
+    AiModule,
     JobsModule,
     MediaStorageModule,
     AuthzModule,
@@ -64,6 +67,7 @@ import { UsersModule } from '@modules/users/users.module';
     CoachingModule,
     ProgressModule,
     AppointmentsModule,
+    AiCoachingModule,
     MediaModule,
     PlansModule,
     CallLogsModule,

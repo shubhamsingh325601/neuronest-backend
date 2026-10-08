@@ -47,7 +47,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const normalised = this.normalise(exception);
 
-    if (normalised.statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    // A deliberate 503 (e.g. `AI_DISABLED`) is an expected answer, not an incident: no Sentry noise.
+    const deliberateUnavailable =
+      exception instanceof HttpException &&
+      normalised.statusCode === HttpStatus.SERVICE_UNAVAILABLE;
+    if (normalised.statusCode >= HttpStatus.INTERNAL_SERVER_ERROR && !deliberateUnavailable) {
       Sentry.captureException(exception);
       this.logger.error(
         { err: exception, path: request?.url },
