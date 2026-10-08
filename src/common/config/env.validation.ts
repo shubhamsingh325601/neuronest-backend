@@ -53,7 +53,7 @@ export function validateEmailEnv(
   if (env.NODE_ENV !== 'production') return env;
 
   const required =
-    env.EMAIL_PROVIDER === 'smtp' ? ['SMTP_USER', 'SMTP_PASSWORD'] : ['RESEND_API_KEY'];
+    env.EMAIL_PROVIDER === 'brevo' ? ['BREVO_API_KEY'] : ['RESEND_API_KEY'];
   for (const key of required) {
     if (!env[key]) {
       return helpers.message({
@@ -120,16 +120,11 @@ export const envValidationSchema = Joi.object({
 
   // Which EmailService implementation to bind. Credentials for the selected provider (and a
   // non-placeholder EMAIL_FROM) are enforced in production by `validateEmailEnv` below.
-  EMAIL_PROVIDER: Joi.string().valid('resend', 'smtp').default('resend'),
+  EMAIL_PROVIDER: Joi.string().valid('resend', 'brevo').default('resend'),
   RESEND_API_KEY: Joi.string().allow('').default(''),
+  // Brevo transactional API (EMAIL_PROVIDER=brevo). EMAIL_FROM must be a sender verified in Brevo.
+  BREVO_API_KEY: Joi.string().allow('').default(''),
   EMAIL_FROM: Joi.string().required(),
-  // SMTP (EMAIL_PROVIDER=smtp). Defaults target Gmail with an App Password (implicit TLS on 465).
-  SMTP_HOST: Joi.string().default('smtp.gmail.com'),
-  SMTP_PORT: Joi.number().port().default(465),
-  // Unset = implicit TLS only on 465 (derived in configuration.ts); set to force either mode.
-  SMTP_SECURE: Joi.boolean(),
-  SMTP_USER: Joi.string().allow('').default(''),
-  SMTP_PASSWORD: Joi.string().allow('').default(''),
 
   // Required in production (real Cloudinary account); local/test run against the
   // Fake media storage service and never need real credentials.

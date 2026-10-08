@@ -44,6 +44,24 @@ describe('envValidationSchema', () => {
     });
   });
 
+  describe('EMAIL_PROVIDER=brevo', () => {
+    const brevo = { ...production, EMAIL_PROVIDER: 'brevo', BREVO_API_KEY: 'xkeysib-k' };
+
+    it('requires BREVO_API_KEY (not RESEND_API_KEY) in production', () => {
+      const env: Record<string, string> = { ...brevo };
+      delete env.RESEND_API_KEY;
+      expect(validate(env).error).toBeUndefined();
+      delete env.BREVO_API_KEY;
+      expect(validate(env).error?.message).toContain('BREVO_API_KEY');
+    });
+
+    it('rejects the removed smtp provider', () => {
+      expect(validate({ ...production, EMAIL_PROVIDER: 'smtp' }).error?.message).toContain(
+        'EMAIL_PROVIDER',
+      );
+    });
+  });
+
   describe('AI (plan 0018)', () => {
     it('defaults to disabled with the planned limits', () => {
       const { value, error } = envValidationSchema.validate(base);

@@ -84,17 +84,17 @@ npm run dev
 
 ### Email setup
 
-Email goes through the provider-agnostic `EmailService`; `EMAIL_PROVIDER` picks the implementation (`resend` default, or `smtp`). In production the app **refuses to boot** if the selected provider's credentials are missing.
+Email goes through the provider-agnostic `EmailService`; `EMAIL_PROVIDER` picks the implementation (`resend` default, or `brevo`). In production the app **refuses to boot** if the selected provider's credentials are missing.
 
 | Stage | Provider | `EMAIL_FROM` | Who can receive |
 |---|---|---|---|
 | **1 — no domain** | `resend` | `NeuroNest <onboarding@resend.dev>` | Only the Resend account owner's address (403 `validation_error` otherwise) |
-| **1 — no domain** | `smtp` (Gmail App Password) | `NeuroNest <you@gmail.com>` (must equal `SMTP_USER`) | Anyone; ~500 messages/day on a personal Gmail |
-| **2 — verified domain** | `resend` | `NeuroNest <no-reply@mail.yourdomain.com>` | Anyone |
+| **1 — no domain** | `brevo` | `NeuroNest <you@gmail.com>` (a sender verified in Brevo) | Anyone; 300 messages/day on the free plan |
+| **2 — verified domain** | `resend` (or `brevo`) | `NeuroNest <no-reply@mail.yourdomain.com>` | Anyone |
 
 - **Resend rules** (from the [Resend error reference](https://resend.com/docs/api-reference/errors)): an unverified `from` domain returns 403 `validation_error` ("domain is not verified"); without a verified domain you can only send test emails to your own address. Stage 2: add the domain in Resend, publish its SPF/DKIM DNS records, wait for "Verified", then change `EMAIL_FROM`.
-- **Gmail SMTP**: enable 2-Step Verification, create an App Password, then set `EMAIL_PROVIDER=smtp`, `SMTP_USER`, `SMTP_PASSWORD` (the 16-character app password), `EMAIL_FROM`. Defaults are `smtp.gmail.com:465` (implicit TLS); use `SMTP_PORT=587` for STARTTLS. Gmail rewrites a `From` that is not the authenticated mailbox.
-- **Render**: free web services block outbound SMTP ports 25/465/587 ([changelog](https://render.com/changelog/free-web-services-will-no-longer-allow-outbound-traffic-to-smtp-ports)); SMTP needs a paid instance there. Resend uses HTTPS and is unaffected.
+- **Brevo**: create an API key (SMTP & API → API Keys), add and verify a sender address (Senders & IP → Senders; Brevo emails a confirmation link), then set `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY` and `EMAIL_FROM` to that exact address. A `from` that is not a verified sender is rejected with 400. Mail from a free-mail sender (gmail.com) may land in spam; verify a domain for production.
+- **Render**: free web services block outbound SMTP ports 25/465/587 ([changelog](https://render.com/changelog/free-web-services-will-no-longer-allow-outbound-traffic-to-smtp-ports)), which is why the app only uses HTTPS providers (Resend, Brevo).
 - **Failures are not silent**: the auth emails are queue jobs. A provider error is logged with its reason (status/code, masked recipient — never credentials), the job retries with backoff, and after `JOBS_MAX_ATTEMPTS` it goes `DEAD` and is reported to Sentry. The signup/forgot-password request itself still returns `202` (no account enumeration), so watch the logs or `jobs` table for `DEAD` rows.
 
 ---

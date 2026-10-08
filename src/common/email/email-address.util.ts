@@ -11,3 +11,14 @@ export function maskEmail(address: string): string {
   if (at < 1) return '***';
   return `${address[0]}***${address.slice(at)}`;
 }
+
+/** Splits `Name <addr@host>` into `{ name, email }` (name omitted when absent). Null if there is no address. */
+export function parseSender(from: string): { name?: string; email: string } | null {
+  const email = extractAddress(from);
+  if (!email) return null;
+  const name = from
+    .replace(/<[^<>]*>\s*$/, '')
+    .trim()
+    .replace(/^"(.*)"$/, '$1');
+  return name && name.toLowerCase() !== email ? { name, email } : { email };
+}

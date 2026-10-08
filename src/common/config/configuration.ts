@@ -33,17 +33,10 @@ export interface AppConfig {
   };
   email: {
     /** Which {@link EmailService} implementation is bound at boot. */
-    provider: 'resend' | 'smtp';
+    provider: 'resend' | 'brevo';
     resendApiKey: string;
+    brevoApiKey: string;
     from: string;
-    smtp: {
-      host: string;
-      port: number;
-      /** Implicit TLS (port 465). False = STARTTLS upgrade (port 587). */
-      secure: boolean;
-      user: string;
-      password: string;
-    };
   };
   cloudinary: {
     cloudName: string;
@@ -124,18 +117,10 @@ export const configuration = (): AppConfig => ({
     accountSetupTtlHours: parseInt(process.env.ACCOUNT_SETUP_TTL_HOURS ?? '72', 10),
   },
   email: {
-    provider: process.env.EMAIL_PROVIDER === 'smtp' ? 'smtp' : 'resend',
+    provider: process.env.EMAIL_PROVIDER === 'brevo' ? 'brevo' : 'resend',
     resendApiKey: process.env.RESEND_API_KEY ?? '',
+    brevoApiKey: process.env.BREVO_API_KEY ?? '',
     from: process.env.EMAIL_FROM as string,
-    smtp: {
-      host: process.env.SMTP_HOST ?? 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT ?? '465', 10),
-      secure: process.env.SMTP_SECURE
-        ? process.env.SMTP_SECURE === 'true'
-        : parseInt(process.env.SMTP_PORT ?? '465', 10) === 465,
-      user: process.env.SMTP_USER ?? '',
-      password: process.env.SMTP_PASSWORD ?? '',
-    },
   },
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? '',
