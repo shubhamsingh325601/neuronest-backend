@@ -16,6 +16,19 @@ const child: ChildDto = {
   parentId: 'parent-1',
   name: 'Alex Johnson',
   dateOfBirth: new Date('2020-06-15T00:00:00Z'),
+  // Profile fields that must never reach a prompt (sentinels asserted absent below).
+  preferredName: 'SentinelNick',
+  gender: 'SentinelGender',
+  primaryLanguage: 'SentinelLanguage',
+  accommodations: 'SentinelAccommodation',
+  clinicalProfile: {
+    currentStage: 'SentinelStage',
+    observationSummary: 'SentinelObservation',
+    primaryCareFocus: 'SentinelFocus',
+    strengths: [{ label: 'SentinelStrength' }],
+    sensoryTraits: [],
+    calmingPreferences: [],
+  } as unknown as ChildDto['clinicalProfile'],
   createdAt: now,
   updatedAt: now,
 };
@@ -99,6 +112,7 @@ describe('CoachingContextBuilder', () => {
       'Johnson',
       'Alex',
       '2020-06-15',
+      'Sentinel',
       'Secret plan title',
       'private',
       'mood',

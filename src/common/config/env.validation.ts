@@ -1,5 +1,4 @@
 import * as Joi from 'joi';
-import { isPlaceholderSender } from '@common/email/email-address.util';
 import { parseCorsOrigins } from './cors';
 
 /** `provider:model` for the three providers the AI module can load. */
@@ -45,9 +44,7 @@ export function validateAiEnv(env: Record<string, unknown>, helpers: Joi.CustomH
 /**
  * Cross-field email rules. Production only (dev/test degrade to logging the message):
  * - the selected provider must have its credentials (an empty key/password makes the service log
- *   instead of send, silently breaking verification and password-reset mail);
- * - `EMAIL_FROM` may not be a reserved/example domain — no provider will accept it, so every send
- *   would fail at runtime. Refusing at boot is louder than a stream of 403/422s.
+ *   instead of send, silently breaking verification and password-reset mail).
  */
 export function validateEmailEnv(
   env: Record<string, unknown>,
@@ -65,15 +62,6 @@ export function validateEmailEnv(
     }
   }
 
-  if (isPlaceholderSender(String(env.EMAIL_FROM))) {
-    return helpers.message({
-      custom:
-        `EMAIL_FROM ("${String(env.EMAIL_FROM)}") uses an example/test domain or has no address; ` +
-        'the provider will reject every send. Resend without a verified domain: ' +
-        '"NeuroNest <onboarding@resend.dev>"; SMTP: the authenticated mailbox; otherwise a ' +
-        'verified-domain address (see README, Email setup).',
-    });
-  }
   return env;
 }
 

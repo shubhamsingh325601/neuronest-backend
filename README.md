@@ -84,7 +84,7 @@ npm run dev
 
 ### Email setup
 
-Email goes through the provider-agnostic `EmailService`; `EMAIL_PROVIDER` picks the implementation (`resend` default, or `smtp`). In production the app **refuses to boot** if the selected provider's credentials are missing or `EMAIL_FROM` is an example/test domain (`*.example`, `example.com`, …).
+Email goes through the provider-agnostic `EmailService`; `EMAIL_PROVIDER` picks the implementation (`resend` default, or `smtp`). In production the app **refuses to boot** if the selected provider's credentials are missing.
 
 | Stage | Provider | `EMAIL_FROM` | Who can receive |
 |---|---|---|---|
