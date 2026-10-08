@@ -27,6 +27,7 @@ enum UserStatus {
 enum VerificationTokenType {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+  PASSWORD_RESET_CODE
   ACCOUNT_SETUP
 }
 
@@ -98,8 +99,26 @@ model User {
   appointmentsMade        Appointment[]              @relation("AppointmentsMade")
   aiRuns                  AiRun[]                    @relation("AiRunsByUser")
   aiOutputsRequested      AiOutput[]                 @relation("AiOutputsRequested")
+  activityCompletionsMade ActivityCompletion[]       @relation("ActivityCompletionsMade")
+  escalationsRaised       Escalation[]               @relation("EscalationsRaised")
+  escalationsHandled      Escalation[]               @relation("EscalationsHandled")
+  preferences             UserPreference?
 
   @@map("users")
+}
+
+/// A parent's notification and archive choices. No row means the defaults below.
+model UserPreference {
+  userId               String   @id @db.Uuid
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  coachingInApp        Boolean  @default(true)
+  coachingEmail        Boolean  @default(false)
+  coachingWhatsapp     Boolean  @default(false)
+  appointmentReminders Boolean  @default(true)
+  consultationArchive  Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+
+  @@map("user_preferences")
 }
 
 model RefreshToken {
@@ -150,13 +169,21 @@ model ClinicianProfile {
 }
 
 model Child {
-  id          String   @id @default(uuid()) @db.Uuid
-  parentId    String   @unique @db.Uuid
-  parent      User     @relation("ChildParent", fields: [parentId], references: [id], onDelete: Cascade)
-  name        String
-  dateOfBirth DateTime @db.Date
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(uuid()) @db.Uuid
+  parentId        String   @unique @db.Uuid
+  parent          User     @relation("ChildParent", fields: [parentId], references: [id], onDelete: Cascade)
+  name            String
+  dateOfBirth     DateTime @db.Date
+  // Parent-editable profile fields (plan 0017 batch A).
+  preferredName   String?
+  gender          String?
+  primaryLanguage String?
+  accommodations  String?
+  // Clinician-authored profile (strengths, sensory traits, calming preferences, communication);
+  // read by the parent, written only by an assigned clinician or admin.
+  clinicalProfile Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   clinicianAssignments ClinicianChildAssignment[]
   media                Media[]
@@ -168,6 +195,8 @@ model Child {
   appointments         Appointment[]
   aiRuns               AiRun[]
   aiOutputs            AiOutput[]
+  activityCompletions  ActivityCompletion[]
+  escalations          Escalation[]
 
   @@map("children")
 }
@@ -273,6 +302,7 @@ model Plan {
   sections        PlanSection[]
   coachingTips    CoachingTip[]
   progressEntries ProgressEntry[]
+  weeks           PlanWeek[]
 
   @@index([childId])
   @@map("plans")
@@ -388,19 +418,24 @@ model MediaConsent {
 
 /// Manually authored weekly coaching tip, per child + plan + week (plan 0012).
 model CoachingTip {
-  id         String   @id @default(uuid()) @db.Uuid
-  childId    String   @db.Uuid
-  child      Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
-  planId     String   @db.Uuid
-  plan       Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
-  weekNumber Int
-  position   Int
-  title      String
-  body       String
-  authorId   String   @db.Uuid
-  author     User     @relation("CoachingTipsAuthored", fields: [authorId], references: [id], onDelete: Restrict)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String   @id @default(uuid()) @db.Uuid
+  childId       String   @db.Uuid
+  child         Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  planId        String   @db.Uuid
+  plan          Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  weekNumber    Int
+  position      Int
+  title         String
+  body          String
+  /// Optional richer guidance the care team can add to a tip.
+  whyItMatters  String?
+  steps         String[] @default([])
+  scriptQuote   String?
+  scriptContext String?
+  authorId      String   @db.Uuid
+  author        User     @relation("CoachingTipsAuthored", fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([planId, weekNumber, position])
   @@index([childId, weekNumber])
@@ -442,6 +477,8 @@ model AppointmentSlot {
   endsAt      DateTime
   createdById String   @db.Uuid
   createdBy   User     @relation("AppointmentSlotsCreated", fields: [createdById], references: [id], onDelete: Restrict)
+  /// Video-call link the clinician publishes with the slot; shown to the parent who books it.
+  meetingUrl  String?
   createdAt   DateTime @default(now())
 
   appointment Appointment?
@@ -453,14 +490,20 @@ model AppointmentSlot {
 
 /// A parent's booking of a slot. `slotId` UNIQUE is the database-enforced double-booking guard.
 model Appointment {
-  id         String          @id @default(uuid()) @db.Uuid
-  slotId     String          @unique @db.Uuid
-  slot       AppointmentSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
-  childId    String          @db.Uuid
-  child      Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
-  bookedById String          @db.Uuid
-  bookedBy   User            @relation("AppointmentsMade", fields: [bookedById], references: [id], onDelete: Restrict)
-  createdAt  DateTime        @default(now())
+  id               String          @id @default(uuid()) @db.Uuid
+  slotId           String          @unique @db.Uuid
+  slot             AppointmentSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  childId          String          @db.Uuid
+  child            Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
+  bookedById       String          @db.Uuid
+  bookedBy         User            @relation("AppointmentsMade", fields: [bookedById], references: [id], onDelete: Restrict)
+  /// What the parent wants to cover (plan goal ids) and which preparation steps they ticked.
+  prepTopicIds     String[]        @default([])
+  prepChecklistIds String[]        @default([])
+  /// Written by the clinician after the call.
+  summary          String?
+  actionPoints     String[]        @default([])
+  createdAt        DateTime        @default(now())
 
   @@index([childId])
   @@map("appointments")
@@ -535,4 +578,121 @@ model AiOutput {
   @@unique([childId, capability, forDate])
   @@index([createdAt])
   @@map("ai_outputs")
+}
+
+// ---- Structured care-plan content (plan 0017 batch B) ----------------------------------
+
+/**
+ * One week of a plan: focus, optional parent guidance, goals and scheduled activities.
+ */
+model PlanWeek {
+  id         String @id @default(uuid()) @db.Uuid
+  planId     String @db.Uuid
+  plan       Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  weekNumber Int
+  title      String
+  focus      String
+  // { title, scriptSnippet, practicalTip, context } — parent coaching for the week.
+  guidance   Json?
+
+  goals      PlanGoal[]
+  activities PlanActivity[]
+
+  @@unique([planId, weekNumber])
+  @@map("plan_weeks")
+}
+
+model PlanGoal {
+  id          String   @id @default(uuid()) @db.Uuid
+  weekId      String   @db.Uuid
+  week        PlanWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  position    Int
+  title       String
+  description String
+  domain      String
+  icon        String?
+
+  @@unique([weekId, position])
+  @@map("plan_goals")
+}
+
+model PlanActivity {
+  id                  String   @id @default(uuid()) @db.Uuid
+  weekId              String   @db.Uuid
+  week                PlanWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  position            Int
+  // 1..7 — the day of the plan week the activity is scheduled for.
+  dayOfWeek           Int
+  title               String
+  shortDescription    String
+  goalCategory        String
+  domain              String
+  durationMinutes     Int
+  whyItMatters        String
+  // [{ title, instruction, tip? }]
+  steps               Json
+  // { title, scriptQuote, tip, context? }
+  parentScript        Json?
+  equipment           Json
+  clinicalReassurance String?
+
+  completion ActivityCompletion?
+
+  @@unique([weekId, position])
+  @@map("plan_activities")
+}
+
+/**
+ * A parent marking an activity done. One row per activity; deleting the row resets it.
+ */
+model ActivityCompletion {
+  id            String       @id @default(uuid()) @db.Uuid
+  activityId    String       @unique @db.Uuid
+  activity      PlanActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  childId       String       @db.Uuid
+  child         Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  completedById String       @db.Uuid
+  completedBy   User         @relation("ActivityCompletionsMade", fields: [completedById], references: [id], onDelete: Restrict)
+  note          String?
+  completedAt   DateTime     @default(now())
+
+  @@index([childId])
+  @@map("activity_completions")
+}
+
+// ---- Parent-raised escalations (plan 0017 batch F, adapted from plan 0015) ---------------
+// An urgent-support request raised by the parent. Clinicians only review and resolve it; there is no
+// chat. `dueAt` is stored (createdAt + 24 h); "overdue" is computed.
+
+enum EscalationStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  CANCELLED
+}
+
+model Escalation {
+  id             String           @id @default(uuid()) @db.Uuid
+  childId        String           @db.Uuid
+  child          Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
+  raisedById     String           @db.Uuid
+  raisedBy       User             @relation("EscalationsRaised", fields: [raisedById], references: [id], onDelete: Restrict)
+  categoryId     String
+  notes          String
+  whatWasTried   String?
+  callbackPhone  String?
+  status         EscalationStatus @default(OPEN)
+  dueAt          DateTime
+  acknowledgedAt DateTime?
+  handledById    String?          @db.Uuid
+  handledBy      User?            @relation("EscalationsHandled", fields: [handledById], references: [id], onDelete: SetNull)
+  resolvedAt     DateTime?
+  resolutionNote String?
+  cancelledAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([childId, createdAt])
+  @@index([status, dueAt])
+  @@map("escalations")
 }

@@ -12,6 +12,7 @@ describe('AuthEmailJobs', () => {
   const tokens = {
     issueEmailVerificationCode: jest.fn(),
     issuePasswordResetToken: jest.fn(),
+    issuePasswordResetCode: jest.fn(),
     revokeEmailVerification: jest.fn(),
   };
   const email = { sendEmailVerificationCode: jest.fn(), sendPasswordResetLink: jest.fn() };
@@ -123,13 +124,15 @@ describe('AuthEmailJobs', () => {
         attempt: 1,
       });
 
-    it('mints the token at send time and emails the reset link', async () => {
+    it('mints the token and the code at send time and emails both', async () => {
       prisma.user.findUnique.mockResolvedValue({ email: 'p@example.com' });
       tokens.issuePasswordResetToken.mockResolvedValue('tok');
+      tokens.issuePasswordResetCode.mockResolvedValue('654321');
       await run();
       expect(email.sendPasswordResetLink).toHaveBeenCalledWith(
         'p@example.com',
         'https://app.example/reset-password?token=tok',
+        '654321',
       );
     });
 

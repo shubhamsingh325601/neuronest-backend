@@ -14,6 +14,7 @@ import { EmailModule } from '@common/email/email.module';
 import { JobsModule } from '@common/jobs/jobs.module';
 import { LoggingModule } from '@common/logging/logging.module';
 import { MediaStorageModule } from '@common/media-storage/media-storage.module';
+import { EscalationsModule } from '@modules/escalations/escalations.module';
 import { AppThrottlerGuard } from '@common/throttler/app-throttler.guard';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { AdminModule } from '@modules/admin/admin.module';
@@ -22,6 +23,7 @@ import { CallLogsModule } from '@modules/call-logs/call-logs.module';
 import { ChildrenModule } from '@modules/children/children.module';
 import { CoachingModule } from '@modules/coaching/coaching.module';
 import { ProgressModule } from '@modules/progress/progress.module';
+import { CarePlanModule } from '@modules/care-plan/care-plan.module';
 import { AppointmentsModule } from '@modules/appointments/appointments.module';
 import { AiCoachingModule } from '@modules/ai-coaching/ai-coaching.module';
 import { ConsentsModule } from '@modules/consents/consents.module';
@@ -66,6 +68,8 @@ import { UsersModule } from '@modules/users/users.module';
     ConsentsModule,
     CoachingModule,
     ProgressModule,
+    CarePlanModule,
+    EscalationsModule,
     AppointmentsModule,
     AiCoachingModule,
     MediaModule,

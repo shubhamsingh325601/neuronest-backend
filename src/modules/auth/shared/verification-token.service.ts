@@ -64,13 +64,46 @@ export class VerificationTokenService {
    * Increments the attempt counter; consumes the token once attempts are exhausted.
    */
   async verifyEmailCode(userId: string, code: string): Promise<boolean> {
-    const token = await this.prisma.verificationToken.findFirst({
-      where: {
+    return this.verifyAttemptLimitedCode(userId, VerificationTokenType.EMAIL_VERIFICATION, code);
+  }
+
+  /**
+   * Issue the short code a mobile client types to reset a password. Same shape as the email
+   * verification code (6 digits, attempt-limited); lives as long as the reset link.
+   */
+  async issuePasswordResetCode(userId: string): Promise<string> {
+    await this.consumeOutstanding(userId, VerificationTokenType.PASSWORD_RESET_CODE);
+    const code = generateNumericCode(6);
+    await this.prisma.verificationToken.create({
+      data: {
         userId,
-        type: VerificationTokenType.EMAIL_VERIFICATION,
-        consumedAt: null,
-        expiresAt: { gt: new Date() },
+        type: VerificationTokenType.PASSWORD_RESET_CODE,
+        channel: VerificationChannel.EMAIL,
+        tokenHash: sha256(code),
+        expiresAt: new Date(Date.now() + this.resetTtlMs),
       },
+    });
+    return code;
+  }
+
+  /** Check (and consume on success) a submitted password-reset code. */
+  async verifyPasswordResetCode(userId: string, code: string): Promise<boolean> {
+    return this.verifyAttemptLimitedCode(userId, VerificationTokenType.PASSWORD_RESET_CODE, code);
+  }
+
+  /** Kill every outstanding password-reset secret (link token and code) once one of them was used. */
+  async revokePasswordReset(userId: string): Promise<void> {
+    await this.consumeOutstanding(userId, VerificationTokenType.PASSWORD_RESET);
+    await this.consumeOutstanding(userId, VerificationTokenType.PASSWORD_RESET_CODE);
+  }
+
+  private async verifyAttemptLimitedCode(
+    userId: string,
+    type: VerificationTokenType,
+    code: string,
+  ): Promise<boolean> {
+    const token = await this.prisma.verificationToken.findFirst({
+      where: { userId, type, consumedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -98,11 +131,12 @@ export class VerificationTokenService {
       return false;
     }
 
-    await this.prisma.verificationToken.update({
-      where: { id: token.id },
+    // Single-use claim: of two concurrent submissions of one code, exactly one wins.
+    const claimed = await this.prisma.verificationToken.updateMany({
+      where: { id: token.id, consumedAt: null },
       data: { consumedAt: new Date() },
     });
-    return true;
+    return claimed.count === 1;
   }
 
   /** Issue a password-reset token. Returns the plaintext for the email link. */

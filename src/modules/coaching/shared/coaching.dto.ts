@@ -18,6 +18,18 @@ export class CoachingTipDto {
   @ApiProperty()
   body!: string;
 
+  @ApiProperty({ type: String, nullable: true })
+  whyItMatters!: string | null;
+
+  @ApiProperty({ type: [String] })
+  steps!: string[];
+
+  @ApiProperty({ type: String, nullable: true })
+  scriptQuote!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  scriptContext!: string | null;
+
   @ApiPropertyOptional({ description: 'Present for CLINICIAN/ADMIN only.' })
   authorId?: string;
 
@@ -28,6 +40,10 @@ export class CoachingTipDto {
       position: row.position,
       title: row.title,
       body: row.body,
+      whyItMatters: row.whyItMatters,
+      steps: row.steps,
+      scriptQuote: row.scriptQuote,
+      scriptContext: row.scriptContext,
     };
     if (role !== Role.PARENT) {
       dto.authorId = row.authorId;

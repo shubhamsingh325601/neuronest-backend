@@ -67,6 +67,7 @@ export const PERMISSIONS = [
   'appointment-slot:manage',
   'appointment-slot:read',
   'appointment:create:self',
+  'appointment:cancel:self',
   'appointment:read',
   // AI coaching tip (Phase 18). Generate is the child's own PARENT only (ADMIN reaches it through
   // the `...PERMISSIONS` spread, so the service rejects it); read is the `child:read` shape.
@@ -74,6 +75,22 @@ export const PERMISSIONS = [
   'ai-coaching:generate:self',
   'ai-coaching:read',
   'ai-run:read',
+  // Call preparation (PARENT, own child; service restricts ADMIN) and the post-call summary
+  // (assigned CLINICIAN / ADMIN).
+  'appointment:prepare:self',
+  'appointment:summarise',
+  // Parent app integration (Phase 17). child:update:self is PARENT-only (service checks ownership);
+  // child-clinical-profile:manage is CLINICIAN (assigned) + ADMIN.
+  'user:update:self',
+  'child:update:self',
+  'child-clinical-profile:manage',
+  // Structured care plan (batch B): the parent marks activities done; service restricts ADMIN.
+  'activity:complete:self',
+  // Parent-raised escalations (batch F): parent creates/cancels for their own child; parent+clinician read;
+  // clinician/admin acknowledge, resolve and work the queue.
+  'escalation:create:self',
+  'escalation:read',
+  'escalation:manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -82,12 +99,17 @@ const SELF_PERMISSIONS: Permission[] = [
   'user:read:self',
   'user:deactivate:self',
   'user:change-password:self',
+  'user:update:self',
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   [Role.PARENT]: [
     ...SELF_PERMISSIONS,
     'child:create:self',
+    'child:update:self',
+    'activity:complete:self',
+    'escalation:create:self',
+    'escalation:read',
     'child:read',
     'media:create:self',
     'media:read',
@@ -99,6 +121,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'progress:read',
     'appointment-slot:read',
     'appointment:create:self',
+    'appointment:cancel:self',
+    'appointment:prepare:self',
     'appointment:read',
     'ai-coaching:generate:self',
     'ai-coaching:read',
@@ -106,6 +130,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   [Role.CLINICIAN]: [
     ...SELF_PERMISSIONS,
     'child:read',
+    'child-clinical-profile:manage',
+    'escalation:read',
+    'escalation:manage',
     'media:read',
     'plan-template:read',
     'plan:manage',
@@ -121,6 +148,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'appointment-slot:read',
     'appointment:read',
     'ai-coaching:read',
+    'appointment:summarise',
   ],
   [Role.ADMIN]: [...PERMISSIONS],
 };

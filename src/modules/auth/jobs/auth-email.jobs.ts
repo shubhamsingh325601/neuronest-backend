@@ -105,9 +105,11 @@ export class AuthEmailJobs implements OnModuleInit {
       return;
     }
     const token = await this.verificationTokens.issuePasswordResetToken(userId);
+    const code = await this.verificationTokens.issuePasswordResetCode(userId);
     await this.email.sendPasswordResetLink(
       user.email,
       buildWebLink(this.appWebUrl, '/reset-password', token),
+      code,
     );
   }
 }

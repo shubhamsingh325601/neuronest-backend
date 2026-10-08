@@ -5,6 +5,7 @@ export interface SentEmail {
   to: string;
   code?: string;
   resetUrl?: string;
+  resetCode?: string;
   setupUrl?: string;
 }
 
@@ -19,9 +20,9 @@ export class FakeEmailService extends EmailService {
     this.sent.push({ kind: 'verification-code', to, code });
   }
 
-  async sendPasswordResetLink(to: string, resetUrl: string): Promise<void> {
+  async sendPasswordResetLink(to: string, resetUrl: string, resetCode?: string): Promise<void> {
     this.guard();
-    this.sent.push({ kind: 'password-reset', to, resetUrl });
+    this.sent.push({ kind: 'password-reset', to, resetUrl, resetCode });
   }
 
   async sendAccountSetupLink(to: string, setupUrl: string): Promise<void> {
@@ -35,6 +36,10 @@ export class FakeEmailService extends EmailService {
 
   lastResetUrlFor(to: string): string | undefined {
     return [...this.sent].reverse().find((m) => m.to === to && m.resetUrl)?.resetUrl;
+  }
+
+  lastResetCodeFor(to: string): string | undefined {
+    return [...this.sent].reverse().find((m) => m.to === to && m.resetCode)?.resetCode;
   }
 
   lastSetupUrlFor(to: string): string | undefined {
