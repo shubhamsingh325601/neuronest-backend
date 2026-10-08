@@ -54,6 +54,10 @@ export class ReplaceCoachingService {
             position: index + 1,
             title: tip.title,
             body: tip.body,
+            whyItMatters: tip.whyItMatters,
+            steps: tip.steps ?? [],
+            scriptQuote: tip.scriptQuote,
+            scriptContext: tip.scriptContext,
             authorId: caller.id,
           })),
         });

@@ -46,7 +46,10 @@ export const PERMISSIONS = [
   'appointment-slot:manage',       // POST /v1/appointment-slots — CLINICIAN(own)/ADMIN
   'appointment-slot:read',         // GET  /v1/children/:childId/appointment-slots — PARENT(own)/CLINICIAN(assigned)/ADMIN
   'appointment:create:self',       // POST /v1/children/:childId/appointments — PARENT (own child) only in practice
+  'appointment:cancel:self',       // DELETE /v1/appointments/:id — PARENT (own child) only in practice
   'appointment:read',              // GET  /v1/children/:childId/appointments, /v1/appointments — PARENT(own)/CLINICIAN(assigned/own)/ADMIN
+  'appointment:prepare:self',      // PUT  /v1/appointments/:id/preparation - PARENT (own child) only in practice
+  'appointment:summarise',         // PUT  /v1/appointments/:id/summary - CLINICIAN(assigned)/ADMIN
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -442,9 +445,31 @@ missing header → `401 INVALID_JOBS_TOKEN`. The global throttler still applies.
   anyone else, admin included — same stance as `progress:write:self`). A slot whose clinician is not
   assigned to the child (or is not ACTIVE, or is already in the past) is `404 SLOT_NOT_FOUND`, so slot
   existence is not disclosed across care teams.
+- `appointment:cancel:self` (PARENT). ADMIN holds it through the spread, so `CancelAppointmentService`
+  restricts cancelling to the child's own parent (`403 FORBIDDEN` otherwise). A call that has already
+  started is `409 APPOINTMENT_STARTED`; success deletes the booking and frees the slot (`204`).
 - `appointment:read` (PARENT, CLINICIAN, ADMIN). `GET /v1/children/{childId}/appointments` is the
   `child:read` shape (parent-own, clinician-assigned, admin-any). `GET /v1/appointments` is a query
   filter: CLINICIAN → appointments on their **own** slots, PARENT → their own child's, ADMIN → all.
+
+- `appointment:prepare:self` (PARENT). ADMIN holds it through the spread, so `SavePreparationService` restricts it to the child's own parent (`403 FORBIDDEN` otherwise); a call that has already ended is `409 APPOINTMENT_ENDED`.
+- `appointment:summarise` (CLINICIAN, ADMIN). A clinician must be assigned to the child (`403` otherwise); before the call starts it is `409 APPOINTMENT_NOT_STARTED`. The summary and action points are then returned to the parent on the appointment.
+
+### Parent-app integration permissions (Phase 17)
+
+| Permission | Roles | Where scope is enforced |
+|---|---|---|
+| `user:update:self` | every role | self only (`PATCH /users/me` takes the caller's id) |
+| `child:update:self` | PARENT | service: caller must be the child's parent (ADMIN reaches the permission via the spread but is refused) |
+| `child-clinical-profile:manage` | CLINICIAN, ADMIN | service: clinician must be assigned to the child |
+| `activity:complete:self` | PARENT | `assertChildAccess(..., 'parent-write')`: only the child's own parent; clinicians/admin are read-only |
+| `escalation:create:self` | PARENT | `parent-write`; one active request per child (partial unique index) |
+| `escalation:read` | PARENT, CLINICIAN | `read` scope |
+| Preferences (`GET`/`PATCH /users/me/preferences`) | every role | self only; read uses `user:read:self`, write uses `user:update:self` |
+| `escalation:manage` | CLINICIAN, ADMIN | clinician works only requests of assigned children (queue is query-filtered) |
+
+AI analyses and the assistant chat are deliberately not part of the backend yet (client decision, 2026-10-08);
+the Parent app shows them as static UI until the AI work is scheduled.
 
 ## 7. Future Migration Path to `@casl/ability`
 

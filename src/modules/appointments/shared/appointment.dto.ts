@@ -23,6 +23,21 @@ export class AppointmentDto {
   @ApiProperty({ example: '2026-10-12T09:30:00.000Z', description: 'UTC ISO-8601.' })
   endsAt!: string;
 
+  @ApiProperty({ type: String, nullable: true, description: 'Video-call link, when the clinician published one.' })
+  meetingUrl!: string | null;
+
+  @ApiProperty({ type: [String], description: 'Plan-goal ids the parent wants to cover.' })
+  prepTopicIds!: string[];
+
+  @ApiProperty({ type: [String], description: 'Preparation steps the parent ticked.' })
+  prepChecklistIds!: string[];
+
+  @ApiProperty({ type: String, nullable: true, description: 'Written by the clinician after the call.' })
+  summary!: string | null;
+
+  @ApiProperty({ type: [String] })
+  actionPoints!: string[];
+
   @ApiProperty()
   createdAt!: string;
 
@@ -30,7 +45,17 @@ export class AppointmentDto {
     id: string;
     childId: string;
     createdAt: Date;
-    slot: { id: string; startsAt: Date; endsAt: Date; clinician: { id: string; name: string } };
+    prepTopicIds: string[];
+    prepChecklistIds: string[];
+    summary: string | null;
+    actionPoints: string[];
+    slot: {
+      id: string;
+      startsAt: Date;
+      endsAt: Date;
+      meetingUrl: string | null;
+      clinician: { id: string; name: string };
+    };
   }): AppointmentDto {
     return {
       id: row.id,
@@ -39,6 +64,11 @@ export class AppointmentDto {
       clinician: { id: row.slot.clinician.id, name: row.slot.clinician.name },
       startsAt: row.slot.startsAt.toISOString(),
       endsAt: row.slot.endsAt.toISOString(),
+      meetingUrl: row.slot.meetingUrl,
+      prepTopicIds: row.prepTopicIds,
+      prepChecklistIds: row.prepChecklistIds,
+      summary: row.summary,
+      actionPoints: row.actionPoints,
       createdAt: row.createdAt.toISOString(),
     };
   }

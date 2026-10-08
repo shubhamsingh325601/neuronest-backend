@@ -73,7 +73,7 @@ export class CreateSlotService {
 
     try {
       const slot = await this.prisma.appointmentSlot.create({
-        data: { clinicianId, startsAt, endsAt, createdById: caller.id },
+        data: { clinicianId, startsAt, endsAt, createdById: caller.id, meetingUrl: dto.meetingUrl },
       });
       return AppointmentSlotDto.from({ ...slot, clinician });
     } catch (err) {

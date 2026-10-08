@@ -4,7 +4,7 @@ import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { CoachingTipDto, CoachingWeekDto } from '@modules/coaching/shared/coaching.dto';
 import { weekOfDay } from '@modules/coaching/shared/week.util';
-import { computeDayNumber } from '@modules/plans/features/today-focus/day-offset.util';
+import { atLocalDate, computeDayNumber } from '@modules/plans/features/today-focus/day-offset.util';
 import { ListCoachingQueryDto } from './dto/list-coaching.query.dto';
 
 /**
@@ -56,7 +56,7 @@ export class ListCoachingService {
     const week = query.week ?? 'current';
     let weekNumber: number;
     if (week === 'current') {
-      const dayNumber = computeDayNumber(plan.startDate, new Date());
+      const dayNumber = computeDayNumber(plan.startDate, atLocalDate(new Date(), query.tzOffsetMinutes));
       if (dayNumber < 1) {
         return { weekNumber: null, tips: [] };
       }

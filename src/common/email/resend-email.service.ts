@@ -42,8 +42,8 @@ export class ResendEmailService extends EmailService {
     await this.dispatch(to, verificationCodeEmail(code, this.verificationTtlMin));
   }
 
-  async sendPasswordResetLink(to: string, resetUrl: string): Promise<void> {
-    await this.dispatch(to, passwordResetEmail(resetUrl, this.passwordResetTtlMin));
+  async sendPasswordResetLink(to: string, resetUrl: string, code?: string): Promise<void> {
+    await this.dispatch(to, passwordResetEmail(resetUrl, this.passwordResetTtlMin, code));
   }
 
   async sendAccountSetupLink(to: string, setupUrl: string): Promise<void> {

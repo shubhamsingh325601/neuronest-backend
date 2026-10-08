@@ -5,7 +5,7 @@
 export abstract class EmailService {
   abstract sendEmailVerificationCode(to: string, code: string): Promise<void>;
 
-  abstract sendPasswordResetLink(to: string, resetUrl: string): Promise<void>;
+  abstract sendPasswordResetLink(to: string, resetUrl: string, code?: string): Promise<void>;
 
   abstract sendAccountSetupLink(to: string, setupUrl: string): Promise<void>;
 }

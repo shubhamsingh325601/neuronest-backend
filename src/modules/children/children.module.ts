@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { CreateChildController } from './features/create-child/create-child.controller';
 import { CreateChildService } from './features/create-child/create-child.service';
 import { GetChildController } from './features/get-child/get-child.controller';
@@ -11,10 +11,14 @@ import { ListClinicianAssignmentsController } from './features/list-clinician-as
 import { ListClinicianAssignmentsService } from './features/list-clinician-assignments/list-clinician-assignments.service';
 import { RevokeClinicianAssignmentController } from './features/revoke-clinician-assignment/revoke-clinician-assignment.controller';
 import { RevokeClinicianAssignmentService } from './features/revoke-clinician-assignment/revoke-clinician-assignment.service';
+import { UpdateChildController } from './features/update-child/update-child.controller';
+import { UpdateChildService } from './features/update-child/update-child.service';
+import { SetClinicalProfileController } from './features/set-clinical-profile/set-clinical-profile.controller';
+import { SetClinicalProfileService } from './features/set-clinical-profile/set-clinical-profile.service';
 
 /**
  * Core Care Domain foundation (Phase 4): the `Child` record and the
- * clinician↔child assignment join. Later phases (media, plans, call logs) build on
+ * clinicianâ†”child assignment join. Later phases (media, plans, call logs) build on
  * top of this module's `Child` model without touching it.
  */
 @Module({
@@ -25,6 +29,8 @@ import { RevokeClinicianAssignmentService } from './features/revoke-clinician-as
     AssignClinicianController,
     ListClinicianAssignmentsController,
     RevokeClinicianAssignmentController,
+    UpdateChildController,
+    SetClinicalProfileController,
   ],
   providers: [
     CreateChildService,
@@ -33,6 +39,8 @@ import { RevokeClinicianAssignmentService } from './features/revoke-clinician-as
     AssignClinicianService,
     ListClinicianAssignmentsService,
     RevokeClinicianAssignmentService,
+    UpdateChildService,
+    SetClinicalProfileService,
   ],
 })
 export class ChildrenModule {}

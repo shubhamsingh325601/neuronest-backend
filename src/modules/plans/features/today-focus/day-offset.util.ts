@@ -1,5 +1,11 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/** 
+ow moved so its UTC date is the caller's local calendar date (offset in minutes ahead of UTC). */
+export function atLocalDate(now: Date, tzOffsetMinutes = 0): Date {
+  return new Date(now.getTime() + tzOffsetMinutes * 60_000);
+}
+
 /**
  * UTC date-only day offset from a plan's `startDate`: `1` on the start date,
  * incrementing daily. No per-child/per-user timezone support this phase (§6 of plan
