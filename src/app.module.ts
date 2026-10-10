@@ -14,6 +14,7 @@ import { EmailModule } from '@common/email/email.module';
 import { JobsModule } from '@common/jobs/jobs.module';
 import { LoggingModule } from '@common/logging/logging.module';
 import { MediaStorageModule } from '@common/media-storage/media-storage.module';
+import { PushModule } from '@common/push/push.module';
 import { EscalationsModule } from '@modules/escalations/escalations.module';
 import { AppThrottlerGuard } from '@common/throttler/app-throttler.guard';
 import { PrismaModule } from '@common/prisma/prisma.module';
@@ -22,6 +23,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { CallLogsModule } from '@modules/call-logs/call-logs.module';
 import { ChildrenModule } from '@modules/children/children.module';
 import { CoachingModule } from '@modules/coaching/coaching.module';
+import { DevicesModule } from '@modules/devices/devices.module';
 import { ProgressModule } from '@modules/progress/progress.module';
 import { CarePlanModule } from '@modules/care-plan/care-plan.module';
 import { AppointmentsModule } from '@modules/appointments/appointments.module';
@@ -59,10 +61,12 @@ import { UsersModule } from '@modules/users/users.module';
     AiModule,
     JobsModule,
     MediaStorageModule,
+    PushModule,
     AuthzModule,
 
     AuthModule,
     UsersModule,
+    DevicesModule,
     CliniciansModule,
     ChildrenModule,
     ConsentsModule,

@@ -43,6 +43,12 @@ export interface AppConfig {
     apiKey: string;
     apiSecret: string;
   };
+  push: {
+    /** Firebase service-account JSON (raw or base64), for hosts with no file system. */
+    serviceAccountJson: string;
+    /** Path to the service-account JSON file, for local runs. Empty JSON and path = push is off. */
+    serviceAccountPath: string;
+  };
   throttle: {
     ttlSec: number;
     limit: number;
@@ -126,6 +132,10 @@ export const configuration = (): AppConfig => ({
     cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? '',
     apiKey: process.env.CLOUDINARY_API_KEY ?? '',
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
+  },
+  push: {
+    serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
+    serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
   },
   throttle: {
     ttlSec: parseInt(process.env.THROTTLE_TTL_SEC ?? '60', 10),

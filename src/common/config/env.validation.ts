@@ -141,6 +141,10 @@ export const envValidationSchema = Joi.object({
     .default('')
     .when('NODE_ENV', { is: 'production', then: Joi.string().required() }),
 
+  // Push notifications (Firebase Cloud Messaging). Both empty = push is off; sends are logged and skipped.
+  FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').default(''),
+  FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().allow('').default(''),
+
   THROTTLE_TTL_SEC: Joi.number().integer().positive().default(60),
   THROTTLE_LIMIT: Joi.number().integer().positive().default(100),
 

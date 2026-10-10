@@ -103,11 +103,27 @@ model User {
   escalationsRaised       Escalation[]               @relation("EscalationsRaised")
   escalationsHandled      Escalation[]               @relation("EscalationsHandled")
   preferences             UserPreference?
+  deviceTokens            DeviceToken[]
 
   @@map("users")
 }
 
 /// A parent's notification and archive choices. No row means the defaults below.
+/// A phone that can receive push notifications for a user. A token belongs to one user at a time:
+/// signing in on a shared phone moves it to the new account.
+model DeviceToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  platform   String   @default("android")
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("device_tokens")
+}
+
 model UserPreference {
   userId               String   @id @db.Uuid
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)

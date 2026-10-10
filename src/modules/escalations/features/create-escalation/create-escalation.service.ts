@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { assertChildAccess } from '@common/authz/child-access';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { PushNotifier } from '@common/push/push-notifier';
 import { assignedClinicianName } from '@modules/escalations/shared/assigned-clinician';
 import { ESCALATION_RESPONSE_MS } from '@modules/escalations/shared/escalation.constants';
 import { EscalationDto } from '@modules/escalations/shared/escalation.dto';
@@ -15,7 +16,10 @@ import { CreateEscalationDto } from './dto/create-escalation.dto';
  */
 @Injectable()
 export class CreateEscalationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: PushNotifier,
+  ) {}
 
   async create(
     childId: string,
@@ -37,6 +41,11 @@ export class CreateEscalationService {
           createdAt: now,
           dueAt: new Date(now.getTime() + ESCALATION_RESPONSE_MS),
         },
+      });
+      void this.notifier.toClinicians(childId, {
+        title: 'Urgent request',
+        body: 'A parent needs a response. Please open the app.',
+        data: { type: 'escalation_created', escalationId: row.id },
       });
       return EscalationDto.from(row, await assignedClinicianName(this.prisma, childId), now);
     } catch (err) {

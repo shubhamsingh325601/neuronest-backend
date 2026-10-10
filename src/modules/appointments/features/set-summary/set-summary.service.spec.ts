@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { Role, UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { PushNotifier } from '@common/push/push-notifier';
 import { SetSummaryService } from './set-summary.service';
 
 describe('SetSummaryService', () => {
@@ -9,6 +10,7 @@ describe('SetSummaryService', () => {
     appointment: { findUnique: jest.fn(), update: jest.fn() },
     clinicianChildAssignment: { findUnique: jest.fn() },
   };
+  const notifier = { toClinicians: jest.fn(), toParent: jest.fn() };
   let service: SetSummaryService;
 
   const asUser = (id: string, role: Role): AuthenticatedUser => ({
@@ -46,9 +48,21 @@ describe('SetSummaryService', () => {
       },
     });
     const moduleRef = await Test.createTestingModule({
-      providers: [SetSummaryService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        SetSummaryService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: PushNotifier, useValue: notifier },
+      ],
     }).compile();
     service = moduleRef.get(SetSummaryService);
+  });
+
+  it('tells the parent the summary is ready', async () => {
+    await service.set('appt-1', asUser('clin-1', Role.CLINICIAN), body, now);
+    expect(notifier.toParent).toHaveBeenCalledWith(
+      'child-1',
+      expect.objectContaining({ title: 'Call summary ready' }),
+    );
   });
 
   it('lets the assigned clinician record a trimmed summary', async () => {

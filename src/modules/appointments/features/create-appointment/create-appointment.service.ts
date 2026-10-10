@@ -7,6 +7,7 @@ import {
 import { Prisma, Role, UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { PushNotifier } from '@common/push/push-notifier';
 import { APPOINTMENT_INCLUDE, AppointmentDto } from '@modules/appointments/shared/appointment.dto';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 
@@ -21,7 +22,10 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto';
  */
 @Injectable()
 export class CreateAppointmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: PushNotifier,
+  ) {}
 
   async create(
     childId: string,
@@ -60,7 +64,7 @@ export class CreateAppointmentService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const booked = await this.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "children" WHERE "id" = ${childId}::uuid FOR UPDATE`;
 
         const booked = await tx.appointment.findUnique({
@@ -87,6 +91,12 @@ export class CreateAppointmentService {
         });
         return AppointmentDto.from(row);
       });
+      void this.notifier.toClinicians(childId, {
+        title: 'New call booked',
+        body: 'A parent booked a monthly call. Open the app to see it.',
+        data: { type: 'appointment_booked', appointmentId: booked.id },
+      });
+      return booked;
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw this.alreadyBooked();

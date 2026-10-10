@@ -7,6 +7,7 @@ import {
 import { Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { PushNotifier } from '@common/push/push-notifier';
 import { APPOINTMENT_INCLUDE, AppointmentDto } from '@modules/appointments/shared/appointment.dto';
 import { SetSummaryDto } from './dto/set-summary.dto';
 
@@ -16,7 +17,10 @@ import { SetSummaryDto } from './dto/set-summary.dto';
  */
 @Injectable()
 export class SetSummaryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: PushNotifier,
+  ) {}
 
   async set(
     id: string,
@@ -62,6 +66,11 @@ export class SetSummaryService {
         actionPoints: dto.actionPoints.map((point) => point.trim()),
       },
       include: APPOINTMENT_INCLUDE,
+    });
+    void this.notifier.toParent(appointment.childId, {
+      title: 'Call summary ready',
+      body: 'Your clinician added a summary of your call.',
+      data: { type: 'appointment_summary', appointmentId: id },
     });
     return AppointmentDto.from(row);
   }

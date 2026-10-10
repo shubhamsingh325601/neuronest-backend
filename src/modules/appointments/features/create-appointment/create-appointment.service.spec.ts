@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { Prisma, Role, UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { PushNotifier } from '@common/push/push-notifier';
 import { CreateAppointmentService } from './create-appointment.service';
 
 describe('CreateAppointmentService', () => {
@@ -14,6 +15,7 @@ describe('CreateAppointmentService', () => {
     appointmentSlot: { findFirst: jest.fn() },
     $transaction: jest.fn(),
   };
+  const notifier = { toClinicians: jest.fn(), toParent: jest.fn() };
   let service: CreateAppointmentService;
 
   const asUser = (id: string, role: Role): AuthenticatedUser => ({
@@ -45,9 +47,21 @@ describe('CreateAppointmentService', () => {
       },
     });
     const moduleRef = await Test.createTestingModule({
-      providers: [CreateAppointmentService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        CreateAppointmentService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: PushNotifier, useValue: notifier },
+      ],
     }).compile();
     service = moduleRef.get(CreateAppointmentService);
+  });
+
+  it('tells the care team about the booking', async () => {
+    await service.create('child-1', parent, dto, now);
+    expect(notifier.toClinicians).toHaveBeenCalledWith(
+      'child-1',
+      expect.objectContaining({ title: 'New call booked' }),
+    );
   });
 
   it('books the slot and embeds the clinician name', async () => {

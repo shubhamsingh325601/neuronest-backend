@@ -8,6 +8,7 @@ import { EscalationStatus, Role } from '@prisma/client';
 import { assertChildAccess } from '@common/authz/child-access';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { PushNotifier } from '@common/push/push-notifier';
 import { assignedClinicianName } from '@modules/escalations/shared/assigned-clinician';
 import { EscalationDto } from '@modules/escalations/shared/escalation.dto';
 import { ResolveEscalationDto } from './dto/resolve-escalation.dto';
@@ -18,7 +19,10 @@ import { ResolveEscalationDto } from './dto/resolve-escalation.dto';
  */
 @Injectable()
 export class HandleEscalationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: PushNotifier,
+  ) {}
 
   async acknowledge(id: string, caller: AuthenticatedUser): Promise<EscalationDto> {
     const { row, clinicianName } = await this.load(id, caller);
@@ -32,6 +36,11 @@ export class HandleEscalationService {
         acknowledgedAt: new Date(),
         handledById: caller.id,
       },
+    });
+    void this.notifier.toParent(row.childId, {
+      title: 'Your request was seen',
+      body: 'Your clinician has seen your urgent request.',
+      data: { type: 'escalation_acknowledged', escalationId: id },
     });
     return EscalationDto.from(updated, clinicianName);
   }
@@ -54,6 +63,11 @@ export class HandleEscalationService {
         handledById: caller.id,
         resolutionNote: dto.note?.trim() || null,
       },
+    });
+    void this.notifier.toParent(row.childId, {
+      title: 'Your request was answered',
+      body: 'Your clinician has responded to your urgent request.',
+      data: { type: 'escalation_resolved', escalationId: id },
     });
     return EscalationDto.from(updated, clinicianName);
   }

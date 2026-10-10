@@ -8,9 +8,11 @@ import { JobQueueService } from '@common/jobs/job-queue.service';
 import { JobRunnerService, type RunSummary } from '@common/jobs/job-runner.service';
 import { MediaStorageService } from '@common/media-storage/media-storage.service';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { PushService } from '@common/push/push.service';
 import { FakeAiService } from './fake-ai.service';
 import { FakeEmailService } from './fake-email.service';
 import { FakeMediaStorageService } from './fake-media-storage.service';
+import { FakePushService } from './fake-push.service';
 
 export interface TestJobs {
   runner: JobRunnerService;
@@ -26,6 +28,7 @@ export interface TestContext {
   jobs: TestJobs;
   mail: FakeEmailService;
   ai: FakeAiService;
+  push: FakePushService;
   mediaStorage: FakeMediaStorageService;
   close: () => Promise<void>;
 }
@@ -39,6 +42,7 @@ export async function createTestApp(): Promise<TestContext> {
   const mail = new FakeEmailService();
   const mediaStorage = new FakeMediaStorageService();
   const ai = new FakeAiService();
+  const push = new FakePushService();
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(EmailService)
@@ -47,6 +51,8 @@ export async function createTestApp(): Promise<TestContext> {
     .useValue(mediaStorage)
     .overrideProvider(AiService)
     .useValue(ai)
+    .overrideProvider(PushService)
+    .useValue(push)
     .compile();
 
   const app = moduleRef.createNestApplication();
@@ -82,6 +88,7 @@ export async function createTestApp(): Promise<TestContext> {
     jobs,
     mail,
     ai,
+    push,
     mediaStorage,
     close: async () => {
       await prisma.truncateAll();

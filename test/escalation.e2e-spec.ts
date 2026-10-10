@@ -98,6 +98,13 @@ describe('Parent-raised escalations (e2e)', () => {
       (new Date(res.body.dueAt).getTime() - new Date(res.body.createdAt).getTime()) / 3_600_000;
     expect(hours).toBe(24);
 
+    const pushed = await ctx.push.waitFor('Urgent request');
+    expect(pushed.userIds).toEqual([clinician.id]);
+    expect(pushed.message.data).toMatchObject({
+      type: 'escalation_created',
+      escalationId: res.body.id,
+    });
+
     const again = await http().post(url()).set(auth(parent.token)).send(body);
     expect(again.status).toBe(409);
     expect(again.body.code).toBe('ESCALATION_ALREADY_ACTIVE');
@@ -169,6 +176,7 @@ describe('Parent-raised escalations (e2e)', () => {
     });
 
     it('acknowledges then resolves with a note the parent can read; both are idempotent', async () => {
+      ctx.push.clear();
       const ack = await http().post(`/v1/escalations/${id}/acknowledge`).set(auth(clinician.token));
       expect(ack.status).toBe(200);
       expect(ack.body.status).toBe('ACKNOWLEDGED');
@@ -190,6 +198,16 @@ describe('Parent-raised escalations (e2e)', () => {
         (await http().post(`/v1/escalations/${id}/resolve`).set(auth(admin.token)).send({})).body
           .status,
       ).toBe('RESOLVED');
+
+      // The parent hears about each change once; repeating a step does not notify again.
+      const seen = await ctx.push.waitFor('Your request was seen');
+      expect(seen.userIds).toEqual([parent.id]);
+      const answered = await ctx.push.waitFor('Your request was answered');
+      expect(answered.userIds).toEqual([parent.id]);
+      expect(ctx.push.sent.map((p) => p.message.title)).toEqual([
+        'Your request was seen',
+        'Your request was answered',
+      ]);
 
       const parentView = await http().get(`${url()}`).set(auth(parent.token));
       expect(parentView.body.data[0]).toMatchObject({ status: 'RESOLVED', overdue: false });
