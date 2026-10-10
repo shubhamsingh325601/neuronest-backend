@@ -32,7 +32,6 @@ import { ConsentsModule } from '@modules/consents/consents.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
 import { JobsHttpModule } from '@modules/jobs/jobs.module';
 import { HealthModule } from '@modules/health/health.module';
-import { StreamProbeModule } from '@modules/stream-probe/stream-probe.module';
 import { MediaModule } from '@modules/media/media.module';
 import { PlansModule } from '@modules/plans/plans.module';
 import { UsersModule } from '@modules/users/users.module';
@@ -81,7 +80,6 @@ import { UsersModule } from '@modules/users/users.module';
     PlansModule,
     CallLogsModule,
     HealthModule,
-    StreamProbeModule, // TEMPORARY (plan 0019 Batch 0.3): remove after the staging SSE measurement
     JobsHttpModule,
     AdminModule,
   ],
