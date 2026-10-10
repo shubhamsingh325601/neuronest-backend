@@ -1,13 +1,23 @@
 # Plan 0018 — Phase 18: AI Foundation (Vercel AI SDK, Gemini-first) and Parent AI Coaching Tip
 
-Status: **Active** (Batch 0 gates 0.1–0.4 passed; see §11)
+Status: **Done** (2026-10-10). Batches 0–4 are implemented and verified; the unfinished remainder moved to plan 0019 (see below).
 Owner: backend
-Last updated: 2026-10-05
+Last updated: 2026-10-10
 
-> This file is the single source of truth for this phase. It carries every decision,
-> convention, and the exact remaining checklist so work can resume cold. Read it top to
-> bottom before touching code. **Nothing in this phase has been implemented yet.**
-> Plan 0015 (escalation) stays ON HOLD and is not touched here.
+> This file is the record of the AI foundation: the port, run recording, budgets, safety filter, evals and the
+> parent coaching tip. It carries every decision made for that work. Read it before touching `src/common/ai/` or
+> `src/modules/ai-coaching/`.
+
+> **Closed and handed over to plan 0019 (2026-10-10).** The following were not done here and are now owned by
+> [0019](0019-phase-19-conversations-and-summaries.md): the docs batch (old Batch 5: `docs/ai.md`, the AGENTS.md
+> matrix row, architecture / schema-decisions / rbac / testing / api-conventions updates), parent free-text chat
+> ("Ask the coach"), streaming, conversation summaries, and the persona/safety rules for chat. Launch gates G1–G5
+> below are still open and still block a real-family launch; they are not code and stay recorded here.
+>
+> Decisions in this file that 0019 reverses **on purpose** (the rest stand): Q1.4 and §10 (free-text chat deferred),
+> Q2.1 and Q5.5 (one port method, non-streaming; the coaching tip stays non-streaming, chat adds a streaming method),
+> §1 out-of-scope list (chat, streaming). The escalation references (plan 0015, Q1.5, the Q3 "escalate" row, §8, §10)
+> are void: plan 0015 was deleted and the escalation feature is removed by 0019 Batch 1. Nothing in this phase depended on it.
 
 ---
 
@@ -448,8 +458,10 @@ export interface AiStructuredResult<T> { output: T; provider: string; model: str
 
 ### Batch 5 — Docs and close
 
-- [ ] **5.1** New `docs/ai.md` (stable conventions: port, versioning rule, data gate, safety rules, how to add a capability/tool, eval procedure); add a row to the AGENTS.md Context-Loading Matrix; `architecture.md` (AI seam, §1 modules list), `schema-decisions.md`, `rbac.md`, `testing.md` (FakeAi, fetch guard, evals), `api-conventions.md` (201/200/202 exception), `.env.example`.
-- [ ] **5.2** Flip Status to **Done**, update `docs/plans/README.md`, write the implementation summary.
+Moved to plan 0019 (Batch 7), so the AI docs are written once, after chat and streaming exist (2026-10-10).
+
+- [x] **5.1** Moved: `docs/ai.md`, AGENTS.md matrix row, `architecture.md`, `schema-decisions.md`, `rbac.md`, `testing.md`, `api-conventions.md`, `.env.example` are 0019 Batch 7.2.
+- [x] **5.2** Status flipped to **Done**, README updated (2026-10-10). The implementation summary is the Batch 0 and Batch 4 results in §11.
 
 ### Launch gates (not code; block real-family launch)
 
@@ -465,8 +477,8 @@ export interface AiStructuredResult<T> { output: T; provider: string; model: str
 |------------|----------------------------|
 | **Video analysis** | Async via the Job queue (same outbox pattern); `ai_runs.capability` + per-capability prompt modules; the port internally uses `messages`, so adding file/video parts later is a field, not a rewrite (deliberately not added now). Likely needs a provider with video input — config swap, same port. |
 | **AI plan generation** | Output contract is plan 0016's `Section`/`Day` shape validated by the same DTO a clinician uses; result goes into `Plan` rows (`origin = AI`) with clinician review (not `ai_outputs`). Needs the job pattern + longer timeout per capability. |
-| **Escalation (0015, on hold)** | Untouched. `AiRun.status` has `BLOCKED`; a future `escalate` output field can be added in a later prompt version without schema change. No notification coupling. |
-| **Ask the coach** | `AiAccessService` is the consent seam; tool contracts specified in §3 Q3; streaming would add a second port method then. |
+| **Escalation** | Decided 2026-10-10: plan 0015 deleted, the escalation feature removed by 0019 Batch 1. No coupling remains. |
+| **Ask the coach** | Now plan 0019 (guided topics chat, streaming second port method). `AiAccessService` is the consent seam; the tool contracts in §3 Q3 stay unbuilt. |
 | **Provider swap** | Config only (Q2); eval + price table + env keys are the only touch points. |
 
 ## 9. Research log
@@ -540,7 +552,7 @@ Deferred (nice-to-have, each with the trigger that promotes it):
 
 | Deferred | Trigger |
 |----------|---------|
-| "Ask the coach" free text (+ its 2 tools, streaming) | G1–G3 done **and** product confirms; tools only if the live eval shows prefetched context misses > ~20% of question types. |
+| "Ask the coach" free text (+ its 2 tools, streaming) | Promoted to plan 0019 (2026-10-10) for dev/staging with synthetic data; real families still need G1–G3. Tools stay unbuilt unless the live eval shows prefetched context misses > ~20% of question types. |
 | Parental AI-processing consent record | O-1 answered; before any real-family launch if counsel requires it. |
 | OpenTelemetry (`@ai-sdk/otel` on v7) | A collector exists or multi-capability tracing is needed. |
 | Provider caching | A prompt > 4k tokens or bursty traffic. |
@@ -548,7 +560,7 @@ Deferred (nice-to-have, each with the trigger that promotes it):
 | Mood/behaviour/trend in the prompt (a later prompt version) | D-7 resolved (O-4). |
 | AI SDK v7 | Repo on ESM/Nest 12, or v6 line stops being published. |
 | Mastra | §3 Q11.3 triggers. |
-| `escalate` output field | Plan 0015 un-held and defined. |
+| `escalate` output field | Void: escalation is removed (0019 Batch 1). |
 | Admin-editable model/budget at runtime | Env change + restart stops being acceptable. |
 
 ## 11. Risks and open questions
@@ -629,11 +641,8 @@ Deferred (nice-to-have, each with the trigger that promotes it):
 
 ## 12. How to resume
 
-> Nothing is implemented. Start at Batch 0 (spike on a scratch branch) and do not merge until 0.1–0.3 are recorded in this
-> file. Precedents to copy: `EmailService`/`FakeEmailService` (port + fake), `JobHandlerRegistry` +
-> `MediaJobs` (handler + recurring), `TodayFocusService` (caller-aware services), `progress:write:self`
-> (ADMIN-rejected-in-service stance), plan 0011's pin of `@nestjs/schedule@6.1.3` (ESM-only trap).
->
-> Paste-ready prompt: *"Read docs/plans/0018. Run Batch 0 (spike) first and report the numbers for 0.1–0.4. Then implement batch by
-> batch. No tools, no streaming, no SDK imports outside src/common/ai. Never log or store prompts or SDK error objects. Verify
-> (lint, unit, build, e2e) after each batch and stop to report."*
+> This phase is Done. Do not resume it. New AI work (chat, streaming, summaries) continues in
+> [plan 0019](0019-phase-19-conversations-and-summaries.md). Read this file for the rules that still bind: SDK imports only in
+> `src/common/ai/`, never log or store prompts or SDK error objects, the data gate (G1), name scrubbing, versioned prompts.
+> Precedents to copy: `EmailService`/`FakeEmailService` (port + fake), `JobHandlerRegistry` + `MediaJobs` (handler + recurring),
+> `TodayFocusService` (caller-aware services), `progress:write:self` (ADMIN-rejected-in-service stance).

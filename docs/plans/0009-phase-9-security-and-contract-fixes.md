@@ -8,7 +8,7 @@ Last updated: 2026-10-04
 > convention, and the exact remaining checklist so work can resume cold. Read it top to
 > bottom before touching code. **Nothing in this phase has been implemented yet** — it
 > was authored from a read-only audit of `docs/NeuroNest_Backend_V1_Developer_Handoff.docx`
-> against the code (2026-10-04). Plans 0009–0015 are a set; read
+> against the code (2026-10-04). Plans 0009–0014 are a set; read
 > [README.md](README.md) for how they fit together.
 
 > **DECISION CHANGE (2026-10-04): no IP-based rate limiting.** The B-2 fix (`TRUST_PROXY_HOPS`,
