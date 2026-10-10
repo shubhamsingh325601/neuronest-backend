@@ -1,7 +1,9 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Role, UserStatus } from '@prisma/client';
+import { CallbackUrlService } from '@common/email/callback-url.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { InvitationService } from '@modules/clinicians/shared/invitation.service';
+import { ResendInvitationDto } from './dto/resend-invitation.dto';
 
 /**
  * Admin re-sends the invitation to a clinician who has not activated yet. No new user
@@ -14,9 +16,11 @@ export class ResendInvitationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invitations: InvitationService,
+    private readonly callbackUrls: CallbackUrlService,
   ) {}
 
-  async resend(id: string): Promise<void> {
+  async resend(id: string, dto: ResendInvitationDto): Promise<void> {
+    const callbackUrl = this.callbackUrls.assertAllowed(dto.callbackUrl);
     const user = await this.prisma.user.findFirst({
       where: { id, role: Role.CLINICIAN },
       select: { id: true, status: true },
@@ -33,7 +37,7 @@ export class ResendInvitationService {
         message: 'Only a clinician who has not yet activated can be re-invited.',
       });
     }
-    await this.prisma.$transaction((tx) => this.invitations.enqueue(tx, id));
+    await this.prisma.$transaction((tx) => this.invitations.enqueue(tx, id, callbackUrl));
     await this.invitations.kick();
   }
 }

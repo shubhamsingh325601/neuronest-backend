@@ -13,6 +13,12 @@ describe('buildWebLink', () => {
     );
   });
 
+  it('uses the callbackUrl instead of base + path, keeping its query', () => {
+    expect(buildWebLink('https://app.example', '/x', 'a+b', 'https://fe.example/set?lang=hi')).toBe(
+      'https://fe.example/set?lang=hi&token=a%2Bb',
+    );
+  });
+
   it('url-encodes the token', () => {
     expect(buildWebLink('https://app.example', '/x', 'a+b/c=')).toBe(
       'https://app.example/x?token=a%2Bb%2Fc%3D',

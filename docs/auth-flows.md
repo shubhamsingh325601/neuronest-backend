@@ -101,6 +101,8 @@ CLIENT                          API                                   DB / EMAIL
   │<─────────────────────────────│  200 { reset: true }                  │
 ```
 
+`forgot-password`, `POST /v1/clinicians` and `POST /v1/clinicians/:id/resend-invitation` accept an optional `callbackUrl`: the frontend page the emailed link opens (`<callbackUrl>?token=…`). Its origin must be `APP_WEB_URL` or in `CORS_ORIGINS`, otherwise `400 INVALID_CALLBACK_URL`; without it the link uses `${APP_WEB_URL}` plus the default path. The link carries only the opaque token: the API resolves who it belongs to and what it is for (reset vs account setup) from the stored hash, so no role or user id travels in the URL.
+
 The `forgot-password` 202-always response is the enumeration guard. Reset invalidates
 every existing session, so a stolen-then-reset account logs the attacker out everywhere.
 

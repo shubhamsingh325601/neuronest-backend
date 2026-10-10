@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { Role, UserStatus } from '@prisma/client';
 import { PasswordService } from '@common/crypto/password.service';
@@ -107,6 +108,49 @@ describe('Clinician lifecycle (e2e)', () => {
     const invalid = await createClinician({ name: '', email: 'nope', extra: 1 });
     expect(invalid.status).toBe(400);
     expect(invalid.body.code).toBe('VALIDATION_ERROR');
+  });
+
+  describe('callbackUrl (where the emailed link opens)', () => {
+    const appOrigin = () => new URL(ctx.app.get(ConfigService).get<string>('appWebUrl')!).origin;
+
+    it('create + resend link to the page the frontend asked for; the token still identifies the clinician', async () => {
+      const page = `${appOrigin()}/custom/set-password`;
+      const created = await createClinician({
+        name: 'Callback Cat',
+        email: 'callback@clinic.example',
+        callbackUrl: page,
+      });
+      expect(created.status).toBe(201);
+      const first = new URL(ctx.mail.lastSetupUrlFor('callback@clinic.example')!);
+      expect(first.origin + first.pathname).toBe(page);
+
+      ctx.mail.clear();
+      const resend = await as(admin.token)(
+        http()
+          .post(`/v1/clinicians/${created.body.id}/resend-invitation`)
+          .send({ callbackUrl: `${page}?lang=hi` }),
+      );
+      expect(resend.status).toBe(202);
+      const url = new URL(ctx.mail.lastSetupUrlFor('callback@clinic.example')!);
+      expect(url.pathname).toBe('/custom/set-password');
+      expect(url.searchParams.get('lang')).toBe('hi');
+
+      expect((await completeSetup(url.searchParams.get('token')!)).status).toBe(200);
+      const user = await ctx.prisma.user.findUnique({ where: { email: 'callback@clinic.example' } });
+      expect(user).toMatchObject({ role: Role.CLINICIAN, status: UserStatus.ACTIVE });
+    });
+
+    it('rejects a callbackUrl on a foreign origin and creates nothing', async () => {
+      const res = await createClinician({
+        name: 'Phish',
+        email: 'phish@clinic.example',
+        callbackUrl: 'https://evil.example/set-password',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_CALLBACK_URL');
+      expect(await ctx.prisma.user.count({ where: { email: 'phish@clinic.example' } })).toBe(0);
+      expect(ctx.mail.lastSetupUrlFor('phish@clinic.example')).toBeUndefined();
+    });
   });
 
   it('resend invalidates the old link, issues a new one, and creates no second user', async () => {

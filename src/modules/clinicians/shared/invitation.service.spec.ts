@@ -27,10 +27,7 @@ describe('InvitationService', () => {
         { provide: EmailService, useValue: email },
         { provide: JobHandlerRegistry, useValue: registry },
         { provide: JobQueueService, useValue: queue },
-        {
-          provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue('https://app.example/') },
-        },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('https://app.example/') } },
       ],
     }).compile();
     service = moduleRef.get(InvitationService);
@@ -45,6 +42,27 @@ describe('InvitationService', () => {
     expect(first).toMatchObject({ type: ACCOUNT_SETUP_JOB, payload: { userId: 'u1' } });
     expect(JSON.stringify(first)).not.toMatch(/token|url|http/i);
     expect(first.dedupeKey).not.toBe(second.dedupeKey);
+  });
+
+  it('keeps the frontend callbackUrl in the payload (not a secret) when one is given', async () => {
+    await service.enqueue({} as never, 'u1', 'https://app.example/set-password');
+    expect(queue.enqueue.mock.calls[0][1].payload).toEqual({
+      userId: 'u1',
+      callbackUrl: 'https://app.example/set-password',
+    });
+  });
+
+  it('emails a link to the callbackUrl page when the job carries one', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'sam@clinic.example',
+      status: UserStatus.INVITED,
+    });
+    verificationTokens.issueAccountSetupToken.mockResolvedValue('tok123');
+    await service.issueAndSend('u1', 'https://app.example/set-password');
+    expect(email.sendAccountSetupLink).toHaveBeenCalledWith(
+      'sam@clinic.example',
+      'https://app.example/set-password?token=tok123',
+    );
   });
 
   it('registers itself as the account-setup handler', async () => {

@@ -6,7 +6,7 @@ import type { AppConfig } from '@common/config/configuration';
 import { EmailService } from '@common/email/email.service';
 import { buildWebLink } from '@common/email/web-link.util';
 import { JobHandlerRegistry } from '@common/jobs/job-handler.registry';
-import { payloadUserId } from '@common/jobs/job-payload.util';
+import { payloadCallbackUrl, payloadUserId } from '@common/jobs/job-payload.util';
 import { JobQueueService } from '@common/jobs/job-queue.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
@@ -37,17 +37,21 @@ export class InvitationService implements OnModuleInit {
   }
 
   onModuleInit(): void {
-    this.registry.register(ACCOUNT_SETUP_JOB, async (job) => this.issueAndSend(payloadUserId(job)));
+    this.registry.register(ACCOUNT_SETUP_JOB, async (job) =>
+      this.issueAndSend(payloadUserId(job), payloadCallbackUrl(job)),
+    );
   }
 
   /**
    * Enqueue an invitation email. Every call uses a fresh key (a deliberate create/resend
    * must send), so only retries of the *same* job are deduplicated by the queue itself.
+   * `callbackUrl` (already validated by the caller) is the frontend page the link opens;
+   * it is not a secret, so it may sit in the payload.
    */
-  enqueue(db: Prisma.TransactionClient, userId: string): Promise<boolean> {
+  enqueue(db: Prisma.TransactionClient, userId: string, callbackUrl?: string): Promise<boolean> {
     return this.queue.enqueue(db, {
       type: ACCOUNT_SETUP_JOB,
-      payload: { userId },
+      payload: callbackUrl ? { userId, callbackUrl } : { userId },
       dedupeKey: `${ACCOUNT_SETUP_JOB}:${userId}:${randomUUID()}`,
     });
   }
@@ -62,7 +66,7 @@ export class InvitationService implements OnModuleInit {
    * (activated, suspended, deleted) gets no email — the job completes as a no-op.
    * Throws when sending fails so the queue retries.
    */
-  async issueAndSend(userId: string): Promise<void> {
+  async issueAndSend(userId: string, callbackUrl?: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { email: true, status: true },
@@ -71,7 +75,7 @@ export class InvitationService implements OnModuleInit {
       return;
     }
     const token = await this.verificationTokens.issueAccountSetupToken(userId);
-    const setupUrl = buildWebLink(this.appWebUrl, '/complete-account-setup', token);
+    const setupUrl = buildWebLink(this.appWebUrl, '/complete-account-setup', token, callbackUrl);
     await this.email.sendAccountSetupLink(user.email, setupUrl);
   }
 }

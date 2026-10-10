@@ -1,6 +1,15 @@
-import { Controller, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 import { ApiAcceptedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Auth } from '@common/authz/auth.decorator';
+import { ResendInvitationDto } from './dto/resend-invitation.dto';
 import { ResendInvitationService } from './resend-invitation.service';
 
 @ApiTags('clinicians')
@@ -16,7 +25,10 @@ export class ResendInvitationController {
     operationId: 'clinicianResendInvitation',
     summary: 'Admin: re-send the setup link to a clinician who has not activated yet.',
   })
-  resend(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.resendInvitationService.resend(id);
+  resend(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResendInvitationDto = {},
+  ): Promise<void> {
+    return this.resendInvitationService.resend(id, dto);
   }
 }

@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Prisma, Role, UserStatus } from '@prisma/client';
+import { CallbackUrlService } from '@common/email/callback-url.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { InvitationService } from '@modules/clinicians/shared/invitation.service';
 import { CreateClinicianService } from './create-clinician.service';
@@ -35,6 +36,10 @@ describe('CreateClinicianService', () => {
         CreateClinicianService,
         { provide: PrismaService, useValue: prisma },
         { provide: InvitationService, useValue: invitations },
+        {
+          provide: CallbackUrlService,
+          useValue: { assertAllowed: (url?: string) => url },
+        },
       ],
     }).compile();
     service = moduleRef.get(CreateClinicianService);
@@ -64,7 +69,7 @@ describe('CreateClinicianService', () => {
       select: { id: true },
     });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(invitations.enqueue).toHaveBeenCalledWith(prisma, 'c1');
+    expect(invitations.enqueue).toHaveBeenCalledWith(prisma, 'c1', undefined);
     expect(invitations.kick).toHaveBeenCalledTimes(1);
     expect(prisma.user.create.mock.invocationCallOrder[0]).toBeLessThan(
       invitations.enqueue.mock.invocationCallOrder[0],

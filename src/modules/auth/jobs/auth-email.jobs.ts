@@ -6,7 +6,7 @@ import type { AppConfig } from '@common/config/configuration';
 import { EmailService } from '@common/email/email.service';
 import { buildWebLink } from '@common/email/web-link.util';
 import { JobHandlerRegistry } from '@common/jobs/job-handler.registry';
-import { minuteBucket, payloadUserId } from '@common/jobs/job-payload.util';
+import { minuteBucket, payloadCallbackUrl, payloadUserId } from '@common/jobs/job-payload.util';
 import { JobQueueService } from '@common/jobs/job-queue.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { VerificationTokenService } from '@modules/auth/shared/verification-token.service';
@@ -42,7 +42,7 @@ export class AuthEmailJobs implements OnModuleInit {
       this.sendVerificationCode(payloadUserId(job)),
     );
     this.registry.register(PASSWORD_RESET_JOB, async (job) =>
-      this.sendPasswordReset(payloadUserId(job)),
+      this.sendPasswordReset(payloadUserId(job), payloadCallbackUrl(job)),
     );
   }
 
@@ -71,10 +71,15 @@ export class AuthEmailJobs implements OnModuleInit {
     });
   }
 
-  enqueuePasswordReset(db: Prisma.TransactionClient, userId: string): Promise<boolean> {
+  /** `callbackUrl` (already validated by the caller) is the frontend page the link opens. */
+  enqueuePasswordReset(
+    db: Prisma.TransactionClient,
+    userId: string,
+    callbackUrl?: string,
+  ): Promise<boolean> {
     return this.queue.enqueue(db, {
       type: PASSWORD_RESET_JOB,
-      payload: { userId },
+      payload: callbackUrl ? { userId, callbackUrl } : { userId },
       dedupeKey: `${PASSWORD_RESET_JOB}:${userId}:${minuteBucket()}`,
     });
   }
@@ -96,7 +101,7 @@ export class AuthEmailJobs implements OnModuleInit {
     await this.email.sendEmailVerificationCode(user.email, code);
   }
 
-  async sendPasswordReset(userId: string): Promise<void> {
+  async sendPasswordReset(userId: string, callbackUrl?: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { email: true },
@@ -108,7 +113,7 @@ export class AuthEmailJobs implements OnModuleInit {
     const code = await this.verificationTokens.issuePasswordResetCode(userId);
     await this.email.sendPasswordResetLink(
       user.email,
-      buildWebLink(this.appWebUrl, '/reset-password', token),
+      buildWebLink(this.appWebUrl, '/reset-password', token, callbackUrl),
       code,
     );
   }

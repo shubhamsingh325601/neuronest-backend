@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma, Role, UserStatus } from '@prisma/client';
+import { CallbackUrlService } from '@common/email/callback-url.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ClinicianDetailDto } from '@modules/clinicians/shared/clinician-detail.dto';
 import { CreateClinicianDto } from '@modules/clinicians/shared/create-clinician.dto';
@@ -19,9 +20,11 @@ export class CreateClinicianService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invitations: InvitationService,
+    private readonly callbackUrls: CallbackUrlService,
   ) {}
 
   async create(dto: CreateClinicianDto): Promise<ClinicianDetailDto> {
+    const callbackUrl = this.callbackUrls.assertAllowed(dto.callbackUrl);
     const email = dto.email.toLowerCase().trim();
     const clash = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (clash) {
@@ -44,7 +47,7 @@ export class CreateClinicianService {
           },
           select: { id: true },
         });
-        await this.invitations.enqueue(tx, user.id);
+        await this.invitations.enqueue(tx, user.id, callbackUrl);
         return user.id;
       });
     } catch (err) {

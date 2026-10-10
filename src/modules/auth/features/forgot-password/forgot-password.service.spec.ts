@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { CallbackUrlService } from '@common/email/callback-url.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { AuthEmailJobs } from '@modules/auth/jobs/auth-email.jobs';
 import { ForgotPasswordService } from './forgot-password.service';
@@ -15,6 +16,10 @@ describe('ForgotPasswordService', () => {
         ForgotPasswordService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuthEmailJobs, useValue: emailJobs },
+        {
+          provide: CallbackUrlService,
+          useValue: { assertAllowed: (url?: string) => url },
+        },
       ],
     }).compile();
     service = moduleRef.get(ForgotPasswordService);
@@ -24,7 +29,7 @@ describe('ForgotPasswordService', () => {
     prisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'p@example.com' });
     await service.requestReset({ email: ' P@Example.com ' });
     expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'p@example.com' } });
-    expect(emailJobs.enqueuePasswordReset).toHaveBeenCalledWith(prisma, 'u1');
+    expect(emailJobs.enqueuePasswordReset).toHaveBeenCalledWith(prisma, 'u1', undefined);
     expect(emailJobs.kick).toHaveBeenCalledTimes(1);
   });
 

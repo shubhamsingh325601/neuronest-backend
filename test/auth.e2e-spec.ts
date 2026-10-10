@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import { UserStatus } from '@prisma/client';
 import { PasswordService } from '@common/crypto/password.service';
@@ -304,6 +305,39 @@ describe('Auth correctness under contention (Phase 9 Batch 1, e2e)', () => {
     expect(statuses).toEqual([200, 401]);
     const loser = a.status === 401 ? a : b;
     expect(loser.body.code).toBe('INVALID_REFRESH_TOKEN');
+  });
+
+  it('forgot-password honours an allowed callbackUrl and answers 400 for a foreign one', async () => {
+    const email = 'callback-reset@example.com';
+    await ctx.prisma.user.create({
+      data: {
+        email,
+        passwordHash: await ctx.app.get(PasswordService).hash(password),
+        name: 'Callback',
+        role: 'PARENT',
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const origin = new URL(ctx.app.get(ConfigService).get<string>('appWebUrl')!).origin;
+
+    const bad = await http()
+      .post('/v1/auth/forgot-password')
+      .send({ email, callbackUrl: 'https://evil.example/reset' });
+    expect(bad.status).toBe(400);
+    expect(bad.body.code).toBe('INVALID_CALLBACK_URL');
+    expect(ctx.mail.lastResetUrlFor(email)).toBeUndefined();
+
+    const ok = await http()
+      .post('/v1/auth/forgot-password')
+      .send({ email, callbackUrl: `${origin}/choose-password` });
+    expect(ok.status).toBe(202);
+    const url = new URL(ctx.mail.lastResetUrlFor(email)!);
+    expect(url.origin + url.pathname).toBe(`${origin}/choose-password`);
+    const reset = await http()
+      .post('/v1/auth/reset-password')
+      .send({ token: url.searchParams.get('token'), newPassword: 'brand-new-passphrase-3' });
+    expect(reset.status).toBe(200);
   });
 
   it('X-4: two concurrent password resets with one token — exactly one succeeds', async () => {

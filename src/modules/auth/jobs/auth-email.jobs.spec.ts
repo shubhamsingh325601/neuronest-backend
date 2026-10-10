@@ -31,10 +31,7 @@ describe('AuthEmailJobs', () => {
         { provide: EmailService, useValue: email },
         { provide: JobHandlerRegistry, useValue: registry },
         { provide: JobQueueService, useValue: queue },
-        {
-          provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue('https://app.example') },
-        },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('https://app.example') } },
       ],
     }).compile();
     jobs = moduleRef.get(AuthEmailJobs);
@@ -95,6 +92,23 @@ describe('AuthEmailJobs', () => {
       await run();
       expect(tokens.issueEmailVerificationCode).not.toHaveBeenCalled();
       expect(email.sendEmailVerificationCode).not.toHaveBeenCalled();
+    });
+
+    it('links to the frontend page named in the payload, when it is an allowed origin', async () => {
+      prisma.user.findUnique.mockResolvedValue({ email: 'p@example.com' });
+      tokens.issuePasswordResetToken.mockResolvedValue('tok');
+      tokens.issuePasswordResetCode.mockResolvedValue('654321');
+      await registry.get(PASSWORD_RESET_JOB)!({
+        id: 'j',
+        type: PASSWORD_RESET_JOB,
+        payload: { userId: 'u1', callbackUrl: 'https://app.example/new-password' },
+        attempt: 1,
+      });
+      expect(email.sendPasswordResetLink).toHaveBeenCalledWith(
+        'p@example.com',
+        'https://app.example/new-password?token=tok',
+        '654321',
+      );
     });
 
     it('is a no-op when the user is gone', async () => {
