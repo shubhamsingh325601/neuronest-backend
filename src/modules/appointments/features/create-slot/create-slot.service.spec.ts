@@ -21,7 +21,8 @@ describe('CreateSlotService', () => {
   const admin = asUser('admin-1', Role.ADMIN);
 
   const HOUR = 3_600_000;
-  const at = (hoursFromNow: number): string => new Date(Date.now() + hoursFromNow * HOUR).toISOString();
+  const at = (hoursFromNow: number): string =>
+    new Date(Date.now() + hoursFromNow * HOUR).toISOString();
   const dto = (overrides: Record<string, unknown> = {}) => ({
     startsAt: at(24),
     endsAt: at(24.5),

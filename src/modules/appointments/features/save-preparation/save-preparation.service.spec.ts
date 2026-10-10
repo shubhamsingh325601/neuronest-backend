@@ -60,7 +60,9 @@ describe('SavePreparationService', () => {
 
   it('404s an unknown appointment', async () => {
     prisma.appointment.findUnique.mockResolvedValue(null);
-    await expect(service.save('nope', asUser('parent-1', Role.PARENT), body, now)).rejects.toMatchObject({
+    await expect(
+      service.save('nope', asUser('parent-1', Role.PARENT), body, now),
+    ).rejects.toMatchObject({
       response: { code: 'APPOINTMENT_NOT_FOUND' },
     });
   });
@@ -81,7 +83,9 @@ describe('SavePreparationService', () => {
       ...upcoming,
       slot: { endsAt: new Date('2026-10-05T11:00:00Z') },
     });
-    await expect(service.save('appt-1', asUser('parent-1', Role.PARENT), body, now)).rejects.toMatchObject({
+    await expect(
+      service.save('appt-1', asUser('parent-1', Role.PARENT), body, now),
+    ).rejects.toMatchObject({
       response: { code: 'APPOINTMENT_ENDED' },
     });
   });

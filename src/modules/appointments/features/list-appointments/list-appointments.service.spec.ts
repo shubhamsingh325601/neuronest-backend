@@ -39,7 +39,11 @@ describe('ListAppointmentsService', () => {
   it('an admin is unfiltered; ?when and the cursor are passed through', async () => {
     await service.list(
       asUser('admin-1', Role.ADMIN),
-      { when: 'upcoming', limit: 5, cursor: Buffer.from('00000000-0000-4000-8000-000000000001').toString('base64url') },
+      {
+        when: 'upcoming',
+        limit: 5,
+        cursor: Buffer.from('00000000-0000-4000-8000-000000000001').toString('base64url'),
+      },
       now,
     );
     const args = prisma.appointment.findMany.mock.calls[0][0];

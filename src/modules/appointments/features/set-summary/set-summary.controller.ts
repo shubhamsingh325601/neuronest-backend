@@ -17,7 +17,8 @@ export class SetSummaryController {
   @ApiOkResponse({ type: AppointmentDto })
   @ApiOperation({
     operationId: 'appointmentSetSummary',
-    summary: 'CLINICIAN (assigned) / ADMIN: record the call summary and agreed action points once the call has started.',
+    summary:
+      'CLINICIAN (assigned) / ADMIN: record the call summary and agreed action points once the call has started.',
   })
   set(
     @Param('id', ParseUUIDPipe) id: string,

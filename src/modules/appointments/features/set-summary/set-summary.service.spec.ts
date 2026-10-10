@@ -18,7 +18,11 @@ describe('SetSummaryService', () => {
     status: UserStatus.ACTIVE,
   });
   const now = new Date('2026-10-05T12:00:00Z');
-  const started = { id: 'appt-1', childId: 'child-1', slot: { startsAt: new Date('2026-10-05T11:30:00Z') } };
+  const started = {
+    id: 'appt-1',
+    childId: 'child-1',
+    slot: { startsAt: new Date('2026-10-05T11:30:00Z') },
+  };
   const body = { summary: '  Good progress.  ', actionPoints: [' Use the timer '] };
 
   beforeEach(async () => {
@@ -65,14 +69,18 @@ describe('SetSummaryService', () => {
 
   it('forbids an unassigned clinician', async () => {
     prisma.clinicianChildAssignment.findUnique.mockResolvedValue(null);
-    await expect(service.set('appt-1', asUser('clin-2', Role.CLINICIAN), body, now)).rejects.toMatchObject({
+    await expect(
+      service.set('appt-1', asUser('clin-2', Role.CLINICIAN), body, now),
+    ).rejects.toMatchObject({
       response: { code: 'FORBIDDEN' },
     });
   });
 
   it('404s an unknown appointment', async () => {
     prisma.appointment.findUnique.mockResolvedValue(null);
-    await expect(service.set('nope', asUser('clin-1', Role.CLINICIAN), body, now)).rejects.toMatchObject({
+    await expect(
+      service.set('nope', asUser('clin-1', Role.CLINICIAN), body, now),
+    ).rejects.toMatchObject({
       response: { code: 'APPOINTMENT_NOT_FOUND' },
     });
   });
@@ -82,7 +90,9 @@ describe('SetSummaryService', () => {
       ...started,
       slot: { startsAt: new Date('2026-10-06T09:00:00Z') },
     });
-    await expect(service.set('appt-1', asUser('clin-1', Role.CLINICIAN), body, now)).rejects.toMatchObject({
+    await expect(
+      service.set('appt-1', asUser('clin-1', Role.CLINICIAN), body, now),
+    ).rejects.toMatchObject({
       response: { code: 'APPOINTMENT_NOT_STARTED' },
     });
   });

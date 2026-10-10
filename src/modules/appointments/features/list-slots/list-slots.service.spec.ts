@@ -61,7 +61,10 @@ describe('ListSlotsService', () => {
     const args = prisma.appointmentSlot.findMany.mock.calls[0][0];
     expect(args.where).toMatchObject({
       appointment: null,
-      clinician: { status: UserStatus.ACTIVE, clinicianAssignments: { some: { childId: 'child-1' } } },
+      clinician: {
+        status: UserStatus.ACTIVE,
+        clinicianAssignments: { some: { childId: 'child-1' } },
+      },
     });
     expect(args.where.startsAt.gt).toBeInstanceOf(Date);
     expect(args.orderBy).toEqual([{ startsAt: 'asc' }, { id: 'asc' }]);
@@ -74,9 +77,10 @@ describe('ListSlotsService', () => {
   });
 
   it('lets an admin and an assigned clinician through, and paginates with a cursor', async () => {
-    const rows = ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002'].map(
-      slotRow,
-    );
+    const rows = [
+      '00000000-0000-4000-8000-000000000001',
+      '00000000-0000-4000-8000-000000000002',
+    ].map(slotRow);
     prisma.appointmentSlot.findMany.mockResolvedValue(rows);
     const out = await service.list('child-1', asUser('admin-1', Role.ADMIN), { limit: 1 });
     expect(out.data).toHaveLength(1);

@@ -19,7 +19,8 @@ export class ListChildAppointmentsController {
   @ApiOkResponse({ type: ListAppointmentsResponseDto })
   @ApiOperation({
     operationId: 'appointmentListForChild',
-    summary: "A child's appointments with the clinician's name — parent (own), assigned clinician, or admin.",
+    summary:
+      "A child's appointments with the clinician's name — parent (own), assigned clinician, or admin.",
   })
   list(
     @Param('childId', ParseUUIDPipe) childId: string,

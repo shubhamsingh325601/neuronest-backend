@@ -53,7 +53,10 @@ export class CreateAppointmentService {
       select: { id: true },
     });
     if (!slot) {
-      throw new NotFoundException({ code: 'SLOT_NOT_FOUND', message: 'No bookable slot with that id.' });
+      throw new NotFoundException({
+        code: 'SLOT_NOT_FOUND',
+        message: 'No bookable slot with that id.',
+      });
     }
 
     try {

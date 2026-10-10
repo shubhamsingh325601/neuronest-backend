@@ -38,7 +38,9 @@ describe('CancelAppointmentService', () => {
 
   it('404s an unknown appointment', async () => {
     prisma.appointment.findUnique.mockResolvedValue(null);
-    await expect(service.cancel('nope', asUser('parent-1', Role.PARENT), now)).rejects.toMatchObject({
+    await expect(
+      service.cancel('nope', asUser('parent-1', Role.PARENT), now),
+    ).rejects.toMatchObject({
       response: { code: 'APPOINTMENT_NOT_FOUND' },
     });
   });
@@ -59,7 +61,9 @@ describe('CancelAppointmentService', () => {
       ...upcoming,
       slot: { startsAt: new Date('2026-10-05T11:00:00Z') },
     });
-    await expect(service.cancel('appt-1', asUser('parent-1', Role.PARENT), now)).rejects.toMatchObject({
+    await expect(
+      service.cancel('appt-1', asUser('parent-1', Role.PARENT), now),
+    ).rejects.toMatchObject({
       response: { code: 'APPOINTMENT_STARTED' },
     });
     expect(prisma.appointment.deleteMany).not.toHaveBeenCalled();

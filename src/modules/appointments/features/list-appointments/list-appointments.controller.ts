@@ -19,7 +19,7 @@ export class ListAppointmentsController {
   @ApiOkResponse({ type: ListAppointmentsResponseDto })
   @ApiOperation({
     operationId: 'appointmentList',
-    summary: 'CLINICIAN: own booked calls; ADMIN: all; PARENT: their child\'s.',
+    summary: "CLINICIAN: own booked calls; ADMIN: all; PARENT: their child's.",
   })
   list(
     @CurrentUser() caller: AuthenticatedUser,

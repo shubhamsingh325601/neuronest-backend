@@ -60,7 +60,9 @@ describe('CreateAppointmentService', () => {
       startsAt: '2026-11-01T09:00:00.000Z',
     });
     expect(tx.appointment.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { slotId: 'slot-1', childId: 'child-1', bookedById: 'parent-1' } }),
+      expect.objectContaining({
+        data: { slotId: 'slot-1', childId: 'child-1', bookedById: 'parent-1' },
+      }),
     );
     expect(tx.$queryRaw).toHaveBeenCalled(); // child row locked
   });
@@ -94,7 +96,10 @@ describe('CreateAppointmentService', () => {
     expect(where).toMatchObject({
       id: 'slot-1',
       startsAt: { gt: now },
-      clinician: { status: UserStatus.ACTIVE, clinicianAssignments: { some: { childId: 'child-1' } } },
+      clinician: {
+        status: UserStatus.ACTIVE,
+        clinicianAssignments: { some: { childId: 'child-1' } },
+      },
     });
   });
 

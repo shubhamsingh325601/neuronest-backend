@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
@@ -15,7 +20,11 @@ export class CancelAppointmentService {
   async cancel(id: string, caller: AuthenticatedUser, now: Date = new Date()): Promise<void> {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id },
-      select: { id: true, child: { select: { parentId: true } }, slot: { select: { startsAt: true } } },
+      select: {
+        id: true,
+        child: { select: { parentId: true } },
+        slot: { select: { startsAt: true } },
+      },
     });
     if (!appointment) {
       throw new NotFoundException({

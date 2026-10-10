@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
@@ -22,7 +27,11 @@ export class SavePreparationService {
   ): Promise<AppointmentDto> {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id },
-      select: { id: true, child: { select: { parentId: true } }, slot: { select: { endsAt: true } } },
+      select: {
+        id: true,
+        child: { select: { parentId: true } },
+        slot: { select: { endsAt: true } },
+      },
     });
     if (!appointment) {
       throw new NotFoundException({

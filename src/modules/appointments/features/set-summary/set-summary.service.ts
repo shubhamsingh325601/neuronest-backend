@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
@@ -52,7 +57,10 @@ export class SetSummaryService {
     }
     const row = await this.prisma.appointment.update({
       where: { id },
-      data: { summary: dto.summary.trim(), actionPoints: dto.actionPoints.map((point) => point.trim()) },
+      data: {
+        summary: dto.summary.trim(),
+        actionPoints: dto.actionPoints.map((point) => point.trim()),
+      },
       include: APPOINTMENT_INCLUDE,
     });
     return AppointmentDto.from(row);

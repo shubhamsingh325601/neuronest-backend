@@ -13,6 +13,10 @@ import { SavePreparationController } from './features/save-preparation/save-prep
 import { SavePreparationService } from './features/save-preparation/save-preparation.service';
 import { SetSummaryController } from './features/set-summary/set-summary.controller';
 import { SetSummaryService } from './features/set-summary/set-summary.service';
+import { DeleteSlotController } from './features/delete-slot/delete-slot.controller';
+import { DeleteSlotService } from './features/delete-slot/delete-slot.service';
+import { ListOwnSlotsController } from './features/list-own-slots/list-own-slots.controller';
+import { ListOwnSlotsService } from './features/list-own-slots/list-own-slots.service';
 import { ListSlotsController } from './features/list-slots/list-slots.controller';
 import { ListSlotsService } from './features/list-slots/list-slots.service';
 
@@ -20,6 +24,8 @@ import { ListSlotsService } from './features/list-slots/list-slots.service';
 @Module({
   controllers: [
     CreateSlotController,
+    ListOwnSlotsController,
+    DeleteSlotController,
     ListSlotsController,
     CreateAppointmentController,
     CancelAppointmentController,
@@ -30,6 +36,8 @@ import { ListSlotsService } from './features/list-slots/list-slots.service';
   ],
   providers: [
     CreateSlotService,
+    ListOwnSlotsService,
+    DeleteSlotService,
     ListSlotsService,
     CreateAppointmentService,
     CancelAppointmentService,

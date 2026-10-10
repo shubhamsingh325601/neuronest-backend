@@ -17,7 +17,8 @@ export class SavePreparationController {
   @ApiOkResponse({ type: AppointmentDto })
   @ApiOperation({
     operationId: 'appointmentSavePreparation',
-    summary: "PARENT (own child): save the topics to cover and the preparation steps done, until the call ends.",
+    summary:
+      'PARENT (own child): save the topics to cover and the preparation steps done, until the call ends.',
   })
   save(
     @Param('id', ParseUUIDPipe) id: string,

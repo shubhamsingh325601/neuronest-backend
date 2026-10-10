@@ -23,7 +23,11 @@ export class AppointmentDto {
   @ApiProperty({ example: '2026-10-12T09:30:00.000Z', description: 'UTC ISO-8601.' })
   endsAt!: string;
 
-  @ApiProperty({ type: String, nullable: true, description: 'Video-call link, when the clinician published one.' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Video-call link, when the clinician published one.',
+  })
   meetingUrl!: string | null;
 
   @ApiProperty({ type: [String], description: 'Plan-goal ids the parent wants to cover.' })
@@ -32,7 +36,11 @@ export class AppointmentDto {
   @ApiProperty({ type: [String], description: 'Preparation steps the parent ticked.' })
   prepChecklistIds!: string[];
 
-  @ApiProperty({ type: String, nullable: true, description: 'Written by the clinician after the call.' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Written by the clinician after the call.',
+  })
   summary!: string | null;
 
   @ApiProperty({ type: [String] })
@@ -82,7 +90,8 @@ export const APPOINTMENT_INCLUDE = {
 export class ListAppointmentsQueryDto extends CursorPaginationQueryDto {
   @ApiPropertyOptional({
     enum: ['upcoming', 'past'],
-    description: 'upcoming = not yet ended, soonest first; past = ended, newest first. Omitted = all, newest first.',
+    description:
+      'upcoming = not yet ended, soonest first; past = ended, newest first. Omitted = all, newest first.',
   })
   @IsOptional()
   @IsIn(['upcoming', 'past'])
