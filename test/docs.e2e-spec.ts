@@ -74,6 +74,8 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     operationId: 'aiCoachingTipGetToday',
   },
   { method: 'post', path: '/v1/appointment-slots', operationId: 'appointmentSlotCreate' },
+  { method: 'get', path: '/v1/appointment-slots', operationId: 'appointmentSlotListOwn' },
+  { method: 'delete', path: '/v1/appointment-slots/{id}', operationId: 'appointmentSlotDelete' },
   { method: 'get', path: '/v1/children/{childId}/appointment-slots', operationId: 'appointmentSlotList' },
   { method: 'post', path: '/v1/children/{childId}/appointments', operationId: 'appointmentCreate' },
   { method: 'get', path: '/v1/children/{childId}/appointments', operationId: 'appointmentListForChild' },

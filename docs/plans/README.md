@@ -20,15 +20,15 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0012 | Phase 12 — Media Consent Record and Manual Weekly Coaching | Done | [0012-phase-12-consent-and-coaching.md](0012-phase-12-consent-and-coaching.md) |
 | 0013 | Phase 13 — Child Progress Tracking and Weekly Summary | Done | [0013-phase-13-progress-tracking.md](0013-phase-13-progress-tracking.md) |
 | 0014 | Phase 14 — Monthly Call Appointments | Done | [0014-phase-14-monthly-call-appointments.md](0014-phase-14-monthly-call-appointments.md) |
-| 0015 | Phase 15 — Escalation Lifecycle (owner/notification blocked on D-3/D-16) | Proposed | [0015-phase-15-escalation-lifecycle.md](0015-phase-15-escalation-lifecycle.md) |
 | 0016 | Phase 16 — Plan Content Model (Template → Per-Child Plan) | Done | [0016-phase-16-plan-content-model.md](0016-phase-16-plan-content-model.md) |
-| 0017 | Phase 17 — Parent App Integration Gaps (profile, care plan, password-reset code, escalations) | Active | [0017-phase-17-parent-app-integration.md](0017-phase-17-parent-app-integration.md) |
-| 0018 | Phase 18 — AI Foundation (Vercel AI SDK, Gemini-first) and Parent AI Coaching Tip | Proposed | [0018-phase-18-ai-foundation.md](0018-phase-18-ai-foundation.md) |
+| 0017 | Phase 17 — Parent App Integration Gaps (profile, care plan, password-reset code, call prep) | Done | [0017-phase-17-parent-app-integration.md](0017-phase-17-parent-app-integration.md) |
+| 0018 | Phase 18 — AI Foundation (Vercel AI SDK, Gemini-first) and Parent AI Coaching Tip | Done | [0018-phase-18-ai-foundation.md](0018-phase-18-ai-foundation.md) |
+| 0019 | Phase 19 — Expert Role, Guided AI Chat (streaming), Expert Chat, Conversation Summaries and Retention | Active | [0019-phase-19-conversations-and-summaries.md](0019-phase-19-conversations-and-summaries.md) |
 
-Plans 0009–0015 come from the frontend's V1 backend handoff
+Plans 0009–0014 come from the frontend's V1 backend handoff
 (`docs/NeuroNest_Backend_V1_Developer_Handoff.docx`), audited against the code on
-2026-10-04. AI work and parent↔clinician chat are deliberately excluded. Suggested order:
-0009 → 0010 → 0011, then 0016 (after a product walk-through), then 0012/0013/0014 (independent of each other); 0015 waits on D-3/D-16 for owner/notification.
+2026-10-04. Plan 0015 (escalations) was deleted on 2026-10-10: escalations are not part of the product.
+AI work is plans 0018 (foundation, done) and 0019 (guided chat, expert role, summaries, in progress); clinicians never chat.
 
 Status values: **Proposed** (written, awaiting review/approval) · **Active** (in progress) · **Done** · **Superseded** · **Parked**. Phase
 8 closed the API-surface gaps found by a post-Phase-7 audit — access-lifecycle

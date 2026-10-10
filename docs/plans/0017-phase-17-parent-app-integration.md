@@ -1,11 +1,12 @@
 # Plan 0017 — Phase 17: Parent App Integration Gaps
 
-Status: **Active**
+Status: **Done** (2026-10-10). Batches A, B, C and G are implemented with unit + e2e tests. Batch F (escalations) is being removed by plan 0019 (Batch 1).
 Owner: backend
-Last updated: 2026-10-08
+Last updated: 2026-10-10
 
-> Single source of truth for this phase. Authored from the Parent mobile app's screen-by-screen
+> Record of this phase. Authored from the Parent mobile app's screen-by-screen
 > audit (`neuroNest/docs/PARENT_API_INTEGRATION_PLAN.md`) against the code after plans 0009–0014 and 0016.
+> AI, chat and conversation summaries are plans 0018 and 0019, not this phase.
 
 ---
 
@@ -13,13 +14,10 @@ Last updated: 2026-10-08
 
 The Parent app runs on mock repositories. Wiring it to the API exposed gaps. Product decisions:
 
-- Clinicians never chat — they review reports, escalations and summaries.
-- **AI is out of scope for the backend (2026-10-08).** The assistant chat, chat summaries and video / emergency
-  analysis are not built here; the Parent app shows them as static UI until the AI phase is scheduled.
-  An earlier draft of this phase built them behind an `AiProvider` seam and they were removed again.
-- An urgent-support request is a **parent-raised escalation** that clinicians review (no chat).
+- Clinicians never chat — they review summaries.
+- AI is not part of this phase. The AI foundation is plan 0018; chat and summaries are plan 0019.
 
-**Out of scope:** AI / LLM (analysis, chat, summaries), notifications, billing, websockets, join links for calls (D-9).
+**Out of scope:** AI / LLM, notifications, billing, websockets, join links for calls (D-9).
 
 ## 2. Scope (batches — each ships with unit + e2e tests and a docs/EXPECTED update)
 
@@ -28,9 +26,8 @@ The Parent app runs on mock repositories. Wiring it to the API exposed gaps. Pro
 | A | `PATCH /users/me` (name); child profile columns + `PATCH /children/{id}`; clinician-authored `clinicalProfile` + `PUT /children/{id}/clinical-profile` |
 | B | Structured plan content (`PlanWeek`, `PlanGoal`, `PlanActivity`) + `PUT /plans/{id}/weeks/{n}`; `ActivityCompletion`; parent reads `GET /children/{id}/care-plan`, completes / resets activities |
 | C | Mobile password reset: 6-digit reset code by email (`POST /auth/reset-password` accepts `{email, code, newPassword}`) |
-| F | `Escalation` (plan 0015 adapted): parent-raised, clinician/admin acknowledge + resolve |
 
-(Batches D = analyses and E = chat were dropped — see §1.)
+(Batches D = analyses and E = chat were dropped. Batch F = escalations was built and is removed again by plan 0019 Batch 1 (decided 2026-10-10).)
 
 ## 3. Locked decisions
 
@@ -44,7 +41,6 @@ The Parent app runs on mock repositories. Wiring it to the API exposed gaps. Pro
 
 - `children`: `preferredName`, `gender`, `primaryLanguage`, `accommodations` (parent-editable), `clinicalProfile` JSONB (clinician-authored).
 - `plan_weeks`, `plan_goals`, `plan_activities` (per-plan content; rows keyed by `(planId, weekNumber)` / `(weekId, position)`), `activity_completions` (one row per activity; delete = reset).
-- `escalations` (status OPEN/ACKNOWLEDGED/RESOLVED/CANCELLED, `dueAt`, partial unique index = one active per child).
 - `VerificationTokenType.PASSWORD_RESET_CODE`.
 
 ## 5. Endpoints added
@@ -58,8 +54,6 @@ The Parent app runs on mock repositories. Wiring it to the API exposed gaps. Pro
 | GET | `/v1/children/{childId}/care-plan` | carePlanGet | `plan:read` |
 | POST/DELETE | `/v1/children/{childId}/activities/{activityId}/completion` | activityComplete / activityReset | `activity:complete:self` |
 | POST | `/v1/auth/reset-password` | authResetPassword | public — now also `{email, code, newPassword}` |
-| POST/GET | `/v1/children/{childId}/escalations`, `/active`; `/v1/escalations/{id}/cancel` | escalation* | `escalation:create:self` / `escalation:read` |
-| GET/POST | `/v1/escalations`, `/{id}/acknowledge`, `/{id}/resolve` | escalationList / Acknowledge / Resolve | `escalation:manage` |
 | PUT | `/v1/appointments/{id}/preparation` | appointmentSavePreparation | `appointment:prepare:self` (parent, own child, until the call ends) |
 | PUT | `/v1/appointments/{id}/summary` | appointmentSetSummary | `appointment:summarise` (assigned clinician / admin, once the call has started) |
 | GET/PATCH | `/v1/users/me/preferences` | usersGetPreferences / usersUpdatePreferences | `user:read:self` / `user:update:self` |
@@ -71,8 +65,10 @@ The Parent app runs on mock repositories. Wiring it to the API exposed gaps. Pro
 
 ## 7. Status
 
-Batches A, B, C, F and G are implemented with unit + e2e tests. Batch G (call preparation, call summary, meeting link, preferences, rich coaching tips, local plan day) is also implemented. Still open: email change; template-level structured content; delivery of email / WhatsApp / reminder messages (needs a notification service); AI (analysis, chat) in its own phase.
+Batches A, B, C and G are implemented with unit + e2e tests. Batch G (call preparation, call summary, meeting link, preferences, rich coaching tips, local plan day) is included. Batch F (escalations) is removed by plan 0019 Batch 1 (decided 2026-10-10).
+
+**Deferred (not built, not scheduled; each needs its own plan):** email change (needs a verification flow); template-level structured plan content; delivery of email / WhatsApp / reminder messages (needs a notification service).
 
 ## 8. How to resume
 
-"Read docs/plans/0017-phase-17-parent-app-integration.md and neuroNest/docs/PARENT_API_INTEGRATION_PLAN.md, then continue wiring the Parent app screen by screen."
+This phase is Done. For new work see plans 0018 and 0019. To wire the Parent app screen by screen, read `neuroNest/docs/PARENT_API_INTEGRATION_PLAN.md`.
