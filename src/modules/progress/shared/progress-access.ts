@@ -1,5 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { assertExpertAssigned } from '@common/authz/child-access';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import type { PrismaService } from '@common/prisma/prisma.service';
 
@@ -12,7 +13,7 @@ function forbidden(): ForbiddenException {
 
 /**
  * Shared scoping for `progress:*` routes (the `media:read` shape, docs/rbac.md §6).
- * - `mode: 'read'`: PARENT must own the child, CLINICIAN must be assigned, ADMIN any.
+ * - `mode: 'read'`: PARENT must own the child, CLINICIAN must be assigned, EXPERT must be assigned, ADMIN any. Any other role is refused.
  * - `mode: 'write'`: only the child's own PARENT. `progress:write:self` reaches ADMIN via
  *   the `...PERMISSIONS` spread, so the role check here is what keeps admin read-only.
  */
@@ -49,7 +50,10 @@ export async function assertChildProgressAccess(
     if (!assignment) {
       throw forbidden();
     }
+  } else if (caller.role === Role.EXPERT) {
+    await assertExpertAssigned(prisma, childId, caller.id);
+  } else if (caller.role !== Role.ADMIN) {
+    throw forbidden();
   }
-  // ADMIN: no check.
   return child;
 }

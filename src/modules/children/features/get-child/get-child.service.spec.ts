@@ -9,6 +9,7 @@ describe('GetChildService', () => {
   const prisma = {
     child: { findUnique: jest.fn() },
     clinicianChildAssignment: { findUnique: jest.fn() },
+    expertChildAssignment: { findUnique: jest.fn() },
   };
   let service: GetChildService;
 
@@ -73,6 +74,19 @@ describe('GetChildService', () => {
     await expect(
       service.getById('child-1', asUser('clinician-2', Role.CLINICIAN)),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('allows an assigned expert and forbids an unassigned one', async () => {
+    prisma.child.findUnique.mockResolvedValue(child);
+    prisma.expertChildAssignment.findUnique.mockResolvedValueOnce({ id: 'a' });
+    await expect(service.getById('child-1', asUser('expert-1', Role.EXPERT))).resolves.toMatchObject({
+      id: 'child-1',
+    });
+    prisma.expertChildAssignment.findUnique.mockResolvedValueOnce(null);
+    await expect(service.getById('child-1', asUser('expert-2', Role.EXPERT))).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.clinicianChildAssignment.findUnique).not.toHaveBeenCalled();
   });
 
   it('allows admin unconditionally', async () => {

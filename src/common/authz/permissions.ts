@@ -86,11 +86,11 @@ export const PERMISSIONS = [
   'child-clinical-profile:manage',
   // Structured care plan (batch B): the parent marks activities done; service restricts ADMIN.
   'activity:complete:self',
-  // Parent-raised escalations (batch F): parent creates/cancels for their own child; parent+clinician read;
-  // clinician/admin acknowledge, resolve and work the queue.
-  'escalation:create:self',
-  'escalation:read',
-  'escalation:manage',
+  // Expert role (Phase 19). ADMIN-only: the expert directory/lifecycle and the expert-child
+  // assignment sets. EXPERT itself holds only read-only grants on existing permissions.
+  'expert:list',
+  'expert:manage',
+  'expert-child:manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -108,8 +108,6 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'child:create:self',
     'child:update:self',
     'activity:complete:self',
-    'escalation:create:self',
-    'escalation:read',
     'child:read',
     'media:create:self',
     'media:read',
@@ -131,8 +129,6 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     ...SELF_PERMISSIONS,
     'child:read',
     'child-clinical-profile:manage',
-    'escalation:read',
-    'escalation:manage',
     'media:read',
     'plan-template:read',
     'plan:manage',
@@ -149,6 +145,15 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'appointment:read',
     'ai-coaching:read',
     'appointment:summarise',
+  ],
+  // Read-only on assigned children (plan 0019 §3 row 2a). No media, plan notes or call logs.
+  [Role.EXPERT]: [
+    ...SELF_PERMISSIONS,
+    'child:read',
+    'plan:read',
+    'progress:read',
+    'appointment:read',
+    'coaching:read',
   ],
   [Role.ADMIN]: [...PERMISSIONS],
 };

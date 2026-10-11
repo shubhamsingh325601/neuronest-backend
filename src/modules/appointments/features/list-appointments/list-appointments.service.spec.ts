@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Role, UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
@@ -34,6 +35,18 @@ describe('ListAppointmentsService', () => {
   it("a parent is filtered to their own child's appointments", async () => {
     await service.list(asUser('parent-1', Role.PARENT), {}, now);
     expect(scopeOf()).toEqual({ child: { parentId: 'parent-1' } });
+  });
+
+  it('an expert is filtered to the children they are assigned to', async () => {
+    await service.list(asUser('exp-1', Role.EXPERT), {}, now);
+    expect(scopeOf()).toEqual({ child: { expertAssignments: { some: { expertId: 'exp-1' } } } });
+  });
+
+  it('refuses a role it does not know', async () => {
+    await expect(service.list(asUser('x-1', 'SOMETHING_NEW' as Role), {}, now)).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.appointment.findMany).not.toHaveBeenCalled();
   });
 
   it('an admin is unfiltered; ?when and the cursor are passed through', async () => {

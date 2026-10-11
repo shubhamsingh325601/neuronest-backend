@@ -1,6 +1,6 @@
 # Plan 0019 — Phase 19: Expert Role, Guided AI Chat (Streaming), Expert Chat, Conversation Summaries and Retention
 
-Status: **Active** (plan approved 2026-10-10; no implementation batch started except the docs housekeeping in Batch 0)
+Status: **Active** (plan approved 2026-10-10; Batch 0 done; Batch 1 (remove escalations) done; Batch 2 (Expert role) done and awaiting owner review)
 Owner: backend
 Last updated: 2026-10-10
 
@@ -52,7 +52,8 @@ Findings from the code that shape this plan:
 
 | # | Decision | Notes / status |
 |---|---|---|
-| 1 | `EXPERT` is a new `Role` enum value. Accounts are **admin-created** with the clinician invitation flow reused (`ACCOUNT_SETUP` token, `INVITED` status). No self-signup. | Same lifecycle as clinicians (plan 0010). |
+| 1 | `EXPERT` is a new `Role` enum value. Accounts are **admin-created directly**: the admin sets the email and an initial password, the account is `ACTIVE` at once, and there is no invitation email or setup link. The expert signs in through the normal login (the clinician app). No self-signup. | Owner change, 2026-10-11 (replaces the invitation-flow idea). |
+| 26 | **Admin password reset signs the expert out.** `POST /experts/{id}/reset-password` stores a new hash and revokes all of the expert's refresh tokens (access tokens simply run out). Same pattern as change-password and reset-password. | Owner decision, 2026-10-11. |
 | 2 | Experts are rows in `users` (`role = EXPERT`). Admin assigns **one or many children to an expert in one call** (`childIds[]`); a child may later have several experts. The link is `ExpertChildAssignment`. | Mirrors `ClinicianChildAssignment`. |
 | 2a | **Expert access is read-only** for assigned children: child profile + clinical profile, plan/care plan, progress, appointments, parent name and contact. No media, plan notes or call logs. Experts hold no write permission except `message:send` and `conversation:close` on their own conversations. | Owner: "see parent and child information, don't alter anything". |
 | 3 | `assertChildAccess` gets an explicit EXPERT branch (assigned only) and a default-deny for unknown roles. | Finding 1. |
@@ -72,6 +73,12 @@ Findings from the code that shape this plan:
 | 17 | **Off-topic control is layered and best-effort:** topic-bound prompt and context, an off-topic marker the pipeline replaces with a fixed redirect, and hard caps (length, daily messages, per-conversation turns, off-topic strikes). | Prompts can be bypassed; the caps and the absence of tools/web cannot. |
 | 18 | **PII is handled in code, not by the prompt:** inbound parent text is redacted before the model sees it; context is an allow-list; the AI is told never to ask for personal details; the output filter blocks names and contact details. | Same rule as 0018 Q6: defence in depth, best effort, G1 stays the real privacy control. |
 | 19 | The "AI assessment" topic exists in the list as `UNAVAILABLE` and the server refuses to open it. | Placeholder for the later plan; no gate table until a feature uses it. |
+| 20 | **Off-topic marker check uses the prefix rule** (§6.4 item 2), not a fixed character buffer. | Owner approved the §14 spike results, 2026-10-10. Measured on 46 streamed calls. |
+| 21 | **`flushHeaders()` is deferred until the first provider part** (first delta or error). | Owner decision, 2026-10-10 (§14 consequence 3). |
+| 22 | **`finishReason 'length'` (reply cut at `maxOutputTokens`) is COMPLETE after trimming.** Send the whole sentences already released, drop the unfinished last fragment, append the footer, store as COMPLETE, `ai_runs.status = SUCCEEDED`. No new message state. Only `'stop'` and trimmed `'length'` are COMPLETE; `'other'`, a thrown loop, an `error` part or a foreign `abort` are failures. | Owner decision, 2026-10-11 (recommended option A). |
+| 23 | **`AiRunStatus` gains one value, `CLIENT_ABORTED`** (our own `AbortController` fired because the client left), stored with null tokens, added by a forward migration (`ALTER TYPE ... ADD VALUE`) in Batch 5. Stalls and total timeouts use the existing `TIMEOUT`; mid-stream `'other'` or a thrown loop uses `PROVIDER_ERROR`. Not built yet. | Owner decision, 2026-10-11. |
+| 24 | **Parent contact is name + email only.** No parent phone number is stored anywhere (`users` has no phone; only `ClinicianProfile` does), so §5 and §12 promised a field that does not exist. | Owner decision, 2026-10-11. A parent phone is a later, separate change. |
+| 25 | `ExpertChildAssignment` has no `assignedByAdminId` (as in §4). An expert cannot see the clinician care team (`GET /children/{childId}/clinicians` is 403 for EXPERT): it is not in the §3 row 2a list. | Batch 2 reading of row 2a. |
 
 ## 4. Data model
 
@@ -180,8 +187,9 @@ All under `/v1`, every handler `@Auth('...')`, `EXPECTED` rows added to `test/do
 | GET | `/children/{childId}/conversations` | `conversationList` | `conversation:read` | Metadata + summary status, never message text. |
 | GET | `/conversations/{id}/summary` | `conversationSummaryGet` | `conversation-summary:read` | Parent own, assigned clinician, the conversation's expert, admin. |
 | GET | `/children/{childId}/conversation-summaries` | `conversationSummaryList` | `conversation-summary:read` | Same scoping. |
-| GET | `/children/{childId}/parent-contact` | `childParentContactGet` | `child:read` | Parent name, email, phone. EXPERT (assigned) and ADMIN only; clinician and parent get 403. |
-| POST/GET/PATCH | `/experts`, `/experts/{id}` | `expertCreate/List/Get/Update` | `expert:manage`, `expert:list` | ADMIN only; mirrors the clinician lifecycle, including resend invitation. |
+| GET | `/children/{childId}/parent-contact` | `childParentContactGet` | `child:read` | Parent name and email (no phone: see §3 row 24). EXPERT (assigned) and ADMIN only; clinician and parent get 403. |
+| POST/GET/PATCH | `/experts`, `/experts/{id}` | `expertCreate/List/Get/Update` | `expert:manage`, `expert:list` | ADMIN only. `POST /experts` takes `{ name, email, password }` and creates an ACTIVE expert; `PATCH` edits name or email. |
+| POST | `/experts/{id}/reset-password` | `expertPasswordReset` | `expert:manage` | ADMIN only. Body `{ newPassword }`, `204`. Revokes every refresh token of the expert. |
 | PUT/GET | `/experts/{id}/children` | `expertChildrenSet/List` | `expert-child:manage` | ADMIN only. Body `{ childIds: uuid[] }`; `PUT` replaces the set as a diff in one transaction. |
 | GET | `/children/{childId}/experts` | `childExpertsList` | `expert-child:manage` | Who is assigned to a child. |
 
@@ -223,7 +231,7 @@ Each topic has its own prompt fragment. The system prompt is `chat.v1` = shared 
 ### 6.4 Scope control (what keeps it from becoming a general chatbot)
 
 1. Topic-bound system prompt and context: the model only knows the plan and the topic.
-2. **Off-topic marker.** The prompt tells the model to begin its reply with `[[OFF_TOPIC]]` and nothing else when the message is outside the topic. The pipeline buffers the start of the stream (about 24 characters); if it sees the marker it discards the stream, emits `delta` with the fixed redirect constant ("I can only help with your child's care and this topic. Pick a topic from the list..."), stores the message with `state = REDIRECTED`, and increments `offTopicCount`.
+2. **Off-topic marker.** The prompt tells the model to begin its reply with `[[OFF_TOPIC]]` and nothing else when the message is outside the topic. The pipeline holds back the start of the stream while the text so far (trimmed) is still a non-empty prefix of `[[OFF_TOPIC]]` (§14: the marker arrives split across several deltas, so a fixed character count is wrong); as soon as the text diverges from the marker it releases the held text as a normal answer, and if the stream ends while still a prefix it is treated as an answer. If it sees the full marker it discards the stream, emits `delta` with the fixed redirect constant ("I can only help with your child's care and this topic. Pick a topic from the list..."), stores the message with `state = REDIRECTED`, and increments `offTopicCount`.
 3. After `AI_CHAT_OFF_TOPIC_LIMIT` (3) strikes the conversation is closed (`409 AI_CHAT_OFF_TOPIC_LIMIT`) and the parent must pick a topic again.
 4. Hard caps: `AI_CHAT_MAX_MESSAGE_CHARS` (1000), `AI_CHAT_DAILY_MESSAGES` per user (30), `AI_CHAT_MAX_TURNS` per conversation (40), `maxOutputTokens` (400), history window `AI_CHAT_HISTORY_MESSAGES` (10).
 5. No tools, no web search, no URL fetch (0018 Q3). There is nothing for an off-topic request to call.
@@ -233,7 +241,7 @@ Each topic has its own prompt fragment. The system prompt is `chat.v1` = shared 
 
 1. Validate; authorise (`AiAccessService`: flag, role, ownership; ADMIN refused); topic must be `AI` kind; daily limit, turn cap, project budget.
 2. Persist the parent message (`seq`), idempotent on `clientMessageId`.
-3. `redactPii()`; build the allow-listed context; call `AiService.streamChat()` (new second port method; `streamText`, no tools, `maxRetries: 0`, timeout, `maxOutputTokens`). Fallback model only **before the first chunk**.
+3. `redactPii()`; build the allow-listed context; call `AiService.streamChat()` (new second port method; response headers are flushed only when the first provider part arrives, so a failure before that is an ordinary problem response or a silent fallback attempt; `streamText`, no tools, `maxRetries: 0`, timeout, `maxOutputTokens`). Fallback model only **before the first chunk**.
 4. Marker check on the buffered start; then the sentence splitter, `checkChatChunk()` (0018 blocklist, name-leak, URL/HTML/markdown checks, plus persona-breach phrases such as "as your doctor", "I diagnose"), then emit `delta`.
 5. On a filter hit: stop, emit `retract`, store the message with `state = RETRACTED` and the safe constant; `ai_runs.status = BLOCKED`.
 6. On a normal end: append the footer by code, persist the AI message, record tokens and cost, emit `done`.
@@ -320,12 +328,13 @@ Generated by job `conversation.summarise` after close (payload `{ conversationId
 
 **Defaults I chose, change if you disagree:**
 - **Push notifications** (FCM) are their own later phase with a `NotificationService` (immediate send plus a queued wake-up job). This phase only defines chat event types.
-- **Parent contact for experts:** name, email and phone through `GET /children/{childId}/parent-contact` (EXPERT assigned, ADMIN).
+- **Parent contact for experts:** name and email (no phone yet, §3 row 24) through `GET /children/{childId}/parent-contact` (EXPERT assigned, ADMIN).
 - **Backstop:** 30 days.
 - One backend instance and an in-process emitter; `LISTEN/NOTIFY` is the documented seam (verify hosting in Batch 0).
 - Parents can read their own summaries; English first, Hinglish in the blocklist and eval fixtures as in 0018.
 
 **Still open**
+- **Proposed (not built): `headersSent` guard in `AllExceptionsFilter`.** Add it in Batch 5.4 only if the streaming controller still needs it; the SSE handler must catch its own errors regardless (§14).
 - Initial wording of the topic labels and the off-topic redirect message (product copy).
 - Which topics the product wants in v1 beyond the four listed (adding one is a code change plus a prompt fragment and eval fixtures).
 
@@ -334,19 +343,19 @@ Generated by job `conversation.summarise` after close (payload `{ conversationId
 ### Batch 0 — Housekeeping and spike
 - [x] 0.1 Delete plan 0015; mark 0017 and 0018 Done; update README; move 0018 Batch 5 here (§9).
 - [x] 0.2 Add the two missing `docs.e2e` rows (`appointmentSlotListOwn`, `appointmentSlotDelete`). Run 2026-10-10 against local Postgres: `docs.e2e-spec` 95/95 green, full `test:e2e` 31 suites / 412 tests green.
-- [ ] 0.3 Spike on a scratch branch (nothing merged): SSE from a Nest controller on the real host (`X-Accel-Buffering: no`, flush, heartbeat, abort on disconnect, idle timeout); `streamText` with `@ai-sdk/google@3` (chunk shape, `usage` at the end, abort, mid-stream provider error); sentence splitter against English and Hinglish; whether the first-chunk off-topic marker survives streaming on Flash-Lite. Record results in §14.
-  - **Status (2026-10-10): spike run and recorded in §14, including Render staging; awaiting owner approval before the box is ticked.** Hostinger leg still open. The throwaway spike scripts and the temporary probe route were deleted (nothing from them ships; the splitter is rebuilt properly in Batch 5).
+- [x] 0.3 Spike on a scratch branch (nothing merged): SSE from a Nest controller on the real host (`X-Accel-Buffering: no`, flush, heartbeat, abort on disconnect, idle timeout); `streamText` with `@ai-sdk/google@3` (chunk shape, `usage` at the end, abort, mid-stream provider error); sentence splitter against English and Hinglish; whether the first-chunk off-topic marker survives streaming on Flash-Lite. Record results in §14.
+  - **Status (2026-10-10): spike run, recorded in §14, and results approved by the owner.** Render staging is measured. **The Hostinger SSE check is still open: repeat the probe there before chat ships on Hostinger** (shared plans may buffer; a VPS will not). The throwaway spike scripts and the temporary probe route were deleted (nothing from them ships; the splitter is rebuilt properly in Batch 5).
 
 ### Batch 1 — Remove escalations
-- [x] 1.1 Owner decision (2026-10-10): remove every escalation route, table and permission completely; the Parent app is still in build and will stop calling `/escalations*`. Still to do in this step: grep helpers (`assignedClinicianName`) for other users before deleting.
-- [ ] 1.2 Delete `src/modules/escalations/`, its permissions, the `app.module` import, the `child-access` comment, `test/escalation.e2e-spec.ts`, and the 7 `docs.e2e` rows.
-- [ ] 1.3 Schema change + forward migration dropping `escalations` and the enum.
-- [ ] 1.4 Verify: `npm run lint && npm test && npm run build && npm run test:e2e`; the migration applies on a fresh DB and on one with the old migrations.
+- [x] 1.1 Owner decision (2026-10-10): remove every escalation route, table and permission completely; the Parent app is still in build and will stop calling `/escalations*`. `assignedClinicianName` was used only by the escalation services and was deleted with them. The push calls in the escalation services (`toClinicians`/`toParent`) went with the module; `PushNotifier` and its other callers (appointments) are unchanged.
+- [x] 1.2 Delete `src/modules/escalations/`, its permissions, the `app.module` import, the `child-access` comment, `test/escalation.e2e-spec.ts`, and the 7 `docs.e2e` rows.
+- [x] 1.3 Schema change + forward migration dropping `escalations` and the enum.
+- [x] 1.4 Verify (2026-10-10): `npm run lint && npm test && npm run build && npm run test:e2e`; the migration applies on a fresh DB and on one with the old migrations. Done: all four green (122 unit suites / 813 tests; 31 e2e suites / 406 tests); `20261010150000_drop_escalations` applied on a fresh database and on one already holding the old migrations plus a synthetic escalation row, and `prisma migrate diff` against `schema.prisma` showed no difference in both cases.
 
 ### Batch 2 — Expert role
-- [ ] 2.1 Enum value, `ROLE_PERMISSIONS` entry, `assertChildAccess` EXPERT branch + default-deny, review all 74 `Role.*` references (record each decision in the PR).
-- [ ] 2.2 `ExpertChildAssignment`; expert create/update/resend (reuse the invitation service); bulk assignment endpoints; user list/DTO enums; read-only expert grants on the child-scoped reads; the parent-contact route.
-- [ ] 2.3 Verify: authz matrix tests, `rbac-route-coverage`, docs drift, full suite.
+- [x] 2.1 Enum value, `ROLE_PERMISSIONS` entry, `assertChildAccess` EXPERT branch + default-deny, review of every `Role.*` reference (decisions in §14, "Batch 2 Role review").
+- [x] 2.2 `ExpertChildAssignment` (migration `20261011090000_add_expert_role`); expert create (direct, with password)/update/admin password reset that revokes refresh tokens; `PUT/GET /experts/{id}/children`, `GET /children/{childId}/experts`; read-only expert grants on the child-scoped reads; the parent-contact route; 9 `docs.e2e` rows (no invitation routes).
+- [x] 2.3 Verify: see §14 "Batch 2 results".
 
 ### Batch 3 — Conversations, messages, retention
 - [ ] 3.1 Models + migration + `truncateAll()`; config keys and validation.
@@ -363,7 +372,7 @@ Generated by job `conversation.summarise` after close (payload `{ conversationId
 - [ ] 5.1 `AiService.streamChat()` + `FakeAiService` streaming; `ai_runs` capability `chat-reply`.
 - [ ] 5.2 `AI_CHAT_TOPICS` constant, topic list endpoint, prompt `chat.v1` + topic fragments, per-topic context builders (calls existing services with the caller).
 - [ ] 5.3 `redactPii`, off-topic marker handling, strike limit, caps.
-- [ ] 5.4 Sentence-buffered filter, SSE controller, footer, disconnect abort.
+- [ ] 5.4 Sentence-buffered filter, SSE controller, footer, disconnect abort; flush headers on the first provider part; `headersSent` guard in `AllExceptionsFilter` only if still needed.
 - [ ] 5.5 Verify: retract/redirect/abort/idempotency e2e, chat eval fixtures live once, full suite.
 
 ### Batch 6 — Parent↔Expert chat delivery
@@ -440,6 +449,37 @@ Setup: `chat.v1`-style system prompt (persona rules + `TODAYS_ACTIVITIES` fragme
 4. **`ai_runs` for streams:** abort and timeout runs have no usage. Record `status` (`ABORTED`/`TIMED_OUT`-style) with null tokens; this needs a decision on whether `AiRunStatus` gains values (a new forward migration in Batch 3/5, not in Batch 1).
 5. **Do not rely on `AllExceptionsFilter` for the SSE route** (see the table). Consider a `headersSent` guard in the filter as a small independent fix (not made here).
 6. **Throttle/guards:** this spike did not exercise `AppThrottlerGuard` or pino-http on a long response; check in Batch 5.4 that the guard does not buffer or double-count a streaming handler.
+
+### Batch 2 Role review (every `Role.*` use, 2026-10-11)
+
+**Fixed (EXPERT-reachable; each now has an EXPERT branch and ends in default-deny).**
+`assertChildAccess` read mode (care plan), `assertChildProgressAccess` read, `assertChildAppointmentReadAccess`,
+`GetChildService`, `ListChildrenService` (query filter), `ListAppointmentsService` (query filter),
+`ListCoachingService`, `GetPlanService`, `ListPlansService`, `TodayFocusService`. Before this, a new role fell
+through to "allow all" in `ListChildren`, `ListAppointments` and the `else if CLINICIAN` helpers (a real over-grant).
+`ListClinicianAssignmentsService`: EXPERT is refused (row 25). `GetUserService` (admin detail): EXPERT shows its assigned children.
+
+**Already safe for EXPERT (strict `=== PARENT` / `!== PARENT` / `!== ADMIN` checks; no change).**
+`assertChildAccess` parent-write, `AiAccessService`, create/cancel appointment, save-preparation, update-child,
+grant/withdraw consent, `assertChildProgressAccess` write, create-slot admin check, delete-slot, archive/complete plan,
+`load-editable-plan`, `set-clinical-profile`, `get-plan-template`, `list-plan-templates`.
+
+**Unreachable by EXPERT (the permission is not granted, so the guard returns 403 first; no change).**
+`get-consent`, `list-media`, plan notes (create/list), call logs (log/list), `assign-plan`, `replace-coaching`,
+`set-summary`, `list-own-slots`. Note: several of these send "anything not PARENT/CLINICIAN" down the ADMIN path; if a
+future batch grants EXPERT one of these permissions, that service must be changed first.
+
+**Not access checks (no change).** `signup` (creates PARENT), `get-summary` (counts), `assign-clinician`,
+`create-slot` clinician lookup, `get-care-plan` clinician name, the clinician services (`role: CLINICIAN` filters, correctly
+exclude experts), user DTOs/enums and the `list-users` role filter (EXPERT appears automatically).
+
+**DTO audience.** `CoachingTipDto.authorId` and `PlanDto.createdById` are hidden only from PARENT, so an EXPERT sees the
+staff user id (an id, not a name). Left as is; say if experts should not see it.
+
+### Batch 2 results (2026-10-11)
+- Unit 125 suites / 835 tests, lint, build clean. New: `child-access.spec`, `get-parent-contact`, `set-expert-children` specs, EXPERT cases in the get-child, list-children, list-appointments and list-clinician-assignments specs.
+- `test/expert-role.e2e-spec.ts`: lifecycle (direct create with password, login, admin password reset ends old refresh token and old password, edit, duplicate email), admin-only gate on all management routes, assignment diff and validation, read matrix on 10 read routes (assigned 200, unassigned 403, other family 403, no writes), parent-contact (expert assigned and admin 200; unassigned expert, clinician, parent 403).
+- Migration applied on a fresh database and on one holding the older migrations plus a synthetic user; `prisma migrate diff` showed no difference in both. `ALTER TYPE ... ADD VALUE` ran inside the migration transaction without trouble.
 
 ## 15. How to resume
 

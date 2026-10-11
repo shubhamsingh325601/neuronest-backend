@@ -6,7 +6,7 @@ import { UserDetailDto } from '@modules/users/shared/user-detail.dto';
 /**
  * Admin detail view of a single user (C1, plan 0008) — embeds relations per §3 row 11:
  * a `PARENT`'s one child (if any, `Child.parentId @unique`), or a `CLINICIAN`'s live
- * `ClinicianChildAssignment` rows. Closes the "identity resolution gap" the phase-8
+ * `ClinicianChildAssignment` rows (an `EXPERT`'s `ExpertChildAssignment` rows likewise). Closes the "identity resolution gap" the phase-8
  * audit flagged — a bare UUID elsewhere in the system can now be resolved to something
  * actionable.
  */
@@ -32,6 +32,12 @@ export class GetUserService {
     } else if (user.role === Role.CLINICIAN) {
       const assignments = await this.prisma.clinicianChildAssignment.findMany({
         where: { clinicianId: user.id },
+        select: { childId: true },
+      });
+      assignedChildIds = assignments.map((a) => a.childId);
+    } else if (user.role === Role.EXPERT) {
+      const assignments = await this.prisma.expertChildAssignment.findMany({
+        where: { expertId: user.id },
         select: { childId: true },
       });
       assignedChildIds = assignments.map((a) => a.childId);

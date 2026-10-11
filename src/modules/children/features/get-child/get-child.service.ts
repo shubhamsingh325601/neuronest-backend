@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { assertExpertAssigned } from '@common/authz/child-access';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { ChildDto } from '@modules/children/shared/child.dto';
@@ -10,6 +11,7 @@ import { ChildDto } from '@modules/children/shared/child.dto';
  * enforced here, per role (see docs/rbac.md §6):
  * - PARENT: must be the child's own parent.
  * - CLINICIAN: must have a live ClinicianChildAssignment for this child.
+ * - EXPERT: must have a live ExpertChildAssignment for this child (read-only).
  * - ADMIN: unconditional.
  */
 @Injectable()
@@ -36,7 +38,14 @@ export class GetChildService {
       return ChildDto.from(child);
     }
 
-    // CLINICIAN
+    if (caller.role === Role.EXPERT) {
+      await assertExpertAssigned(this.prisma, child.id, caller.id);
+      return ChildDto.from(child);
+    }
+
+    if (caller.role !== Role.CLINICIAN) {
+      throw this.forbidden();
+    }
     const assignment = await this.prisma.clinicianChildAssignment.findUnique({
       where: { clinicianId_childId: { clinicianId: caller.id, childId: child.id } },
       select: { id: true },

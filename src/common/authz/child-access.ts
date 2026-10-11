@@ -10,9 +10,24 @@ function forbidden(): ForbiddenException {
   });
 }
 
+/** 403 unless the EXPERT has a live assignment to the child (read-only access, plan 0019 §3 row 3). */
+export async function assertExpertAssigned(
+  prisma: PrismaService,
+  childId: string,
+  expertId: string,
+): Promise<void> {
+  const assignment = await prisma.expertChildAssignment.findUnique({
+    where: { expertId_childId: { expertId, childId } },
+    select: { id: true },
+  });
+  if (!assignment) {
+    throw forbidden();
+  }
+}
+
 /**
- * Child-scoped access shared by the parent-app domains (care plan, analyses, chat, escalations) (the `media:read` shape, docs/rbac.md §6).
- * - `read`: PARENT owns the child, CLINICIAN is assigned, ADMIN any.
+ * Child-scoped access shared by the parent-app domains (care plan, analyses, chat) (the `media:read` shape, docs/rbac.md §6).
+ * - `read`: PARENT owns the child, CLINICIAN or EXPERT is assigned, ADMIN any. Any other role is refused.
  * - `parent-write`: only the child's own PARENT (admin and clinicians are read-only here).
  */
 export async function assertChildAccess(
@@ -48,6 +63,10 @@ export async function assertChildAccess(
     if (!assignment) {
       throw forbidden();
     }
+  } else if (caller.role === Role.EXPERT) {
+    await assertExpertAssigned(prisma, childId, caller.id);
+  } else if (caller.role !== Role.ADMIN) {
+    throw forbidden();
   }
   return child;
 }

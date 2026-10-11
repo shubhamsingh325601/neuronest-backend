@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { assertExpertAssigned } from '@common/authz/child-access';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { PLAN_CONTENT_INCLUDE, PlanDetailDto } from '@modules/plans/shared/plan.dto';
@@ -39,8 +40,11 @@ export class GetPlanService {
       if (!assignment) {
         throw this.forbidden();
       }
+    } else if (caller.role === Role.EXPERT) {
+      await assertExpertAssigned(this.prisma, plan.childId, caller.id);
+    } else if (caller.role !== Role.ADMIN) {
+      throw this.forbidden();
     }
-    // ADMIN: no check.
 
     return PlanDetailDto.fromWithContent(plan, { audience: caller.role });
   }

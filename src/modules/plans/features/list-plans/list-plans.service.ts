@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
+import { assertExpertAssigned } from '@common/authz/child-access';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { DEFAULT_PAGE_LIMIT } from '@common/pagination/cursor-pagination.query.dto';
 import { decodeCursor, toCursorPage } from '@common/pagination/cursor.util';
@@ -45,8 +46,11 @@ export class ListPlansService {
       if (!assignment) {
         throw this.forbidden();
       }
+    } else if (caller.role === Role.EXPERT) {
+      await assertExpertAssigned(this.prisma, childId, caller.id);
+    } else if (caller.role !== Role.ADMIN) {
+      throw this.forbidden();
     }
-    // ADMIN: no check.
 
     const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const where: Prisma.PlanWhereInput = {

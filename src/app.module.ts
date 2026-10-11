@@ -15,7 +15,6 @@ import { JobsModule } from '@common/jobs/jobs.module';
 import { LoggingModule } from '@common/logging/logging.module';
 import { MediaStorageModule } from '@common/media-storage/media-storage.module';
 import { PushModule } from '@common/push/push.module';
-import { EscalationsModule } from '@modules/escalations/escalations.module';
 import { AppThrottlerGuard } from '@common/throttler/app-throttler.guard';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { AdminModule } from '@modules/admin/admin.module';
@@ -30,6 +29,7 @@ import { AppointmentsModule } from '@modules/appointments/appointments.module';
 import { AiCoachingModule } from '@modules/ai-coaching/ai-coaching.module';
 import { ConsentsModule } from '@modules/consents/consents.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
+import { ExpertsModule } from '@modules/experts/experts.module';
 import { JobsHttpModule } from '@modules/jobs/jobs.module';
 import { HealthModule } from '@modules/health/health.module';
 import { MediaModule } from '@modules/media/media.module';
@@ -68,12 +68,12 @@ import { UsersModule } from '@modules/users/users.module';
     UsersModule,
     DevicesModule,
     CliniciansModule,
+    ExpertsModule,
     ChildrenModule,
     ConsentsModule,
     CoachingModule,
     ProgressModule,
     CarePlanModule,
-    EscalationsModule,
     AppointmentsModule,
     AiCoachingModule,
     MediaModule,

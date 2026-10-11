@@ -1,6 +1,6 @@
 # Plan 0017 — Phase 17: Parent App Integration Gaps
 
-Status: **Done** (2026-10-10). Batches A, B, C and G are implemented with unit + e2e tests. Batch F (escalations) is being removed by plan 0019 (Batch 1).
+Status: **Done** (2026-10-10). Batches A, B, C and G are implemented with unit + e2e tests. Batch F (escalations) was removed by plan 0019 (Batch 1).
 Owner: backend
 Last updated: 2026-10-10
 

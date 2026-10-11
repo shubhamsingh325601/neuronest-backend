@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Role } from '@prisma/client';
 import { encodeCursor } from '@common/pagination/cursor.util';
@@ -69,6 +70,21 @@ describe('ListChildrenService', () => {
     await service.list({}, caller(Role.ADMIN));
 
     expect(prisma.child.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+  });
+
+  it('filters to assigned children for EXPERT', async () => {
+    prisma.child.findMany.mockResolvedValue([]);
+
+    await service.list({}, caller(Role.EXPERT));
+
+    expect(prisma.child.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { expertAssignments: { some: { expertId: CALLER_ID } } } }),
+    );
+  });
+
+  it('refuses a role it does not know', async () => {
+    await expect(service.list({}, caller('SOMETHING_NEW' as Role))).rejects.toThrow(ForbiddenException);
+    expect(prisma.child.findMany).not.toHaveBeenCalled();
   });
 
   it('over-fetches by one and returns a nextCursor when there is another page', async () => {

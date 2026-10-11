@@ -15,6 +15,7 @@ enum Role {
   PARENT
   CLINICIAN
   ADMIN
+  EXPERT
 }
 
 enum UserStatus {
@@ -85,6 +86,7 @@ model User {
   child                   Child?                     @relation("ChildParent")
   clinicianAssignments    ClinicianChildAssignment[] @relation("ClinicianAssignments")
   assignmentsMadeAsAdmin  ClinicianChildAssignment[] @relation("AssignmentsMadeByAdmin")
+  expertAssignments       ExpertChildAssignment[]    @relation("ExpertAssignments")
   uploadedMedia           Media[]                    @relation("UploadedMedia")
   planTemplatesCreated    PlanTemplate[]             @relation("PlanTemplatesCreated")
   plansCreated            Plan[]                     @relation("PlansCreated")
@@ -100,8 +102,6 @@ model User {
   aiRuns                  AiRun[]                    @relation("AiRunsByUser")
   aiOutputsRequested      AiOutput[]                 @relation("AiOutputsRequested")
   activityCompletionsMade ActivityCompletion[]       @relation("ActivityCompletionsMade")
-  escalationsRaised       Escalation[]               @relation("EscalationsRaised")
-  escalationsHandled      Escalation[]               @relation("EscalationsHandled")
   preferences             UserPreference?
   deviceTokens            DeviceToken[]
 
@@ -202,7 +202,8 @@ model Child {
   updatedAt       DateTime @updatedAt
 
   clinicianAssignments ClinicianChildAssignment[]
-  media                Media[]
+  expertAssignments    ExpertChildAssignment[]
+  media               Media[]
   plans                Plan[]
   monthlyCallLogs      MonthlyCallLog[]
   mediaConsents        MediaConsent[]
@@ -212,7 +213,6 @@ model Child {
   aiRuns               AiRun[]
   aiOutputs            AiOutput[]
   activityCompletions  ActivityCompletion[]
-  escalations          Escalation[]
 
   @@map("children")
 }
@@ -230,6 +230,21 @@ model ClinicianChildAssignment {
   @@unique([clinicianId, childId])
   @@index([childId])
   @@map("clinician_child_assignments")
+}
+
+/// Read-only link between an EXPERT user and a child (plan 0019). The admin replaces an
+/// expert's whole set in one call, so the row records only who and when.
+model ExpertChildAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  expertId  String   @db.Uuid
+  expert    User     @relation("ExpertAssignments", fields: [expertId], references: [id], onDelete: Cascade)
+  childId   String   @db.Uuid
+  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([expertId, childId])
+  @@index([childId])
+  @@map("expert_child_assignments")
 }
 
 model Media {
@@ -674,41 +689,4 @@ model ActivityCompletion {
 
   @@index([childId])
   @@map("activity_completions")
-}
-
-// ---- Parent-raised escalations (plan 0017 batch F, adapted from plan 0015) ---------------
-// An urgent-support request raised by the parent. Clinicians only review and resolve it; there is no
-// chat. `dueAt` is stored (createdAt + 24 h); "overdue" is computed.
-
-enum EscalationStatus {
-  OPEN
-  ACKNOWLEDGED
-  RESOLVED
-  CANCELLED
-}
-
-model Escalation {
-  id             String           @id @default(uuid()) @db.Uuid
-  childId        String           @db.Uuid
-  child          Child            @relation(fields: [childId], references: [id], onDelete: Cascade)
-  raisedById     String           @db.Uuid
-  raisedBy       User             @relation("EscalationsRaised", fields: [raisedById], references: [id], onDelete: Restrict)
-  categoryId     String
-  notes          String
-  whatWasTried   String?
-  callbackPhone  String?
-  status         EscalationStatus @default(OPEN)
-  dueAt          DateTime
-  acknowledgedAt DateTime?
-  handledById    String?          @db.Uuid
-  handledBy      User?            @relation("EscalationsHandled", fields: [handledById], references: [id], onDelete: SetNull)
-  resolvedAt     DateTime?
-  resolutionNote String?
-  cancelledAt    DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  @@index([childId, createdAt])
-  @@index([status, dueAt])
-  @@map("escalations")
 }

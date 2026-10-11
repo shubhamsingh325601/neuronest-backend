@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PlanStatus, Role } from '@prisma/client';
+import { assertExpertAssigned } from '@common/authz/child-access';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { PlanDayDto, PlanDto } from '@modules/plans/shared/plan.dto';
@@ -37,8 +38,11 @@ export class TodayFocusService {
       if (!assignment) {
         throw this.forbidden();
       }
+    } else if (caller.role === Role.EXPERT) {
+      await assertExpertAssigned(this.prisma, childId, caller.id);
+    } else if (caller.role !== Role.ADMIN) {
+      throw this.forbidden();
     }
-    // ADMIN: no check.
 
     const plan = await this.prisma.plan.findFirst({
       where: { childId, status: PlanStatus.ACTIVE },

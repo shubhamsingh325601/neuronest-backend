@@ -1,5 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { assertExpertAssigned } from '@common/authz/child-access';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import type { PrismaService } from '@common/prisma/prisma.service';
 
@@ -13,7 +14,7 @@ function forbidden(): ForbiddenException {
 /**
  * Shared scoping for the child-nested `appointment-slot:read` / `appointment:read` routes
  * (the `child:read` shape, docs/rbac.md §6): PARENT must own the child, CLINICIAN must be
- * assigned, ADMIN any.
+ * assigned, EXPERT must be assigned, ADMIN any. Any other role is refused.
  */
 export async function assertChildAppointmentReadAccess(
   prisma: PrismaService,
@@ -40,7 +41,10 @@ export async function assertChildAppointmentReadAccess(
     if (!assignment) {
       throw forbidden();
     }
+  } else if (caller.role === Role.EXPERT) {
+    await assertExpertAssigned(prisma, childId, caller.id);
+  } else if (caller.role !== Role.ADMIN) {
+    throw forbidden();
   }
-  // ADMIN: no check.
   return child;
 }

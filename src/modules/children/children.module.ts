@@ -11,6 +11,10 @@ import { ListClinicianAssignmentsController } from './features/list-clinician-as
 import { ListClinicianAssignmentsService } from './features/list-clinician-assignments/list-clinician-assignments.service';
 import { RevokeClinicianAssignmentController } from './features/revoke-clinician-assignment/revoke-clinician-assignment.controller';
 import { RevokeClinicianAssignmentService } from './features/revoke-clinician-assignment/revoke-clinician-assignment.service';
+import { GetParentContactController } from './features/get-parent-contact/get-parent-contact.controller';
+import { GetParentContactService } from './features/get-parent-contact/get-parent-contact.service';
+import { ListChildExpertsController } from './features/list-child-experts/list-child-experts.controller';
+import { ListChildExpertsService } from './features/list-child-experts/list-child-experts.service';
 import { UpdateChildController } from './features/update-child/update-child.controller';
 import { UpdateChildService } from './features/update-child/update-child.service';
 import { SetClinicalProfileController } from './features/set-clinical-profile/set-clinical-profile.controller';
@@ -31,6 +35,8 @@ import { SetClinicalProfileService } from './features/set-clinical-profile/set-c
     RevokeClinicianAssignmentController,
     UpdateChildController,
     SetClinicalProfileController,
+    ListChildExpertsController,
+    GetParentContactController,
   ],
   providers: [
     CreateChildService,
@@ -41,6 +47,8 @@ import { SetClinicalProfileService } from './features/set-clinical-profile/set-c
     RevokeClinicianAssignmentService,
     UpdateChildService,
     SetClinicalProfileService,
+    ListChildExpertsService,
+    GetParentContactService,
   ],
   // Exported for the AI coaching module, which authorises through the same ownership rules.
   exports: [GetChildService],

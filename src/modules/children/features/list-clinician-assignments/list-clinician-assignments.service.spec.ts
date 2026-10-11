@@ -64,6 +64,14 @@ describe('ListClinicianAssignmentsService', () => {
     expect(result.map((r) => r.clinicianId)).toEqual(['clinician-1', 'clinician-2']);
   });
 
+  it('forbids an expert: the care team is not in their read-only set', async () => {
+    prisma.child.findUnique.mockResolvedValue(child);
+    await expect(service.list('child-1', asUser('expert-1', Role.EXPERT))).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.clinicianChildAssignment.findMany).not.toHaveBeenCalled();
+  });
+
   it('allows the owning parent and admin unconditionally', async () => {
     prisma.child.findUnique.mockResolvedValue(child);
     prisma.clinicianChildAssignment.findMany.mockResolvedValue([]);

@@ -13,6 +13,7 @@ import { ClinicianChildAssignmentDto } from '@modules/children/shared/clinician-
  *   row (§3 row 4 of plan 0008 — same "clinician-to-clinician coordination" framing as
  *   `plan-note:read`).
  * - ADMIN: unconditional.
+ * - EXPERT (and any other role): refused. The care team is not in the expert's read-only set.
  *
  * No pagination (§3 row 3 of plan 0008) — a child's care team is bounded by business
  * rule, unlike an unbounded-over-time list.
@@ -45,8 +46,9 @@ export class ListClinicianAssignmentsService {
       if (!assignment) {
         throw this.forbidden();
       }
+    } else if (caller.role !== Role.ADMIN) {
+      throw this.forbidden();
     }
-    // ADMIN: no check.
 
     const rows = await this.prisma.clinicianChildAssignment.findMany({
       where: { childId },

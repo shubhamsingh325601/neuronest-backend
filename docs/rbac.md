@@ -467,10 +467,7 @@ missing header → `401 INVALID_JOBS_TOKEN`. The global throttler still applies.
 | `child:update:self` | PARENT | service: caller must be the child's parent (ADMIN reaches the permission via the spread but is refused) |
 | `child-clinical-profile:manage` | CLINICIAN, ADMIN | service: clinician must be assigned to the child |
 | `activity:complete:self` | PARENT | `assertChildAccess(..., 'parent-write')`: only the child's own parent; clinicians/admin are read-only |
-| `escalation:create:self` | PARENT | `parent-write`; one active request per child (partial unique index) |
-| `escalation:read` | PARENT, CLINICIAN | `read` scope |
 | Preferences (`GET`/`PATCH /users/me/preferences`) | every role | self only; read uses `user:read:self`, write uses `user:update:self` |
-| `escalation:manage` | CLINICIAN, ADMIN | clinician works only requests of assigned children (queue is query-filtered) |
 
 AI analyses and the assistant chat are deliberately not part of the backend yet (client decision, 2026-10-08);
 the Parent app shows them as static UI until the AI work is scheduled.
@@ -491,6 +488,23 @@ The one exception is the parent AI coaching tip below (plan 0018), which ships d
   ownership, and where a parental AI-processing consent check would go (plan 0018 O-1).
 - The background job re-checks authorization at run time, as the requesting user, and aborts if
   that user is no longer `ACTIVE`: access is never trusted from enqueue time.
+
+### EXPERT role and `expert:*` / `expert-child:manage` (Phase 19, batch 2)
+
+- `EXPERT` is a fourth role. It holds only read-only grants on permissions that already existed
+  (`child:read`, `plan:read`, `progress:read`, `appointment:read`, `coaching:read`) plus the `user:*:self` set.
+  No `media:read`, `plan-note:*`, `monthly-call:*`, `consent:*` or any write permission.
+- `expert:list`, `expert:manage`, `expert-child:manage` are ADMIN only (via the spread). Experts are created
+  directly by the admin with a password (no invitation); `POST /experts/{id}/reset-password` sets a new one and
+  revokes the expert's refresh tokens. The assigned set is replaced in one call (`PUT /experts/{id}/children`).
+- **Scope** is the `ExpertChildAssignment` row, checked in the service: `assertChildAccess` (and the progress,
+  appointment, coaching, plan and child services) have an explicit EXPERT branch (assigned only). The child list
+  and the cross-child appointment list filter by the assignment. The care team route
+  (`GET /children/{childId}/clinicians`) stays closed to experts.
+- **Default deny.** These read checks used to fall through to "allow" for any role that was not PARENT or
+  CLINICIAN, which would have made a new role act like ADMIN. They now end with `else if (role !== ADMIN) 403`.
+- `GET /children/{childId}/parent-contact` uses `child:read` but is EXPERT (assigned) and ADMIN only: the parent
+  (own data) and the clinician get 403. It returns name and email only; no parent phone is stored anywhere.
 
 ## 7. Future Migration Path to `@casl/ability`
 
