@@ -104,6 +104,8 @@ model User {
   activityCompletionsMade ActivityCompletion[]       @relation("ActivityCompletionsMade")
   preferences             UserPreference?
   deviceTokens            DeviceToken[]
+  conversationsAsParent   Conversation[]             @relation("ConversationParent")
+  conversationsAsExpert   Conversation[]             @relation("ConversationExpert")
 
   @@map("users")
 }
@@ -201,18 +203,20 @@ model Child {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  clinicianAssignments ClinicianChildAssignment[]
-  expertAssignments    ExpertChildAssignment[]
-  media               Media[]
-  plans                Plan[]
-  monthlyCallLogs      MonthlyCallLog[]
-  mediaConsents        MediaConsent[]
-  coachingTips         CoachingTip[]
-  progressEntries      ProgressEntry[]
-  appointments         Appointment[]
-  aiRuns               AiRun[]
-  aiOutputs            AiOutput[]
-  activityCompletions  ActivityCompletion[]
+  clinicianAssignments  ClinicianChildAssignment[]
+  expertAssignments     ExpertChildAssignment[]
+  media                 Media[]
+  plans                 Plan[]
+  monthlyCallLogs       MonthlyCallLog[]
+  mediaConsents         MediaConsent[]
+  coachingTips          CoachingTip[]
+  progressEntries       ProgressEntry[]
+  appointments          Appointment[]
+  aiRuns                AiRun[]
+  aiOutputs             AiOutput[]
+  activityCompletions   ActivityCompletion[]
+  conversations         Conversation[]
+  conversationSummaries ConversationSummary[]
 
   @@map("children")
 }
@@ -689,4 +693,108 @@ model ActivityCompletion {
 
   @@index([childId])
   @@map("activity_completions")
+}
+
+enum ConversationKind {
+  AI
+  HUMAN
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED // no new messages; the summary is generated and the raw messages are purged later
+}
+
+/// Code-defined guided topics for the AI chat (AI_CHAT_TOPICS). The unavailable assessment topic is never stored.
+enum AiChatTopic {
+  TODAYS_ACTIVITIES
+  PLAN_EXPLAINER
+  RECENT_PROGRESS
+  EVERYDAY_ROUTINES
+}
+
+/// One chat session between a parent and the AI or an expert (plan 0019). Survives the purge of its messages.
+model Conversation {
+  id                 String             @id @default(uuid()) @db.Uuid
+  kind               ConversationKind
+  topic              AiChatTopic? // AI only
+  childId            String             @db.Uuid
+  child              Child              @relation(fields: [childId], references: [id], onDelete: Cascade)
+  parentId           String             @db.Uuid
+  parent             User               @relation("ConversationParent", fields: [parentId], references: [id], onDelete: Cascade)
+  expertId           String?            @db.Uuid // HUMAN only
+  expert             User?              @relation("ConversationExpert", fields: [expertId], references: [id], onDelete: SetNull)
+  status             ConversationStatus @default(OPEN)
+  lastMessageSeq     Int                @default(0)
+  lastMessageAt      DateTime?
+  offTopicCount      Int                @default(0) // AI only
+  closedAt           DateTime?
+  messagesPurgedAt   DateTime? // proof of deletion; set in the purge transaction
+  purgedMessageCount Int?
+  createdAt          DateTime           @default(now())
+
+  messages Message[]
+  summary  ConversationSummary?
+
+  @@index([childId, createdAt])
+  @@index([status, lastMessageAt]) // idle-close scan
+  @@index([status, closedAt]) // purge scan
+  @@map("conversations")
+}
+
+enum MessageSender {
+  PARENT
+  EXPERT
+  AI
+}
+
+enum MessageState {
+  COMPLETE
+  RETRACTED // safety filter hit; stores a fixed constant
+  REDIRECTED // off-topic reply; stores a fixed constant
+}
+
+/// Append-only chat log. `body` is the ONLY place raw chat text lives; the purge hard-deletes these rows.
+model Message {
+  id              String        @id @default(uuid()) @db.Uuid
+  conversationId  String        @db.Uuid
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  seq             Int
+  sender          MessageSender
+  senderId        String?       @db.Uuid // null for AI
+  clientMessageId String? // idempotent send, unique per conversation
+  body            String
+  state           MessageState  @default(COMPLETE)
+  createdAt       DateTime      @default(now())
+
+  @@unique([conversationId, seq])
+  @@unique([conversationId, clientMessageId])
+  @@map("messages")
+}
+
+enum SummaryStatus {
+  PENDING
+  READY
+  FAILED
+  PLACEHOLDER
+}
+
+/// What remains after the raw messages are purged. Written by the summary job (batch 4) or, at the retention backstop, as a placeholder.
+model ConversationSummary {
+  id             String        @id @default(uuid()) @db.Uuid
+  conversationId String        @unique @db.Uuid
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  childId        String        @db.Uuid
+  child          Child         @relation(fields: [childId], references: [id], onDelete: Cascade)
+  status         SummaryStatus @default(PENDING)
+  content        Json? // allow-listed shape, plan 0019 section 7
+  promptVersion  Int?
+  provider       String?
+  model          String?
+  failureReason  String? // enum-like code, never provider text
+  generatedAt    DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@index([childId, createdAt])
+  @@map("conversation_summaries")
 }

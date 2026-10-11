@@ -28,6 +28,7 @@ import { CarePlanModule } from '@modules/care-plan/care-plan.module';
 import { AppointmentsModule } from '@modules/appointments/appointments.module';
 import { AiCoachingModule } from '@modules/ai-coaching/ai-coaching.module';
 import { ConsentsModule } from '@modules/consents/consents.module';
+import { ConversationsModule } from '@modules/conversations/conversations.module';
 import { CliniciansModule } from '@modules/clinicians/clinicians.module';
 import { ExpertsModule } from '@modules/experts/experts.module';
 import { JobsHttpModule } from '@modules/jobs/jobs.module';
@@ -69,6 +70,7 @@ import { UsersModule } from '@modules/users/users.module';
     DevicesModule,
     CliniciansModule,
     ExpertsModule,
+    ConversationsModule,
     ChildrenModule,
     ConsentsModule,
     CoachingModule,

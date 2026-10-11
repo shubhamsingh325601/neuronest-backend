@@ -91,6 +91,12 @@ export const PERMISSIONS = [
   'expert:list',
   'expert:manage',
   'expert-child:manage',
+  // Human chat (Phase 19). Parent and the conversation's expert only; ADMIN reaches these through the
+  // `...PERMISSIONS` spread, so the services refuse it (no raw chat text for admin).
+  'conversation:create:self',
+  'message:send',
+  'conversation:read',
+  'conversation:close',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -124,6 +130,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'appointment:read',
     'ai-coaching:generate:self',
     'ai-coaching:read',
+    'conversation:create:self',
+    'message:send',
+    'conversation:read',
+    'conversation:close',
   ],
   [Role.CLINICIAN]: [
     ...SELF_PERMISSIONS,
@@ -154,6 +164,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'progress:read',
     'appointment:read',
     'coaching:read',
+    'message:send',
+    'conversation:read',
+    'conversation:close',
   ],
   [Role.ADMIN]: [...PERMISSIONS],
 };

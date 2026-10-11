@@ -62,6 +62,33 @@ describe('envValidationSchema', () => {
     });
   });
 
+  describe('conversation retention (plan 0019)', () => {
+    it('defaults to 24 h idle close, 7 d purge and a 30 d backstop', () => {
+      const { value, error } = envValidationSchema.validate(base);
+      expect(error).toBeUndefined();
+      expect(value).toMatchObject({
+        CONVERSATION_IDLE_CLOSE_HOURS: 24,
+        CONVERSATION_PURGE_IDLE_DAYS: 7,
+        CONVERSATION_PURGE_BACKSTOP_DAYS: 30,
+      });
+    });
+
+    it('rejects a backstop shorter than the normal purge delay and non-positive values', () => {
+      const backstop = validate({
+        ...base,
+        CONVERSATION_PURGE_IDLE_DAYS: '10',
+        CONVERSATION_PURGE_BACKSTOP_DAYS: '9',
+      });
+      expect(backstop.error?.message).toContain('CONVERSATION_PURGE_BACKSTOP_DAYS');
+      expect(validate({ ...base, CONVERSATION_IDLE_CLOSE_HOURS: '0' }).error?.message).toContain(
+        'CONVERSATION_IDLE_CLOSE_HOURS',
+      );
+      expect(validate({ ...base, CONVERSATION_PURGE_IDLE_DAYS: '0' }).error?.message).toContain(
+        'CONVERSATION_PURGE_IDLE_DAYS',
+      );
+    });
+  });
+
   describe('AI (plan 0018)', () => {
     it('defaults to disabled with the planned limits', () => {
       const { value, error } = envValidationSchema.validate(base);

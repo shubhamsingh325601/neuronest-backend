@@ -88,6 +88,14 @@ export interface AppConfig {
     dailyRequestBudget: number;
     outputRetentionDays: number;
   };
+  conversations: {
+    /** An OPEN conversation with no message for this many hours is closed by the sweep. */
+    idleCloseHours: number;
+    /** Raw messages are purged this many days after close, once the summary is READY. */
+    purgeIdleDays: number;
+    /** Hard backstop: purge this many days after close even without a READY summary. */
+    purgeBackstopDays: number;
+  };
   logLevel: string;
   admin: {
     email: string;
@@ -170,6 +178,11 @@ export const configuration = (): AppConfig => ({
     userDailyLimit: parseInt(process.env.AI_USER_DAILY_LIMIT ?? '3', 10),
     dailyRequestBudget: parseInt(process.env.AI_DAILY_REQUEST_BUDGET ?? '400', 10),
     outputRetentionDays: parseInt(process.env.AI_OUTPUT_RETENTION_DAYS ?? '14', 10),
+  },
+  conversations: {
+    idleCloseHours: parseInt(process.env.CONVERSATION_IDLE_CLOSE_HOURS ?? '24', 10),
+    purgeIdleDays: parseInt(process.env.CONVERSATION_PURGE_IDLE_DAYS ?? '7', 10),
+    purgeBackstopDays: parseInt(process.env.CONVERSATION_PURGE_BACKSTOP_DAYS ?? '30', 10),
   },
   logLevel: process.env.LOG_LEVEL ?? 'info',
   admin: {

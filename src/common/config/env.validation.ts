@@ -183,6 +183,14 @@ export const envValidationSchema = Joi.object({
   AI_DAILY_REQUEST_BUDGET: Joi.number().integer().min(1).default(400),
   AI_OUTPUT_RETENTION_DAYS: Joi.number().integer().min(1).default(14),
 
+  // Conversation retention (plan 0019 section 8). The backstop may not come before the normal purge.
+  CONVERSATION_IDLE_CLOSE_HOURS: Joi.number().integer().min(1).default(24),
+  CONVERSATION_PURGE_IDLE_DAYS: Joi.number().integer().min(1).default(7),
+  CONVERSATION_PURGE_BACKSTOP_DAYS: Joi.number()
+    .integer()
+    .min(Joi.ref('CONVERSATION_PURGE_IDLE_DAYS'))
+    .default(30),
+
   SENTRY_DSN: Joi.string().allow('').default(''),
   LOG_LEVEL: Joi.string()
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')
