@@ -97,6 +97,9 @@ export const PERMISSIONS = [
   'message:send',
   'conversation:read',
   'conversation:close',
+  // Summaries of closed chats (Phase 19). Parent own, the conversation's expert, assigned clinician;
+  // ADMIN through the spread. Scope is enforced in the services, with a default-deny per role.
+  'conversation-summary:read',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -134,6 +137,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'message:send',
     'conversation:read',
     'conversation:close',
+    'conversation-summary:read',
   ],
   [Role.CLINICIAN]: [
     ...SELF_PERMISSIONS,
@@ -155,6 +159,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'appointment:read',
     'ai-coaching:read',
     'appointment:summarise',
+    'conversation-summary:read',
   ],
   // Read-only on assigned children (plan 0019 §3 row 2a). No media, plan notes or call logs.
   [Role.EXPERT]: [
@@ -167,6 +172,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'message:send',
     'conversation:read',
     'conversation:close',
+    'conversation-summary:read',
   ],
   [Role.ADMIN]: [...PERMISSIONS],
 };

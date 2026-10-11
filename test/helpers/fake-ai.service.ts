@@ -11,7 +11,7 @@ export interface FakeAiCall {
   promptVersion: number;
   system: string;
   user: string;
-  actor: { userId: string; childId?: string };
+  actor: { userId?: string; childId?: string };
 }
 
 type Scripted = { output: unknown } | { error: AiRunError };

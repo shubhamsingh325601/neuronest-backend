@@ -7,6 +7,7 @@ import {
   SummaryStatus,
   UserStatus,
 } from '@prisma/client';
+import { AiRunError } from '@common/ai/ai.service';
 import { PasswordService } from '@common/crypto/password.service';
 import { JobHandlerRegistry } from '@common/jobs/job-handler.registry';
 import {
@@ -25,12 +26,19 @@ describe('Conversations (e2e)', () => {
   const DAY_MS = 86_400_000;
   const HOUR_MS = 3_600_000;
 
+  // Names a summary must not leak: they are not the role words the summary text naturally contains.
+  const NAME_BY_ROLE: Record<Role, string> = {
+    PARENT: 'Meera Rao',
+    EXPERT: 'Dev Anand',
+    CLINICIAN: 'Isha Verma',
+    ADMIN: 'Asha Nair',
+  };
   const createLoggedInUser = async (email: string, role: Role) => {
     const user = await ctx.prisma.user.create({
       data: {
         email,
         passwordHash: await ctx.app.get(PasswordService).hash(password),
-        name: role,
+        name: NAME_BY_ROLE[role],
         role,
         status: UserStatus.ACTIVE,
         emailVerifiedAt: new Date(),
@@ -268,6 +276,278 @@ describe('Conversations (e2e)', () => {
     });
   });
 
+  describe('summaries', () => {
+    const output = {
+      overview: 'The family talked about broken sleep and a calmer evening routine.',
+      themes: ['sleep', 'routines'],
+      parentConcerns: ['Frequent night waking'],
+      guidanceGiven: ['Keep the same wind-down steps each evening'],
+      openQuestions: ['Whether daytime naps are too long'],
+      followUpSuggested: true,
+    };
+    let otherClinician: U;
+    let readyId: string; // HUMAN, summary READY, messages still stored
+    let aiId: string; // AI, summary READY
+    let openId: string; // OPEN, no summary
+
+    const summaryJobs = (conversationId: string) =>
+      ctx.prisma.job.findMany({
+        where: {
+          type: 'conversation.summarise',
+          payload: { path: ['conversationId'], equals: conversationId },
+        },
+      });
+    const summaryOf = (conversationId: string) =>
+      ctx.prisma.conversationSummary.findUniqueOrThrow({ where: { conversationId } });
+    const chatWithTwoMessages = async () => {
+      const id = await startChat();
+      await send(id, parent.token, 'Alex wakes at night, call me on 98765 43210', 'sm-1');
+      await send(id, expert.token, 'Thanks Meera, keep the routine steady', 'sm-2');
+      return id;
+    };
+
+    beforeAll(async () => {
+      otherClinician = await createLoggedInUser('cv-clinician2@example.com', Role.CLINICIAN);
+      await ctx.prisma.clinicianChildAssignment.create({
+        data: { clinicianId: clinician.id, childId, assignedByAdminId: admin.id },
+      });
+      ctx.ai.reset();
+      ctx.ai.willReturn(output);
+      readyId = await chatWithTwoMessages();
+      expect((await post(`/conversations/${readyId}/close`, parent.token)).status).toBe(200);
+      openId = await startChat();
+      const ai = await ctx.prisma.conversation.create({
+        data: {
+          kind: ConversationKind.AI,
+          topic: 'TODAYS_ACTIVITIES',
+          childId,
+          parentId: parent.id,
+          status: ConversationStatus.CLOSED,
+          closedAt: new Date(),
+        },
+      });
+      aiId = ai.id;
+      await ctx.prisma.conversationSummary.create({
+        data: {
+          conversationId: aiId,
+          childId,
+          status: SummaryStatus.READY,
+          generatedAt: new Date(),
+          content: { ...output, participantsKind: 'AI' },
+        },
+      });
+    });
+
+    it('closing queues one job and the summary is READY; the model only saw scrubbed text', async () => {
+      expect(await summaryJobs(readyId)).toHaveLength(1);
+      const [job] = await summaryJobs(readyId);
+      expect(job).toMatchObject({
+        status: 'SUCCEEDED',
+        dedupeKey: `summary:${readyId}`,
+        payload: { conversationId: readyId },
+      });
+      expect(await summaryOf(readyId)).toMatchObject({
+        status: 'READY',
+        childId,
+        content: { ...output, participantsKind: 'HUMAN' },
+        failureReason: null,
+        promptVersion: 1,
+      });
+
+      expect(ctx.ai.calls).toHaveLength(1);
+      const call = ctx.ai.calls[0];
+      expect(call).toMatchObject({
+        capability: 'conversation-summary',
+        promptId: 'conversation-summary',
+      });
+      expect(call.actor).toEqual({ childId });
+      expect(call.user).toContain('the child wakes at night, call me on a phone number');
+      expect(call.user).toContain('Thanks the parent, keep the routine steady');
+      for (const leaked of ['Alex', 'Meera', '98765']) expect(call.user).not.toContain(leaked);
+
+      // A second close changes nothing: no second job, no second model call.
+      expect((await post(`/conversations/${readyId}/close`, parent.token)).status).toBe(200);
+      expect(await summaryJobs(readyId)).toHaveLength(1);
+      expect(ctx.ai.calls).toHaveLength(1);
+    });
+
+    it('the idle sweep closes a silent session, shows it as PENDING with a job, and the job finishes it', async () => {
+      const id = await chatWithTwoMessages();
+      await ctx.prisma.conversation.update({
+        where: { id },
+        data: { lastMessageAt: new Date(Date.now() - 25 * HOUR_MS) },
+      });
+
+      expect(await ctx.app.get(ConversationJobs).closeIdle()).toBe(1);
+
+      expect(await summaryOf(id)).toMatchObject({ status: 'PENDING', content: null });
+      const [job] = await summaryJobs(id);
+      expect(job).toMatchObject({ status: 'PENDING', dedupeKey: `summary:${id}`, maxAttempts: 3 });
+      const listed = await get(`/children/${childId}/conversations`, parent.token);
+      expect(listed.body.data.find((c: { id: string }) => c.id === id).summaryStatus).toBe(
+        'PENDING',
+      );
+
+      ctx.ai.reset();
+      ctx.ai.willReturn(output);
+      expect(await ctx.jobs.drain()).toMatchObject({ succeeded: 1, dead: 0 });
+      expect((await summaryOf(id)).status).toBe('READY');
+    });
+
+    it('a failing provider retries, then the job is DEAD; the backstop then writes a PLACEHOLDER and purges', async () => {
+      const id = await chatWithTwoMessages();
+      ctx.ai.reset();
+      for (let i = 0; i < 3; i++)
+        ctx.ai.willFail(new AiRunError('AI_PROVIDER', { retryable: true }));
+
+      expect((await post(`/conversations/${id}/close`, parent.token)).status).toBe(200);
+      expect(await summaryOf(id)).toMatchObject({ status: 'FAILED', failureReason: 'AI_PROVIDER' });
+      const [first] = await summaryJobs(id);
+      expect(first).toMatchObject({ status: 'PENDING', attempts: 1 });
+
+      for (let attempt = 2; attempt <= 3; attempt++) {
+        await ctx.prisma.job.update({
+          where: { id: first.id },
+          data: { runAt: new Date(Date.now() - 1000) },
+        });
+        await ctx.jobs.drain();
+      }
+      const [dead] = await summaryJobs(id);
+      expect(dead).toMatchObject({ status: 'DEAD', attempts: 3 });
+      expect(dead.lastError).toContain('AI_PROVIDER');
+      expect((await summaryOf(id)).status).toBe('FAILED');
+      expect(await ctx.prisma.message.count({ where: { conversationId: id } })).toBe(2);
+
+      // Thirty-one days on, the purge gives up on the summary and removes the raw messages.
+      const later = new Date(Date.now() + 31 * DAY_MS);
+      await ctx.app.get(ConversationJobs).purge(later);
+      expect(await summaryOf(id)).toMatchObject({
+        status: 'PLACEHOLDER',
+        failureReason: 'BACKSTOP_REACHED',
+        content: null,
+      });
+      expect(await ctx.prisma.message.count({ where: { conversationId: id } })).toBe(0);
+      expect((await summaryJobs(id))[0].status).toBe('DEAD');
+
+      const read = await get(`/conversations/${id}/summary`, parent.token);
+      expect(read.status).toBe(200);
+      expect(read.body).toMatchObject({ status: 'PLACEHOLDER', content: null });
+      expect(read.body.note).toMatch(
+        /^Summary unavailable; the conversation was removed on \d{4}-\d{2}-\d{2}\.$/,
+      );
+    });
+
+    it('a job that fails once and then succeeds ends READY', async () => {
+      const id = await chatWithTwoMessages();
+      ctx.ai.reset();
+      ctx.ai.willFail(new AiRunError('AI_TIMEOUT', { retryable: true }));
+      ctx.ai.willReturn(output);
+
+      await post(`/conversations/${id}/close`, parent.token);
+      expect((await summaryOf(id)).status).toBe('FAILED');
+      const [job] = await summaryJobs(id);
+      await ctx.prisma.job.update({
+        where: { id: job.id },
+        data: { runAt: new Date(Date.now() - 1000) },
+      });
+      await ctx.jobs.drain();
+
+      expect(await summaryOf(id)).toMatchObject({ status: 'READY', failureReason: null });
+      expect((await summaryJobs(id))[0].status).toBe('SUCCEEDED');
+    });
+
+    it('reading one summary: parent own, the conversation expert, an assigned clinician and admin; nobody else', async () => {
+      const path = `/conversations/${readyId}/summary`;
+      for (const who of [parent, expert, clinician, admin]) {
+        const res = await get(path, who.token);
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({
+          conversationId: readyId,
+          kind: 'HUMAN',
+          status: 'READY',
+          content: { ...output, participantsKind: 'HUMAN' },
+          note: null,
+        });
+      }
+      for (const who of [otherParent, strangerExpert, otherClinician]) {
+        expect((await get(path, who.token)).status).toBe(403);
+      }
+    });
+
+    it('an AI conversation summary is for the parent, the assigned clinician and admin, not an expert', async () => {
+      const path = `/conversations/${aiId}/summary`;
+      for (const who of [parent, clinician, admin]) {
+        const res = await get(path, who.token);
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ kind: 'AI', status: 'READY' });
+      }
+      expect((await get(path, expert.token)).status).toBe(403);
+    });
+
+    it('an expert who lost the child assignment can no longer read the summary', async () => {
+      await ctx.prisma.expertChildAssignment.delete({
+        where: { expertId_childId: { expertId: expert.id, childId } },
+      });
+      try {
+        expect((await get(`/conversations/${readyId}/summary`, expert.token)).status).toBe(403);
+        expect(
+          (await get(`/children/${childId}/conversation-summaries`, expert.token)).status,
+        ).toBe(403);
+      } finally {
+        await ctx.prisma.expertChildAssignment.create({ data: { expertId: expert.id, childId } });
+      }
+    });
+
+    it('unknown conversation and a conversation without a summary are 404', async () => {
+      const missing = await get(`/conversations/${missingId}/summary`, admin.token);
+      expect(missing.status).toBe(404);
+      expect(missing.body.code).toBe('CONVERSATION_NOT_FOUND');
+      const none = await get(`/conversations/${openId}/summary`, parent.token);
+      expect(none.status).toBe(404);
+      expect(none.body.code).toBe('SUMMARY_NOT_FOUND');
+      expect((await get('/conversations/not-a-uuid/summary', admin.token)).status).toBe(400);
+    });
+
+    it('listing a child: parent, assigned clinician and admin see all; the expert only their own chats; others 403', async () => {
+      const path = `/children/${childId}/conversation-summaries`;
+      const ids = (res: request.Response) =>
+        res.body.data.map((s: { conversationId: string }) => s.conversationId);
+
+      for (const who of [parent, clinician, admin]) {
+        const res = await get(path, who.token);
+        expect(res.status).toBe(200);
+        expect(ids(res)).toEqual(expect.arrayContaining([readyId, aiId]));
+      }
+      const expertView = await get(path, expert.token);
+      expect(expertView.status).toBe(200);
+      expect(ids(expertView)).toContain(readyId);
+      expect(ids(expertView)).not.toContain(aiId);
+
+      for (const who of [otherParent, strangerExpert, otherClinician]) {
+        expect((await get(path, who.token)).status).toBe(403);
+      }
+      expect(
+        (await get(`/children/${otherChildId}/conversation-summaries`, parent.token)).status,
+      ).toBe(403);
+      expect((await get(`/children/${missingId}/conversation-summaries`, admin.token)).status).toBe(
+        404,
+      );
+
+      const paged = await get(`${path}?limit=1`, parent.token);
+      expect(paged.body.data).toHaveLength(1);
+      expect(paged.body.nextCursor).not.toBeNull();
+      const next = await get(`${path}?limit=1&cursor=${paged.body.nextCursor}`, parent.token);
+      expect(next.body.data[0].id).not.toBe(paged.body.data[0].id);
+    });
+
+    it('the summary responses carry no raw message text', async () => {
+      const res = await get(`/children/${childId}/conversation-summaries`, admin.token);
+      const text = JSON.stringify(res.body);
+      expect(text).not.toContain('wakes at night');
+      expect(text).not.toContain('98765');
+    });
+  });
+
   describe('retention jobs (clock-controlled)', () => {
     const now = new Date('2026-12-01T12:00:00.000Z');
     const ago = (ms: number, from: Date = now) => new Date(from.getTime() - ms);
@@ -459,6 +739,8 @@ describe('Conversations (e2e)', () => {
     });
 
     it('both jobs are registered with the real queue and run through it', async () => {
+      // Summary jobs queued by the closes above are not what this test is about.
+      await ctx.prisma.job.deleteMany({ where: { type: 'conversation.summarise' } });
       const registry = ctx.app.get(JobHandlerRegistry);
       expect(registry.has(CLOSE_IDLE_JOB) && registry.has(PURGE_JOB)).toBe(true);
       expect(registry.recurringJobs().map((r) => r.type)).toEqual(

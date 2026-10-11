@@ -14,7 +14,7 @@ export type SafetyVerdict = 'ok' | { reject: string };
  * The list is the engineering draft of the blocklist; clinician sign-off on it is launch gate G3,
  * and it is English-only until that review decides on Hindi/Hinglish coverage.
  */
-const BLOCKLIST: { code: string; pattern: RegExp }[] = [
+export const BLOCKLIST: { code: string; pattern: RegExp }[] = [
   {
     code: 'MEDICATION',
     pattern:

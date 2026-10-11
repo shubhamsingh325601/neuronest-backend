@@ -2,17 +2,20 @@ import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { ConversationStatus, SummaryStatus } from '@prisma/client';
 import { JobHandlerRegistry } from '@common/jobs/job-handler.registry';
+import { JobQueueService } from '@common/jobs/job-queue.service';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { SUMMARISE_JOB } from './conversation-summary.queue';
 import { CLOSE_IDLE_JOB, ConversationJobs, PURGE_JOB } from './conversation.jobs';
 
 describe('ConversationJobs', () => {
   const tx = {
-    conversationSummary: { upsert: jest.fn() },
+    conversationSummary: { upsert: jest.fn(), createMany: jest.fn() },
     message: { deleteMany: jest.fn() },
     conversation: { updateMany: jest.fn() },
   };
+  const queue = { enqueue: jest.fn(), kick: jest.fn() };
   const prisma = {
-    conversation: { updateMany: jest.fn(), findMany: jest.fn() },
+    conversation: { findMany: jest.fn() },
     $transaction: jest.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
   };
   let registry: JobHandlerRegistry;
@@ -30,6 +33,7 @@ describe('ConversationJobs', () => {
         ConversationJobs,
         { provide: PrismaService, useValue: prisma },
         { provide: JobHandlerRegistry, useValue: registry },
+        { provide: JobQueueService, useValue: queue },
         {
           provide: ConfigService,
           useValue: {
@@ -43,22 +47,47 @@ describe('ConversationJobs', () => {
   });
 
   describe('closeIdle', () => {
-    it('closes OPEN sessions idle past the cutoff, counting an empty session from its creation', async () => {
-      prisma.conversation.updateMany.mockResolvedValue({ count: 2 });
+    const cutoff = new Date('2026-11-19T12:00:00.000Z');
+    const idleWhere = {
+      status: ConversationStatus.OPEN,
+      OR: [{ lastMessageAt: { lt: cutoff } }, { lastMessageAt: null, createdAt: { lt: cutoff } }],
+    };
+
+    it('closes OPEN sessions idle past the cutoff, counting an empty session from its creation, and queues each summary', async () => {
+      prisma.conversation.findMany.mockResolvedValue([
+        { id: 'c-1', childId: 'child-1' },
+        { id: 'c-2', childId: 'child-2' },
+      ]);
+      tx.conversation.updateMany.mockResolvedValue({ count: 1 });
 
       await expect(jobs.closeIdle(now)).resolves.toBe(2);
 
-      const cutoff = new Date('2026-11-19T12:00:00.000Z');
-      expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
-        where: {
-          status: ConversationStatus.OPEN,
-          OR: [
-            { lastMessageAt: { lt: cutoff } },
-            { lastMessageAt: null, createdAt: { lt: cutoff } },
-          ],
-        },
+      expect(prisma.conversation.findMany.mock.calls[0][0].where).toEqual(idleWhere);
+      expect(tx.conversation.updateMany).toHaveBeenCalledWith({
+        where: { id: 'c-1', ...idleWhere },
         data: { status: ConversationStatus.CLOSED, closedAt: now },
       });
+      expect(tx.conversationSummary.createMany).toHaveBeenCalledWith({
+        data: [{ conversationId: 'c-1', childId: 'child-1' }],
+        skipDuplicates: true,
+      });
+      expect(queue.enqueue).toHaveBeenCalledTimes(2);
+      expect(queue.enqueue).toHaveBeenCalledWith(tx, {
+        type: SUMMARISE_JOB,
+        payload: { conversationId: 'c-1' },
+        dedupeKey: 'summary:c-1',
+        maxAttempts: 3,
+      });
+      // A job must not kick the queue it is running in.
+      expect(queue.kick).not.toHaveBeenCalled();
+    });
+
+    it('does not queue a summary for a session that received a message in the meantime', async () => {
+      prisma.conversation.findMany.mockResolvedValue([{ id: 'c-1', childId: 'child-1' }]);
+      tx.conversation.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(jobs.closeIdle(now)).resolves.toBe(0);
+      expect(queue.enqueue).not.toHaveBeenCalled();
     });
   });
 

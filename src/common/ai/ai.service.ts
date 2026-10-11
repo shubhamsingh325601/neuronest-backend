@@ -20,8 +20,8 @@ export interface AiStructuredRequest<T> {
   schema: ZodType<T>;
   /** Semantic/safety checks on a schema-valid output. A rejection counts as INVALID_OUTPUT. */
   postCheck?: (output: T) => 'ok' | { reject: string };
-  /** Who the spend is attributed to. Metadata only. */
-  actor: { userId: string; childId?: string };
+  /** Who the spend is attributed to. Metadata only. `userId` is left out for system jobs (no requester). */
+  actor: { userId?: string; childId?: string };
   maxOutputTokens?: number;
 }
 

@@ -18,9 +18,9 @@ function nameRegex(tokens: string[]): RegExp | null {
 }
 
 /** Pseudonymise: replace the child's name parts (case-insensitive, whole words) with "the child". */
-export function scrubName(text: string, tokens: string[]): string {
+export function scrubName(text: string, tokens: string[], placeholder = CHILD_PLACEHOLDER): string {
   const re = nameRegex(tokens);
-  return re ? text.replace(re, CHILD_PLACEHOLDER) : text;
+  return re ? text.replace(re, placeholder) : text;
 }
 
 export function containsName(text: string, tokens: string[]): boolean {

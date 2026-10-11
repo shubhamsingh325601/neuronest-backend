@@ -18,6 +18,7 @@
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.config.ts --runInBand",
     "ai:eval": "ts-node -r tsconfig-paths/register test/ai/run-eval.ts",
+    "ai:eval:summary": "ts-node -r tsconfig-paths/register test/ai/run-summary-eval.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
