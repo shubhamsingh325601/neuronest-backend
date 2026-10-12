@@ -183,6 +183,15 @@ export const envValidationSchema = Joi.object({
   AI_DAILY_REQUEST_BUDGET: Joi.number().integer().min(1).default(400),
   AI_OUTPUT_RETENTION_DAYS: Joi.number().integer().min(1).default(14),
 
+  // Guided AI chat caps (plan 0019 section 6.4).
+  AI_CHAT_OFF_TOPIC_LIMIT: Joi.number().integer().min(1).default(3),
+  AI_CHAT_MAX_MESSAGE_CHARS: Joi.number().integer().min(1).max(2000).default(1000),
+  AI_CHAT_DAILY_MESSAGES: Joi.number().integer().min(1).default(30),
+  AI_CHAT_MAX_TURNS: Joi.number().integer().min(1).default(40),
+  AI_CHAT_HISTORY_MESSAGES: Joi.number().integer().min(0).max(50).default(10),
+  AI_CHAT_MAX_OUTPUT_TOKENS: Joi.number().integer().min(50).max(8192).default(400),
+  AI_CHAT_TOTAL_TIMEOUT_MS: Joi.number().integer().min(5000).max(300000).default(60000),
+
   // Conversation retention (plan 0019 section 8). The backstop may not come before the normal purge.
   CONVERSATION_IDLE_CLOSE_HOURS: Joi.number().integer().min(1).default(24),
   CONVERSATION_PURGE_IDLE_DAYS: Joi.number().integer().min(1).default(7),

@@ -88,6 +88,21 @@ export interface AppConfig {
     dailyRequestBudget: number;
     outputRetentionDays: number;
   };
+  /** Guided AI chat caps (plan 0019 section 6.4). */
+  aiChat: {
+    /** Strikes (off-topic replies) after which the conversation is closed. */
+    offTopicLimit: number;
+    maxMessageChars: number;
+    /** Parent messages per user per Pacific day, across all AI chats. */
+    dailyMessages: number;
+    /** Parent messages per conversation. */
+    maxTurns: number;
+    /** Earlier messages sent to the model as history. */
+    historyMessages: number;
+    maxOutputTokens: number;
+    /** Upper bound for one streamed reply; a silent provider is cut sooner by `ai.timeoutMs`. */
+    totalTimeoutMs: number;
+  };
   conversations: {
     /** An OPEN conversation with no message for this many hours is closed by the sweep. */
     idleCloseHours: number;
@@ -178,6 +193,15 @@ export const configuration = (): AppConfig => ({
     userDailyLimit: parseInt(process.env.AI_USER_DAILY_LIMIT ?? '3', 10),
     dailyRequestBudget: parseInt(process.env.AI_DAILY_REQUEST_BUDGET ?? '400', 10),
     outputRetentionDays: parseInt(process.env.AI_OUTPUT_RETENTION_DAYS ?? '14', 10),
+  },
+  aiChat: {
+    offTopicLimit: parseInt(process.env.AI_CHAT_OFF_TOPIC_LIMIT ?? '3', 10),
+    maxMessageChars: parseInt(process.env.AI_CHAT_MAX_MESSAGE_CHARS ?? '1000', 10),
+    dailyMessages: parseInt(process.env.AI_CHAT_DAILY_MESSAGES ?? '30', 10),
+    maxTurns: parseInt(process.env.AI_CHAT_MAX_TURNS ?? '40', 10),
+    historyMessages: parseInt(process.env.AI_CHAT_HISTORY_MESSAGES ?? '10', 10),
+    maxOutputTokens: parseInt(process.env.AI_CHAT_MAX_OUTPUT_TOKENS ?? '400', 10),
+    totalTimeoutMs: parseInt(process.env.AI_CHAT_TOTAL_TIMEOUT_MS ?? '60000', 10),
   },
   conversations: {
     idleCloseHours: parseInt(process.env.CONVERSATION_IDLE_CLOSE_HOURS ?? '24', 10),

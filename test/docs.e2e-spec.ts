@@ -67,6 +67,13 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
     path: '/v1/children/{childId}/conversation-summaries',
     operationId: 'conversationSummaryList',
   },
+  { method: 'get', path: '/v1/ai-chat/topics', operationId: 'aiChatTopicList' },
+  {
+    method: 'post',
+    path: '/v1/children/{childId}/ai-conversations',
+    operationId: 'aiConversationCreate',
+  },
+  { method: 'post', path: '/v1/ai-conversations/{id}/messages', operationId: 'aiConversationSend' },
   { method: 'get', path: '/v1/clinicians', operationId: 'clinicianList' },
   { method: 'post', path: '/v1/clinicians', operationId: 'clinicianCreate' },
   { method: 'get', path: '/v1/clinicians/{id}', operationId: 'clinicianGet' },

@@ -89,6 +89,31 @@ describe('envValidationSchema', () => {
     });
   });
 
+  describe('guided AI chat (plan 0019)', () => {
+    it('defaults to the planned caps', () => {
+      const { value, error } = envValidationSchema.validate(base);
+      expect(error).toBeUndefined();
+      expect(value).toMatchObject({
+        AI_CHAT_OFF_TOPIC_LIMIT: 3,
+        AI_CHAT_MAX_MESSAGE_CHARS: 1000,
+        AI_CHAT_DAILY_MESSAGES: 30,
+        AI_CHAT_MAX_TURNS: 40,
+        AI_CHAT_HISTORY_MESSAGES: 10,
+        AI_CHAT_MAX_OUTPUT_TOKENS: 400,
+        AI_CHAT_TOTAL_TIMEOUT_MS: 60000,
+      });
+    });
+
+    it('rejects non-positive caps and a message limit above what the API accepts', () => {
+      expect(validate({ ...base, AI_CHAT_OFF_TOPIC_LIMIT: '0' }).error?.message).toContain(
+        'AI_CHAT_OFF_TOPIC_LIMIT',
+      );
+      expect(validate({ ...base, AI_CHAT_MAX_MESSAGE_CHARS: '2001' }).error?.message).toContain(
+        'AI_CHAT_MAX_MESSAGE_CHARS',
+      );
+    });
+  });
+
   describe('AI (plan 0018)', () => {
     it('defaults to disabled with the planned limits', () => {
       const { value, error } = envValidationSchema.validate(base);

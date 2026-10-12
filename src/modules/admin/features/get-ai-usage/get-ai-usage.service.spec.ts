@@ -66,6 +66,7 @@ describe('GetAiUsageService', () => {
         TIMEOUT: 0,
         PROVIDER_ERROR: 0,
         REJECTED_BUDGET: 2,
+        CLIENT_ABORTED: 0,
       },
       tokens: { input: 400, output: 250 },
       costEstimateMicroUsd: 745,

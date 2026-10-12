@@ -552,6 +552,7 @@ enum AiRunStatus {
   TIMEOUT
   PROVIDER_ERROR // 4xx/5xx other than 429
   REJECTED_BUDGET // refused by our own budget; no provider request was made
+  CLIENT_ABORTED // our AbortController fired because the client left a stream; tokens are null
 }
 
 /// One row per provider ATTEMPT (primary = 1, fallback = 2). Metadata only: never a prompt,

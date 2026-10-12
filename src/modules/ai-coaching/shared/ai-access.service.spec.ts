@@ -69,6 +69,53 @@ describe('AiAccessService', () => {
     });
   });
 
+  describe('assertCanChat', () => {
+    it('returns the child for its own parent when AI is enabled', async () => {
+      const { service, children } = make();
+      const parent = user(Role.PARENT, 'parent-1');
+
+      await expect(service.assertCanChat('c1', parent)).resolves.toBe(child);
+      expect(children.getById).toHaveBeenCalledWith('c1', parent);
+    });
+
+    it('delegates ownership: an unrelated parent or missing child fails as GetChildService does', async () => {
+      const { service, children } = make();
+      children.getById.mockRejectedValueOnce(new ForbiddenException());
+      await expect(service.assertCanChat('c1', user(Role.PARENT, 'other'))).rejects.toThrow(
+        ForbiddenException,
+      );
+      children.getById.mockRejectedValueOnce(new NotFoundException());
+      await expect(service.assertCanChat('c1', user(Role.PARENT))).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it.each([Role.ADMIN, Role.CLINICIAN, Role.EXPERT])('%s is refused: 403', async (role) => {
+      const { service } = make();
+      await expect(service.assertCanChat('c1', user(role))).rejects.toThrow(ForbiddenException);
+    });
+
+    it('another parent id on the child is refused even when GetChildService allows the read', async () => {
+      const { service } = make();
+      await expect(service.assertCanChat('c1', user(Role.PARENT, 'someone-else'))).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('503 AI_DISABLED when the feature flag is off, with the chat wording', async () => {
+      const { service } = make(false);
+      const err = await service
+        .assertCanChat('c1', user(Role.PARENT, 'parent-1'))
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(ServiceUnavailableException);
+      expect((err as ServiceUnavailableException).getResponse()).toMatchObject({
+        code: 'AI_DISABLED',
+        message: 'AI chat is not enabled.',
+      });
+    });
+  });
+
   describe('getChildForRead', () => {
     it('is GetChildService with the real caller, and ignores the flag', async () => {
       const { service, children } = make(false);

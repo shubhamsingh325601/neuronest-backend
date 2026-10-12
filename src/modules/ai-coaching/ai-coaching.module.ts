@@ -27,5 +27,6 @@ import { CoachingTipGenerator } from './shared/coaching-tip.generator';
     GetCoachingTipService,
     AiCoachingJobs,
   ],
+  exports: [AiAccessService],
 })
 export class AiCoachingModule {}

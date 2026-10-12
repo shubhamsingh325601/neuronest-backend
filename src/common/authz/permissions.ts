@@ -100,6 +100,9 @@ export const PERMISSIONS = [
   // Summaries of closed chats (Phase 19). Parent own, the conversation's expert, assigned clinician;
   // ADMIN through the spread. Scope is enforced in the services, with a default-deny per role.
   'conversation-summary:read',
+  // Guided AI chat (Phase 19). The child's own PARENT only: ADMIN reaches it through the spread, so the
+  // services refuse it; EXPERT and CLINICIAN never chat with the AI (plan 0019 section 10).
+  'ai-chat:send:self',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -138,6 +141,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'conversation:read',
     'conversation:close',
     'conversation-summary:read',
+    'ai-chat:send:self',
   ],
   [Role.CLINICIAN]: [
     ...SELF_PERMISSIONS,

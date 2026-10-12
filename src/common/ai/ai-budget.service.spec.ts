@@ -28,15 +28,20 @@ describe('AiBudgetService', () => {
     expect(await make(401).service.hasCapacity()).toBe(false);
   });
 
-  it("counts a user's first-attempt runs since Pacific midnight", async () => {
+  it("counts a user's first-attempt runs of one capability since Pacific midnight", async () => {
     const { service, prisma } = make(2);
 
-    const used = await service.generationsByUserToday('u1', new Date('2026-07-15T20:30:00Z'));
+    const used = await service.generationsByUserToday(
+      'u1',
+      'coaching-tip',
+      new Date('2026-07-15T20:30:00Z'),
+    );
 
     expect(used).toBe(2);
     expect(prisma.aiRun.count).toHaveBeenCalledWith({
       where: {
         userId: 'u1',
+        capability: 'coaching-tip',
         attempt: 1,
         createdAt: { gte: new Date('2026-07-15T07:00:00.000Z') },
         status: { not: AiRunStatus.REJECTED_BUDGET },

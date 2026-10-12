@@ -32,13 +32,18 @@ export class AiBudgetService {
   }
 
   /**
-   * Generations this user started today (Pacific day): one first-attempt run per generation, so a
-   * fallback attempt or a refused-by-budget run does not count against their personal limit.
+   * Generations this user started today (Pacific day) for one capability: one first-attempt run per
+   * generation, so a fallback attempt or a refused-by-budget run does not count against their personal limit.
    */
-  async generationsByUserToday(userId: string, now: Date = new Date()): Promise<number> {
+  async generationsByUserToday(
+    userId: string,
+    capability: string,
+    now: Date = new Date(),
+  ): Promise<number> {
     return this.prisma.aiRun.count({
       where: {
         userId,
+        capability,
         attempt: 1,
         createdAt: { gte: pacificDayStart(now) },
         status: { not: AiRunStatus.REJECTED_BUDGET },

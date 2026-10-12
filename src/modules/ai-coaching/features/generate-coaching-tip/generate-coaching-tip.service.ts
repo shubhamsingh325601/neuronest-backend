@@ -139,7 +139,7 @@ export class GenerateCoachingTipService {
 
   private async assertUserLimit(userId: string, now: Date): Promise<void> {
     const limit = this.config.get('ai', { infer: true }).userDailyLimit;
-    if ((await this.budget.generationsByUserToday(userId, now)) >= limit) {
+    if ((await this.budget.generationsByUserToday(userId, COACHING_TIP_CAPABILITY, now)) >= limit) {
       throw new HttpException(
         {
           code: 'AI_USER_LIMIT_REACHED',

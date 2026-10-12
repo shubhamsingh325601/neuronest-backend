@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AiRunStatus" ADD VALUE 'CLIENT_ABORTED';

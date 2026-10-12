@@ -33,7 +33,23 @@ export class AiAccessService {
    * `ai-coaching:generate:self` reaches ADMIN through the `...PERMISSIONS` spread, hence the role
    * check here (same stance as `progress:write:self`).
    */
-  async assertCanGenerate(childId: string, caller: AuthenticatedUser): Promise<ChildDto> {
+  assertCanGenerate(childId: string, caller: AuthenticatedUser): Promise<ChildDto> {
+    return this.assertOwnParent(childId, caller, 'AI coaching tips are not enabled.');
+  }
+
+  /**
+   * The guided AI chat (plan 0019): the child's own parent only, same rule as a generation. `ai-chat:send:self`
+   * reaches ADMIN through the spread, so ADMIN is refused here.
+   */
+  assertCanChat(childId: string, caller: AuthenticatedUser): Promise<ChildDto> {
+    return this.assertOwnParent(childId, caller, 'AI chat is not enabled.');
+  }
+
+  private async assertOwnParent(
+    childId: string,
+    caller: AuthenticatedUser,
+    disabledMessage: string,
+  ): Promise<ChildDto> {
     const child = await this.children.getById(childId, caller);
     if (caller.role !== Role.PARENT || child.parentId !== caller.id) {
       throw new ForbiddenException({
@@ -42,10 +58,7 @@ export class AiAccessService {
       });
     }
     if (!this.enabled) {
-      throw new ServiceUnavailableException({
-        code: 'AI_DISABLED',
-        message: 'AI coaching tips are not enabled.',
-      });
+      throw new ServiceUnavailableException({ code: 'AI_DISABLED', message: disabledMessage });
     }
     return child;
   }

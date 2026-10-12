@@ -14,7 +14,7 @@ export interface ClassifiedFailure {
 }
 
 export const STATUS_TO_CODE: Record<
-  Exclude<AiRunStatus, 'SUCCEEDED' | 'REJECTED_BUDGET'>,
+  Exclude<AiRunStatus, 'SUCCEEDED' | 'REJECTED_BUDGET' | 'CLIENT_ABORTED'>,
   AiRunErrorCode
 > = {
   INVALID_OUTPUT: 'AI_INVALID_OUTPUT',

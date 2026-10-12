@@ -43,7 +43,7 @@ export const FIXTURE_DIR = join(__dirname, 'fixtures');
 export function loadFixtures(dir: string = FIXTURE_DIR): EvalFixture[] {
   const fixtures: EvalFixture[] = [];
   for (const file of readdirSync(dir)
-    .filter((f) => f.endsWith('.json') && !f.startsWith('summary-'))
+    .filter((f) => f.endsWith('.json') && !f.startsWith('summary-') && !f.startsWith('chat-'))
     .sort()) {
     const raw: unknown = JSON.parse(readFileSync(join(dir, file), 'utf8'));
     const parsed = z.array(fixtureSchema).safeParse(raw);

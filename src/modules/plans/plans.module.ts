@@ -84,6 +84,6 @@ import { ReplacePlanSectionsService } from './features/replace-plan-sections/rep
     DeletePlanDayService,
     ReplacePlanSectionsService,
   ],
-  exports: [TodayFocusService],
+  exports: [TodayFocusService, GetPlanService],
 })
 export class PlansModule {}
