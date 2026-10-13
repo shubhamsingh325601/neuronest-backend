@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserStatus } from '@prisma/client';
+import { Role, UserStatus } from '@prisma/client';
 import type { Request } from 'express';
 import type { AppConfig } from '@common/config/configuration';
 import { PrismaService } from '@common/prisma/prisma.service';
@@ -24,6 +24,7 @@ import type { AuthenticatedUser, JwtPayload } from './jwt-payload.type';
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   private readonly accessSecret: string;
+  private readonly impersonationEnabled: boolean;
 
   constructor(
     private readonly reflector: Reflector,
@@ -32,6 +33,7 @@ export class JwtAuthGuard implements CanActivate {
     config: ConfigService<AppConfig, true>,
   ) {
     this.accessSecret = config.get('jwt', { infer: true }).accessSecret;
+    this.impersonationEnabled = config.get('impersonation', { infer: true }).enabled;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -91,9 +93,36 @@ export class JwtAuthGuard implements CanActivate {
       email: account.email,
       role: account.role,
       status: account.status,
+      ...(payload.imp ? { impersonatedBy: await this.verifyImpersonator(payload.imp, account.role) } : {}),
     };
     (request as Request & { user: AuthenticatedUser }).user = user;
     return true;
+  }
+
+  /**
+   * An impersonation token (claim `imp`) is honoured only while the feature is switched on, for a PARENT
+   * target, and while the admin who minted it is still an active ADMIN. Anything else reads as an
+   * invalid token, so turning the flag off or deactivating the admin ends every such session at once.
+   */
+  private async verifyImpersonator(adminId: string, targetRole: Role): Promise<string> {
+    const admin = this.impersonationEnabled
+      ? await this.prisma.user.findUnique({
+          where: { id: adminId },
+          select: { role: true, status: true },
+        })
+      : null;
+    if (
+      !admin ||
+      admin.role !== Role.ADMIN ||
+      admin.status !== UserStatus.ACTIVE ||
+      targetRole !== Role.PARENT
+    ) {
+      throw new UnauthorizedException({
+        code: 'INVALID_TOKEN',
+        message: 'Access token is invalid or expired.',
+      });
+    }
+    return adminId;
   }
 
   private extractBearer(request: Request): string | null {

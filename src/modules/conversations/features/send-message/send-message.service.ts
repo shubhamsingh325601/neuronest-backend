@@ -7,6 +7,8 @@ import {
 import { ConversationKind, ConversationStatus, MessageSender, Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { messageAppended } from '@modules/conversations/shared/conversation-event';
+import { ConversationEventBus } from '@modules/conversations/shared/conversation-event-bus';
 import { MessageDto } from '@modules/conversations/shared/conversation.dto';
 import { loadParticipantConversation } from '@modules/conversations/shared/load-participant-conversation';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -14,11 +16,15 @@ import { SendMessageDto } from './dto/send-message.dto';
 /**
  * Appends a message to a HUMAN conversation. The conversation row is locked (`FOR UPDATE`) for the
  * length of the transaction, so two simultaneous sends cannot receive the same `seq`, and a send
- * cannot slip in after a close. A repeated `clientMessageId` returns the stored message.
+ * cannot slip in after a close. A repeated `clientMessageId` returns the stored message. A new message
+ * is announced on the event bus after the transaction commits (live events stream; push later).
  */
 @Injectable()
 export class SendMessageService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bus: ConversationEventBus,
+  ) {}
 
   async send(id: string, dto: SendMessageDto, caller: AuthenticatedUser): Promise<MessageDto> {
     const conversation = await loadParticipantConversation(this.prisma, id, caller);
@@ -30,7 +36,7 @@ export class SendMessageService {
     }
     const sender = caller.role === Role.PARENT ? MessageSender.PARENT : MessageSender.EXPERT;
 
-    return this.prisma.$transaction(async (tx) => {
+    const { message, created } = await this.prisma.$transaction(async (tx) => {
       const [locked] = await tx.$queryRaw<{ status: ConversationStatus; lastMessageSeq: number }[]>`
         SELECT "status", "lastMessageSeq" FROM "conversations" WHERE "id" = ${id}::uuid FOR UPDATE`;
       if (!locked) {
@@ -55,7 +61,7 @@ export class SendMessageService {
             message: 'That clientMessageId was already used by someone else in this conversation.',
           });
         }
-        return MessageDto.from(existing);
+        return { message: existing, created: false };
       }
 
       if (locked.status !== ConversationStatus.OPEN) {
@@ -82,7 +88,10 @@ export class SendMessageService {
           createdAt: now,
         },
       });
-      return MessageDto.from(message);
+      return { message, created: true };
     });
+
+    if (created) this.bus.publish(messageAppended(conversation, message));
+    return MessageDto.from(message);
   }
 }

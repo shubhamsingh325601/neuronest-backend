@@ -535,4 +535,79 @@ describe('AI chat (e2e)', () => {
       expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT', 'AI']);
     });
   });
+
+  describe('chat closed while the reply is streaming', () => {
+    it('ends with an error event coded CONVERSATION_CLOSED and stores no answer', async () => {
+      const { parent, childId } = await family();
+      const id = await openChat(parent, childId);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      ctx.ai.willStreamChat({
+        deltas: ['A first sentence here. ', 'And a second. '],
+        holdUntil: gate,
+      });
+      const server = ctx.app.getHttpServer();
+      if (!server.listening) await ctx.app.listen(0);
+      const { port } = server.address() as { port: number };
+
+      const response = await fetch(`http://127.0.0.1:${port}/v1/ai-conversations/${id}/messages`, {
+        method: 'POST',
+        headers: { ...auth(parent.token), 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Hello', clientMessageId: 'cl-1' }),
+      });
+      expect(response.status).toBe(200);
+      const reader = response.body!.getReader();
+      expect(await reader.read()).toMatchObject({ done: false }); // text is flowing
+
+      const close = await http().post(`/v1/conversations/${id}/close`).set(auth(parent.token));
+      expect(close.status).toBeLessThan(300);
+      release();
+
+      const decoder = new TextDecoder();
+      let rest = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        rest += decoder.decode(value);
+      }
+      const events = parseSse(rest);
+      expect(events[events.length - 1]).toEqual({
+        event: 'error',
+        data: { code: 'CONVERSATION_CLOSED' },
+      });
+      expect(events.map((e) => e.event)).not.toContain('done');
+      expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT']);
+    });
+  });
+
+  describe('the generic conversation endpoints on an AI chat', () => {
+    it('the parent can read its messages and close it; an expert, admin, clinician and other parent get 403', async () => {
+      const { parent, childId } = await family();
+      const id = await openChat(parent, childId);
+      ctx.ai.willStreamChat({ deltas: ['Try one short story. '] });
+      expect((await send(id, parent.token, 'Hello', 'g-1')).status).toBe(200);
+
+      for (const who of [expert, admin, clinician, otherParent]) {
+        const list = await http().get(`/v1/conversations/${id}/messages`).set(auth(who.token));
+        expect(list.status).toBe(403);
+        const close = await http().post(`/v1/conversations/${id}/close`).set(auth(who.token));
+        expect(close.status).toBe(403);
+      }
+      // The refusals changed nothing.
+      expect((await ctx.prisma.conversation.findUniqueOrThrow({ where: { id } })).status).toBe(
+        'OPEN',
+      );
+
+      const list = await http().get(`/v1/conversations/${id}/messages`).set(auth(parent.token));
+      expect(list.status).toBe(200);
+      expect(list.body.purged).toBe(false);
+      expect(list.body.items.map((m: { sender: string }) => m.sender)).toEqual(['PARENT', 'AI']);
+
+      const close = await http().post(`/v1/conversations/${id}/close`).set(auth(parent.token));
+      expect(close.status).toBeLessThan(300);
+      expect(close.body).toMatchObject({ id, kind: 'AI', status: 'CLOSED' });
+    });
+  });
 });

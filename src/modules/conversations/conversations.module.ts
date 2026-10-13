@@ -5,6 +5,9 @@ import { PlansModule } from '@modules/plans/plans.module';
 import { ProgressModule } from '@modules/progress/progress.module';
 import { CloseConversationController } from './features/close-conversation/close-conversation.controller';
 import { CloseConversationService } from './features/close-conversation/close-conversation.service';
+import { ConversationEventsController } from './features/conversation-events/conversation-events.controller';
+import { ConversationEventsGuard } from './features/conversation-events/conversation-events.guard';
+import { ConversationEventsService } from './features/conversation-events/conversation-events.service';
 import { CreateAiConversationController } from './features/create-ai-conversation/create-ai-conversation.controller';
 import { CreateAiConversationService } from './features/create-ai-conversation/create-ai-conversation.service';
 import { CreateConversationController } from './features/create-conversation/create-conversation.controller';
@@ -26,12 +29,16 @@ import { SendMessageService } from './features/send-message/send-message.service
 import { ConversationSummaryJobs } from './jobs/conversation-summary.jobs';
 import { ConversationJobs } from './jobs/conversation.jobs';
 import { AiChatContextBuilder } from './shared/ai-chat-context.builder';
+import { ConversationEventBus } from './shared/conversation-event-bus';
+import { InProcessConversationEventBus } from './shared/in-process-conversation-event-bus';
 
 /**
  * Chat sessions (plan 0019): parent-to-expert, and the parent's guided AI chat. Postgres is the only
  * store of message text; the retention jobs close idle sessions and hard-delete their messages. Closing
  * queues an AI summary, which is all that remains once the messages are purged. The AI chat reads the
- * child, plan and progress only through those modules' exported services.
+ * child, plan and progress only through those modules' exported services. The chat with an expert is
+ * delivered live over server-sent events, fed by `ConversationEventBus`: in-process today, replaceable
+ * by Postgres LISTEN/NOTIFY for several instances (see the bus for the seam).
  */
 @Module({
   imports: [AiCoachingModule, ChildrenModule, PlansModule, ProgressModule],
@@ -42,12 +49,16 @@ import { AiChatContextBuilder } from './shared/ai-chat-context.builder';
     CreateConversationController,
     SendMessageController,
     ListMessagesController,
+    ConversationEventsController,
     CloseConversationController,
     ListConversationsController,
     GetConversationSummaryController,
     ListConversationSummariesController,
   ],
   providers: [
+    { provide: ConversationEventBus, useClass: InProcessConversationEventBus },
+    ConversationEventsService,
+    ConversationEventsGuard,
     ListAiChatTopicsService,
     CreateAiConversationService,
     SendAiMessageService,

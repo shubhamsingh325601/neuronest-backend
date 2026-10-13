@@ -2,6 +2,7 @@ import { Role } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import type { JobQueueService } from '@common/jobs/job-queue.service';
 import type { PrismaService } from '@common/prisma/prisma.service';
+import type { ConversationEventBus } from '@modules/conversations/shared/conversation-event-bus';
 import { CloseConversationService } from './close-conversation.service';
 
 describe('CloseConversationService', () => {
@@ -15,9 +16,11 @@ describe('CloseConversationService', () => {
     $transaction: jest.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
   };
   const queue = { enqueue: jest.fn(), kick: jest.fn() };
+  const bus = { publish: jest.fn(), subscribe: jest.fn() };
   const service = new CloseConversationService(
     prisma as unknown as PrismaService,
     queue as unknown as JobQueueService,
+    bus as unknown as ConversationEventBus,
   );
   const parent = { id: 'parent-1', role: Role.PARENT, email: 'p@example.com' } as AuthenticatedUser;
   const row = {
@@ -59,6 +62,30 @@ describe('CloseConversationService', () => {
     expect(queue.kick).toHaveBeenCalledTimes(1);
   });
 
+  it('announces the close once on the event bus, with ids only, after the transaction', async () => {
+    tx.conversation.updateMany.mockResolvedValue({ count: 1 });
+    let committed = false;
+    prisma.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => {
+      const result = await fn(tx);
+      committed = true;
+      return result;
+    });
+    bus.publish.mockImplementation(() => expect(committed).toBe(true));
+
+    await service.close('c-1', parent);
+
+    expect(bus.publish).toHaveBeenCalledTimes(1);
+    expect(bus.publish).toHaveBeenCalledWith({
+      type: 'conversation-closed',
+      conversationId: 'c-1',
+      kind: 'HUMAN',
+      childId: 'child-1',
+      parentId: 'parent-1',
+      expertId: 'expert-1',
+      reason: 'MANUAL',
+    });
+  });
+
   it('queues nothing when the conversation was already closed', async () => {
     tx.conversation.updateMany.mockResolvedValue({ count: 0 });
 
@@ -66,5 +93,6 @@ describe('CloseConversationService', () => {
 
     expect(queue.enqueue).not.toHaveBeenCalled();
     expect(queue.kick).not.toHaveBeenCalled();
+    expect(bus.publish).not.toHaveBeenCalled();
   });
 });

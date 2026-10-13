@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { ConversationKind, MessageSender, Role, UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { ConversationEventBus } from '@modules/conversations/shared/conversation-event-bus';
 import { SendMessageService } from './send-message.service';
 
 describe('SendMessageService', () => {
@@ -16,6 +17,7 @@ describe('SendMessageService', () => {
     expertChildAssignment: { findUnique: jest.fn() },
     $transaction: jest.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
   };
+  const bus = { publish: jest.fn(), subscribe: jest.fn() };
   let service: SendMessageService;
   const parent: AuthenticatedUser = {
     id: 'pa-1',
@@ -42,7 +44,11 @@ describe('SendMessageService', () => {
       Promise.resolve({ id: 'm-1', state: 'COMPLETE', ...data }),
     );
     const moduleRef = await Test.createTestingModule({
-      providers: [SendMessageService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        SendMessageService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ConversationEventBus, useValue: bus },
+      ],
     }).compile();
     service = moduleRef.get(SendMessageService);
   });
@@ -58,6 +64,32 @@ describe('SendMessageService', () => {
     expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
       tx.conversation.update.mock.invocationCallOrder[0],
     );
+  });
+
+  it('announces a new message on the event bus after the commit: ids, seq and sender, no text', async () => {
+    let committed = false;
+    prisma.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => {
+      const result = await fn(tx);
+      committed = true;
+      return result;
+    });
+    bus.publish.mockImplementation(() => expect(committed).toBe(true));
+
+    await service.send('c-1', dto, parent);
+
+    expect(bus.publish).toHaveBeenCalledTimes(1);
+    expect(bus.publish).toHaveBeenCalledWith({
+      type: 'message-appended',
+      conversationId: 'c-1',
+      kind: ConversationKind.HUMAN,
+      childId: 'child-1',
+      parentId: 'pa-1',
+      expertId: 'ex-1',
+      messageId: 'm-1',
+      seq: 5,
+      sender: MessageSender.PARENT,
+    });
+    expect(JSON.stringify(bus.publish.mock.calls)).not.toContain('hello there');
   });
 
   it('records the expert as sender for an expert', async () => {
@@ -80,6 +112,7 @@ describe('SendMessageService', () => {
     await expect(service.send('c-1', dto, parent)).resolves.toMatchObject({ id: 'm-0', seq: 2 });
     expect(tx.message.create).not.toHaveBeenCalled();
     expect(tx.conversation.update).not.toHaveBeenCalled();
+    expect(bus.publish).not.toHaveBeenCalled();
   });
 
   it('still returns the stored message when the conversation has since closed', async () => {

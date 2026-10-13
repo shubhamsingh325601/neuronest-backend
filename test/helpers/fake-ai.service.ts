@@ -32,6 +32,8 @@ export interface FakeChatScript {
   fail?: AiRunError;
   /** After the deltas, wait until the client leaves (the caller's signal), then end quietly. */
   hang?: boolean;
+  /** After the deltas, wait for this promise before ending the reply (a test decides when). */
+  holdUntil?: Promise<void>;
 }
 
 /**
@@ -114,6 +116,7 @@ export class FakeAiService extends AiService {
       this.chatAborts += 1;
       return;
     }
+    if (script.holdUntil) await script.holdUntil;
     yield { type: 'end', finishReason: script.finishReason ?? 'stop' };
   }
 

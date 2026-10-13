@@ -103,9 +103,22 @@ export const PERMISSIONS = [
   // Guided AI chat (Phase 19). The child's own PARENT only: ADMIN reaches it through the spread, so the
   // services refuse it; EXPERT and CLINICIAN never chat with the AI (plan 0019 section 10).
   'ai-chat:send:self',
+  // TEMPORARY testing aid: an ADMIN mints a short-lived token that acts as a PARENT, so the parent
+  // features can be tried from the admin site. ADMIN only (through the spread) and inert unless
+  // IMPERSONATION_ENABLED=true. Remove before real families use the app (docs/rbac.md).
+  'user:impersonate',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+
+/**
+ * Self-service actions an impersonated session may not take: they would change the real account's
+ * credentials or lock it. Refused by PermissionsGuard with IMPERSONATION_RESTRICTED.
+ */
+export const IMPERSONATION_BLOCKED_PERMISSIONS: readonly Permission[] = [
+  'user:change-password:self',
+  'user:deactivate:self',
+];
 
 const SELF_PERMISSIONS: Permission[] = [
   'user:read:self',

@@ -19,29 +19,37 @@ export class AccessTokenService {
     this.ttl = jwt.accessTtl;
   }
 
-  /** Returns `{ accessToken, expiresIn }` (expiresIn in seconds). */
-  async issue(user: Pick<User, 'id' | 'email' | 'role' | 'status'>): Promise<{
+  /**
+   * Returns `{ accessToken, expiresIn }` (expiresIn in seconds). `options.impersonatedBy` marks a token
+   * an ADMIN is using to act as `user`; `options.ttl` overrides the normal lifetime (same "15m" form).
+   */
+  async issue(
+    user: Pick<User, 'id' | 'email' | 'role' | 'status'>,
+    options: { impersonatedBy?: string; ttl?: string } = {},
+  ): Promise<{
     accessToken: string;
     expiresIn: number;
   }> {
+    const ttl = options.ttl ?? this.ttl;
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
       status: user.status,
+      ...(options.impersonatedBy ? { imp: options.impersonatedBy } : {}),
     };
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: this.secret,
       // jsonwebtoken accepts a duration string ("15m"); its types are stricter than that.
-      expiresIn: this.ttl as unknown as number,
+      expiresIn: ttl as unknown as number,
     });
-    return { accessToken, expiresIn: this.ttlSeconds() };
+    return { accessToken, expiresIn: this.ttlSeconds(ttl) };
   }
 
-  private ttlSeconds(): number {
-    const match = /^(\d+)([smhd])$/.exec(this.ttl.trim());
+  private ttlSeconds(ttl: string): number {
+    const match = /^(\d+)([smhd])$/.exec(ttl.trim());
     if (!match) {
-      const asNumber = Number(this.ttl);
+      const asNumber = Number(ttl);
       return Number.isFinite(asNumber) ? asNumber : 900;
     }
     const value = Number(match[1]);

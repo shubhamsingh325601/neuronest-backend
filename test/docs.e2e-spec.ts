@@ -56,6 +56,8 @@ const EXPECTED: Array<{ method: string; path: string; operationId: string }> = [
   { method: 'get', path: '/v1/children/{childId}/conversations', operationId: 'conversationList' },
   { method: 'post', path: '/v1/conversations/{id}/messages', operationId: 'messageSend' },
   { method: 'get', path: '/v1/conversations/{id}/messages', operationId: 'messageList' },
+  { method: 'get', path: '/v1/conversations/{id}/events', operationId: 'conversationEvents' },
+  { method: 'post', path: '/v1/users/{id}/impersonate', operationId: 'userImpersonate' },
   { method: 'post', path: '/v1/conversations/{id}/close', operationId: 'conversationClose' },
   {
     method: 'get',

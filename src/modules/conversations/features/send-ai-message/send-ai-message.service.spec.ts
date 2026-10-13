@@ -1,4 +1,4 @@
-import { Logger, ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { MessageState, Role, UserStatus } from '@prisma/client';
 import { AiRunError, type AiChatEvent, type AiChatOutcome } from '@common/ai/ai.service';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
@@ -195,6 +195,26 @@ describe('SendAiMessageService', () => {
       name: 'error',
       data: { code: 'AI_TIMEOUT' },
     });
+  });
+
+  it('a chat closed while the reply streams ends with a CONVERSATION_CLOSED error event, not AI_FAILED', async () => {
+    const h = make({
+      run: scripted([
+        { type: 'delta', text: 'A calm answer. ' },
+        { type: 'end', finishReason: 'stop' },
+      ]),
+    });
+    h.storeReply.mockRejectedValue(
+      new ConflictException({ code: 'CONVERSATION_CLOSED', message: 'closed' }) as never,
+    );
+    const out = sink();
+
+    await expect(
+      h.service.stream('conv-1', dto, parent, new AbortController().signal, out.sink),
+    ).resolves.toBeUndefined();
+
+    expect(out.calls.map((c) => c.name)).toEqual(['delta', 'error']);
+    expect(out.calls[1].data).toEqual({ code: 'CONVERSATION_CLOSED' });
   });
 
   it('retracts a bad sentence, stores the safe text and tells the run it was blocked', async () => {

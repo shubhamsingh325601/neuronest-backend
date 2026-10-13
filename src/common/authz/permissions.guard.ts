@@ -3,7 +3,11 @@ import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { IS_PUBLIC_KEY, REQUIRED_PERMISSIONS_KEY } from './auth.decorator';
 import type { AuthenticatedUser } from './jwt-payload.type';
-import { type Permission, roleHasPermission } from './permissions';
+import {
+  IMPERSONATION_BLOCKED_PERMISSIONS,
+  type Permission,
+  roleHasPermission,
+} from './permissions';
 
 /**
  * Authorization guard. Runs after {@link JwtAuthGuard} and checks the route's
@@ -35,6 +39,13 @@ export class PermissionsGuard implements CanActivate {
     if (!user) {
       // JwtAuthGuard should have populated this; defensive only.
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Not authenticated.' });
+    }
+
+    if (user.impersonatedBy && required.some((p) => IMPERSONATION_BLOCKED_PERMISSIONS.includes(p))) {
+      throw new ForbiddenException({
+        code: 'IMPERSONATION_RESTRICTED',
+        message: 'This action is not allowed while acting as another user.',
+      });
     }
 
     const missing = required.filter((perm) => !roleHasPermission(user.role, perm));

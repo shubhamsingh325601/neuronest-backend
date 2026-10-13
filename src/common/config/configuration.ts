@@ -110,6 +110,21 @@ export interface AppConfig {
     purgeIdleDays: number;
     /** Hard backstop: purge this many days after close even without a READY summary. */
     purgeBackstopDays: number;
+    /** Live event streams (`GET /conversations/{id}/events`) one user may hold open at once. */
+    maxStreamsPerUser: number;
+    /** Live event streams open on one conversation at once (two people, a few devices each). */
+    maxStreamsPerConversation: number;
+    /** Heartbeat of those streams; also when access is re-checked. Keep it below proxy idle timeouts. */
+    streamHeartbeatMs: number;
+  };
+  /**
+   * TEMPORARY testing aid: an ADMIN may mint a short-lived token that acts as a PARENT
+   * (`POST /admin/users/{id}/impersonate`). Off by default; remove before real families use the app.
+   */
+  impersonation: {
+    enabled: boolean;
+    /** Lifetime of such a token, in minutes. There is no refresh token: the admin mints another. */
+    ttlMin: number;
   };
   logLevel: string;
   admin: {
@@ -207,6 +222,16 @@ export const configuration = (): AppConfig => ({
     idleCloseHours: parseInt(process.env.CONVERSATION_IDLE_CLOSE_HOURS ?? '24', 10),
     purgeIdleDays: parseInt(process.env.CONVERSATION_PURGE_IDLE_DAYS ?? '7', 10),
     purgeBackstopDays: parseInt(process.env.CONVERSATION_PURGE_BACKSTOP_DAYS ?? '30', 10),
+    maxStreamsPerUser: parseInt(process.env.CONVERSATION_STREAMS_PER_USER ?? '5', 10),
+    maxStreamsPerConversation: parseInt(
+      process.env.CONVERSATION_STREAMS_PER_CONVERSATION ?? '4',
+      10,
+    ),
+    streamHeartbeatMs: parseInt(process.env.CONVERSATION_STREAM_HEARTBEAT_MS ?? '15000', 10),
+  },
+  impersonation: {
+    enabled: process.env.IMPERSONATION_ENABLED === 'true',
+    ttlMin: parseInt(process.env.IMPERSONATION_TTL_MIN ?? '60', 10),
   },
   logLevel: process.env.LOG_LEVEL ?? 'info',
   admin: {

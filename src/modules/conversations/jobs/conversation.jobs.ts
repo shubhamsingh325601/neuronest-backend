@@ -5,6 +5,8 @@ import type { AppConfig } from '@common/config/configuration';
 import { JobHandlerRegistry } from '@common/jobs/job-handler.registry';
 import { JobQueueService } from '@common/jobs/job-queue.service';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { conversationClosed } from '@modules/conversations/shared/conversation-event';
+import { ConversationEventBus } from '@modules/conversations/shared/conversation-event-bus';
 import { enqueueSummary } from './conversation-summary.queue';
 
 export const CLOSE_IDLE_JOB = 'conversation.close-idle';
@@ -34,6 +36,7 @@ export class ConversationJobs implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly registry: JobHandlerRegistry,
     private readonly queue: JobQueueService,
+    private readonly bus: ConversationEventBus,
     config: ConfigService<AppConfig, true>,
   ) {
     const conversations = config.get('conversations', { infer: true });
@@ -67,13 +70,13 @@ export class ConversationJobs implements OnModuleInit {
     };
     const candidates = await this.prisma.conversation.findMany({
       where: idle,
-      select: { id: true, childId: true },
+      select: { id: true, kind: true, childId: true, parentId: true, expertId: true },
     });
 
     let closed = 0;
     for (const candidate of candidates) {
       // The idle condition is checked again, so a message that just arrived keeps the session open.
-      closed += await this.prisma.$transaction(async (tx) => {
+      const count = await this.prisma.$transaction(async (tx) => {
         const result = await tx.conversation.updateMany({
           where: { id: candidate.id, ...idle },
           data: { status: ConversationStatus.CLOSED, closedAt: now },
@@ -81,6 +84,9 @@ export class ConversationJobs implements OnModuleInit {
         if (result.count === 1) await enqueueSummary(tx, this.queue, candidate);
         return result.count;
       });
+      // After the commit, so a listener that reads the database sees the closed row.
+      if (count === 1) this.bus.publish(conversationClosed(candidate, 'IDLE'));
+      closed += count;
     }
     if (closed > 0) {
       this.logger.log({ closed }, 'Closed idle conversations');

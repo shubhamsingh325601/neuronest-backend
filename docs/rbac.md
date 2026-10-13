@@ -506,6 +506,24 @@ The one exception is the parent AI coaching tip below (plan 0018), which ships d
 - `GET /children/{childId}/parent-contact` uses `child:read` but is EXPERT (assigned) and ADMIN only: the parent
   (own data) and the clinician get 403. It returns name and email only; no parent phone is stored anywhere.
 
+### `user:impersonate` (Phase 19, TEMPORARY testing aid) — ADMIN acts as a PARENT
+
+- `POST /v1/users/{id}/impersonate` returns a bearer token that acts as the parent. It exists so the owner can try
+  the parent features (AI chat, expert chat) from the admin site while there is no parent app build to test with.
+  **Remove it before real families use the app** (delete `src/modules/admin/features/impersonate-user/`, the
+  `imp` claim handling in `JwtAuthGuard`, `IMPERSONATION_BLOCKED_PERMISSIONS`, the permission and the two env keys).
+- ADMIN only (through the spread; no other role holds it). It is **inert unless `IMPERSONATION_ENABLED=true`**: the
+  route is a 404 `IMPERSONATION_DISABLED`, and tokens already minted are rejected as `INVALID_TOKEN`.
+- Target: an `ACTIVE` `PARENT` only (never another admin, clinician or expert).
+- The token has an `imp` claim (the admin's id), lives `IMPERSONATION_TTL_MIN` minutes (default 60) and has **no
+  refresh token**. `JwtAuthGuard` re-checks on every request that the minting admin is still an `ACTIVE` ADMIN, so
+  deactivating the admin ends the session at once.
+- An impersonated session is otherwise the parent (it passes every parent service check, including the ones that
+  refuse ADMIN). It may not change the password or deactivate the account (`IMPERSONATION_RESTRICTED`), and cannot
+  mint another token.
+- Audit: each token issued is a `warn` log line with the admin id and the target id (no database table: temporary).
+  Messages the admin sends as the parent are stored as the parent's own (`sender = PARENT`).
+
 ## 7. Future Migration Path to `@casl/ability`
 
 The static map is intentionally designed as a strict subset of CASL. When business rules require **dynamic attribute-based conditions** (e.g., *"A clinician may read a session report only if the child is in their active caseload"*):

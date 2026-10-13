@@ -5,6 +5,8 @@ import { GetJobController } from './features/get-job/get-job.controller';
 import { GetJobService } from './features/get-job/get-job.service';
 import { GetSummaryController } from './features/get-summary/get-summary.controller';
 import { GetSummaryService } from './features/get-summary/get-summary.service';
+import { ImpersonateUserController } from './features/impersonate-user/impersonate-user.controller';
+import { ImpersonateUserService } from './features/impersonate-user/impersonate-user.service';
 import { ListJobsController } from './features/list-jobs/list-jobs.controller';
 import { ListJobsService } from './features/list-jobs/list-jobs.service';
 import { RequeueJobController } from './features/requeue-job/requeue-job.controller';
@@ -25,8 +27,10 @@ import { RunJobsNowController } from './features/run-jobs-now/run-jobs-now.contr
     GetJobController,
     RequeueJobController,
     RunJobsNowController,
+    ImpersonateUserController,
   ],
   providers: [
+    ImpersonateUserService,
     GetSummaryService,
     GetAiUsageService,
     ListJobsService,

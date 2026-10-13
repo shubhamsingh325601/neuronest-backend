@@ -332,7 +332,7 @@ export class SendAiMessageService {
     } catch (err) {
       this.logFailure(err);
       if (!started) throw this.problemFor(err);
-      sink.event('error', { code: err instanceof AiRunError ? err.code : 'AI_FAILED' });
+      sink.event('error', { code: this.errorCode(err) });
     } finally {
       await run.finish(verdict);
     }
@@ -403,6 +403,23 @@ export class SendAiMessageService {
       code: 'AI_UNAVAILABLE',
       message: 'The assistant is unavailable right now. Please try again.',
     });
+  }
+
+  /**
+   * The code of an `error` event. Only codes this app chose are passed on: a provider failure, or
+   * one of our own refusals met after the stream began (a chat closed while the reply was written
+   * is `CONVERSATION_CLOSED`). Anything else is a generic `AI_FAILED`.
+   */
+  private errorCode(err: unknown): string {
+    if (err instanceof AiRunError) return err.code;
+    if (err instanceof HttpException) {
+      const body = err.getResponse();
+      if (typeof body === 'object' && body !== null && 'code' in body) {
+        const { code } = body as { code: unknown };
+        if (typeof code === 'string') return code;
+      }
+    }
+    return 'AI_FAILED';
   }
 
   private logFailure(err: unknown): void {

@@ -200,6 +200,16 @@ export const envValidationSchema = Joi.object({
     .min(Joi.ref('CONVERSATION_PURGE_IDLE_DAYS'))
     .default(30),
 
+  // Live chat events (plan 0019 section 13, step 6.1). Caps on open SSE connections, and the
+  // heartbeat interval (below the 30 to 60 s idle timeouts of common proxies).
+  CONVERSATION_STREAMS_PER_USER: Joi.number().integer().min(1).max(50).default(5),
+  CONVERSATION_STREAMS_PER_CONVERSATION: Joi.number().integer().min(1).max(50).default(4),
+  CONVERSATION_STREAM_HEARTBEAT_MS: Joi.number().integer().min(50).max(55000).default(15000),
+
+  // TEMPORARY testing aid: admin impersonation of a parent. Off by default.
+  IMPERSONATION_ENABLED: Joi.boolean().default(false),
+  IMPERSONATION_TTL_MIN: Joi.number().integer().min(1).max(480).default(60),
+
   SENTRY_DSN: Joi.string().allow('').default(''),
   LOG_LEVEL: Joi.string()
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')

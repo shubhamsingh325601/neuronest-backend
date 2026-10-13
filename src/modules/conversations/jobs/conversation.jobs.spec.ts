@@ -4,6 +4,7 @@ import { ConversationStatus, SummaryStatus } from '@prisma/client';
 import { JobHandlerRegistry } from '@common/jobs/job-handler.registry';
 import { JobQueueService } from '@common/jobs/job-queue.service';
 import { PrismaService } from '@common/prisma/prisma.service';
+import { ConversationEventBus } from '@modules/conversations/shared/conversation-event-bus';
 import { SUMMARISE_JOB } from './conversation-summary.queue';
 import { CLOSE_IDLE_JOB, ConversationJobs, PURGE_JOB } from './conversation.jobs';
 
@@ -14,6 +15,7 @@ describe('ConversationJobs', () => {
     conversation: { updateMany: jest.fn() },
   };
   const queue = { enqueue: jest.fn(), kick: jest.fn() };
+  const bus = { publish: jest.fn(), subscribe: jest.fn() };
   const prisma = {
     conversation: { findMany: jest.fn() },
     $transaction: jest.fn((fn: (t: typeof tx) => unknown) => fn(tx)),
@@ -34,6 +36,7 @@ describe('ConversationJobs', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: JobHandlerRegistry, useValue: registry },
         { provide: JobQueueService, useValue: queue },
+        { provide: ConversationEventBus, useValue: bus },
         {
           provide: ConfigService,
           useValue: {
@@ -88,6 +91,34 @@ describe('ConversationJobs', () => {
 
       await expect(jobs.closeIdle(now)).resolves.toBe(0);
       expect(queue.enqueue).not.toHaveBeenCalled();
+      expect(bus.publish).not.toHaveBeenCalled();
+    });
+
+    it('announces each close on the event bus once the transaction has committed, with ids only', async () => {
+      prisma.conversation.findMany.mockResolvedValue([
+        { id: 'c-1', kind: 'HUMAN', childId: 'child-1', parentId: 'pa-1', expertId: 'ex-1' },
+      ]);
+      let committed = false;
+      prisma.$transaction.mockImplementation(async (fn: (t: typeof tx) => unknown) => {
+        const result = await fn(tx);
+        committed = true;
+        return result;
+      });
+      tx.conversation.updateMany.mockResolvedValue({ count: 1 });
+      bus.publish.mockImplementation(() => expect(committed).toBe(true));
+
+      await jobs.closeIdle(now);
+
+      expect(bus.publish).toHaveBeenCalledTimes(1);
+      expect(bus.publish).toHaveBeenCalledWith({
+        type: 'conversation-closed',
+        conversationId: 'c-1',
+        kind: 'HUMAN',
+        childId: 'child-1',
+        parentId: 'pa-1',
+        expertId: 'ex-1',
+        reason: 'IDLE',
+      });
     });
   });
 
