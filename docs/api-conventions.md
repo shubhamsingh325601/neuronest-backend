@@ -56,6 +56,17 @@ squatter's password stops working (plan 0009 B-1). It does not leak that the add
 taken. Signup for an already-*verified* email, or for any row that is not a `PARENT`
 (an invited clinician, an admin), is a real conflict → **409**, with no change made.
 
+## Streaming (SSE) routes
+
+Two routes are the deliberate exception to the single-JSON-response rule; both are `text/event-stream`:
+
+- `POST /v1/ai-conversations/{id}/messages` (`aiConversationSend`): events `delta`, `retract`, `done`, `error`. Headers are flushed on the
+  first provider delta, so any failure before that is a normal RFC 9457 problem response. After the headers the handler never throws; failures are an `error` event with a stable `code`.
+- `GET /v1/conversations/{id}/events` (`conversationEvents`): every frame's `id` is a resumable message `seq` (`Last-Event-ID`). It is an accelerator:
+  `GET .../messages?afterSeq=` is the correct way to catch up.
+
+Refusals that can be decided up front (400, 403, 404, 422, 429) must happen before the stream starts, in a route guard for `@Sse` handlers (a throw inside the handler would become an `event: error` on a 200 response). Send a `: hb` heartbeat comment every 15 s. Frontend contract: [frontend-handoff-chat-and-test-console.md](frontend-handoff-chat-and-test-console.md).
+
 ## Status codes in use
 
 | Code | When |

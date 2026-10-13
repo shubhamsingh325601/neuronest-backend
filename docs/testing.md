@@ -107,6 +107,10 @@ E2E tests execute HTTP requests against a fully booted NestJS application.
 
 `test/helpers/setup-e2e.ts` sets `JOBS_KICK_MODE=inline` (the post-commit kick is awaited inside the request, so specs that read `ctx.mail` right after an HTTP call keep working) and `JOBS_ENABLED=false` (no cron / boot sweep). `ctx.jobs.drain()` runs due jobs until none remain; backoff is respected, so move a row's `runAt` back (`prisma.job.updateMany`) to make a retry due. `FakeEmailService.failSends = true` simulates a provider outage. Rows created through Prisma should set `runAt` explicitly when a test depends on them being due: the DB default uses the database clock, which can drift from the host's.
 
+### AI and retention in tests
+
+No test calls a provider: `FakeAiService` (`test/helpers/fake-ai.service.ts`) returns scripted structured output and scripted stream parts, and applies the schema and `postCheck` like the real service. Retention tests drive the purge with a controllable clock, so "no message older than the backstop exists after one pass" is asserted without waiting. Live model quality is measured separately by `npm run ai:eval*` (see [ai.md](ai.md)).
+
 ### Available E2E Suites
 
 | Suite | File | What it Validates |
@@ -122,6 +126,11 @@ E2E tests execute HTTP requests against a fully booted NestJS application.
 | **Coaching** | `test/coaching.e2e-spec.ts` | Idempotent per-week replace, current-week resolution, out-of-range → empty, parent isolation + `authorId` redaction, clinician assignment scoping, completed plan hidden from parent |
 | **Progress** | `test/progress.e2e-spec.ts` | No-plan child can log, upsert same date → one row (201/200), `planId` stamped and kept after plan completes, range/empty/future/too-old → 400, parent-only writes, history order/pagination/filters, read scoping, weekly summary maths + trend + empty week |
 | **Appointments** | `test/appointment.e2e-spec.ts` | Clinician/admin publish slots, overlap/past/range/too-long/inactive-clinician rejections, free-slot listing scoped to assigned ACTIVE clinicians, booking, one-upcoming cap, **concurrent booking of one slot → one 201 + one 409 (unique `slotId`)**, unassigned slot → 404, parent-only booking, clinician/parent/admin read scoping, `?when=upcoming\|past` |
+| **Expert Role** | `test/expert-role.e2e-spec.ts` | Direct expert creation and login, admin password reset ends old sessions, admin-only management routes, assignment diff, read matrix on assigned vs unassigned children, parent-contact route |
+| **Conversations** | `test/conversation.e2e-spec.ts` | Human chat lifecycle, idempotent send, cursor read, authz matrix (ADMIN refused), close and idle-close, summary job via `ctx.jobs.drain()`, clock-controlled purge (rows deleted, audit fields), backstop PLACEHOLDER, no message text in `ai_runs` / `jobs` |
+| **AI Chat** | `test/ai-chat.e2e-spec.ts` | Streamed happy path, retract, redirect, strike limit, caps, disconnect abort, idempotent replay, `AI_ENABLED=false`, topic list |
+| **Conversation Events** | `test/conversation-events.e2e-spec.ts` | SSE on a really listening server: resume with `Last-Event-ID`, resync, heartbeat, stream caps, access lost mid-stream, guard refusals as problem+json |
+| **Impersonation** | `test/impersonation.e2e-spec.ts` | Temporary admin-as-parent token (flag off = 404, blocked permissions, admin deactivation ends it) |
 | **Error Shape** | `test/error-shape.e2e-spec.ts` | Verification that all errors conform to RFC 9457 `application/problem+json` |
 | **RBAC Route Coverage** | `test/rbac-route-coverage.e2e-spec.ts` | Asserts every route is explicitly protected or explicitly marked `@Public()` |
 | **OpenAPI Contract Drift** | `test/docs.e2e-spec.ts` | Live OpenAPI spec reflection matching expected paths and `operationId`s |

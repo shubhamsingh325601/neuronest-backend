@@ -59,6 +59,41 @@ describe('ChatReplyProcessor', () => {
     });
   });
 
+  describe('greetings and identity answers (prompt v2)', () => {
+    it('shows a short in-topic answer to "hi" as an ordinary reply, whatever the delta cut', () => {
+      const answer = [
+        'Hello! I am an AI assistant, ',
+        'and I cannot see names or personal details. ',
+        'I can help with today',
+        "'s activity. What would you like to ask?",
+      ];
+      const { actions, processor } = run(answer);
+
+      expect(processor.outcome).toBe('COMPLETE');
+      expect(shown(actions)).toBe(answer.join(''));
+    });
+
+    it('does not mistake a reply that starts with a bracket or "I am" for the marker', () => {
+      expect(run(['I am an AI assistant. ', 'Ask me anything.']).processor.outcome).toBe(
+        'COMPLETE',
+      );
+    });
+  });
+
+  describe('replies that end without text', () => {
+    it('is EMPTY when the provider stopped at the length limit before any text (thinking used the budget)', () => {
+      const { actions, processor } = run([], 'length');
+
+      expect(actions).toEqual([]);
+      expect(processor.outcome).toBe('EMPTY');
+    });
+
+    it('is EMPTY for a stop with only whitespace, and for a half marker cut at the length limit', () => {
+      expect(run(['  '], 'stop').processor.outcome).toBe('EMPTY');
+      expect(run(['[[OFF_TO'], 'length').processor.outcome).toBe('EMPTY');
+    });
+  });
+
   describe('sentence release', () => {
     it('releases whole sentences, however the deltas are cut, and the text matches what was shown', () => {
       const { actions, processor } = run([

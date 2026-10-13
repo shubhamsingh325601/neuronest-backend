@@ -13,7 +13,7 @@ This document serves as the **Architecture Decision Record (ADR)** explaining th
 
 | Enum | Values | Notes |
 |------|--------|-------|
-| `Role` | `PARENT`, `CLINICIAN`, `ADMIN` | New users are always `PARENT`. `CLINICIAN` / `ADMIN` are assigned out-of-band (seed, later admin tooling). |
+| `Role` | `PARENT`, `CLINICIAN`, `ADMIN`, `EXPERT` | New users are always `PARENT`. `CLINICIAN` / `EXPERT` are created by an admin; `ADMIN` is seeded. `EXPERT` (Phase 19) is read-only on assigned children and chats with parents. |
 | `UserStatus` | `ACTIVE`, `SUSPENDED`, `DEACTIVATED`, `INVITED` | Only `ACTIVE` may authenticate. `SUSPENDED` is admin-driven (later phase); `DEACTIVATED` is user-driven self-exclusion; `INVITED` is a provisioned account (clinician created by an admin) that cannot log in until its owner completes account setup. |
 | `VerificationTokenType` | `EMAIL_VERIFICATION`, `PASSWORD_RESET`, `ACCOUNT_SETUP` | Discriminator on the single verification-token table. `ACCOUNT_SETUP` shares the `PASSWORD_RESET` shape (opaque 32-byte token, link-delivered). |
 | `VerificationChannel` | `EMAIL` | Present now so adding `SMS` / `AUTHENTICATOR` later is a value, not a migration of shape. |

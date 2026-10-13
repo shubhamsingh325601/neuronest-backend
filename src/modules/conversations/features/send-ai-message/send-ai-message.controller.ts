@@ -67,6 +67,7 @@ export class SendAiMessageController {
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
+        write(': hb\n\n'); // first bytes now: the provider can take a long time to start
         heartbeat = setInterval(() => write(': hb\n\n'), HEARTBEAT_MS);
       },
       event: (name, data) => write(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`),

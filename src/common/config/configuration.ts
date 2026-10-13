@@ -100,8 +100,15 @@ export interface AppConfig {
     /** Earlier messages sent to the model as history. */
     historyMessages: number;
     maxOutputTokens: number;
-    /** Upper bound for one streamed reply; a silent provider is cut sooner by `ai.timeoutMs`. */
+    /** Upper bound for one streamed reply. */
     totalTimeoutMs: number;
+    /**
+     * Longest wait for the first piece of text. The SDK's chunk timeout (`ai.timeoutMs`) only starts once the
+     * provider has answered the request, so it cannot cut a provider that is slow to start (plan 0019 section 14).
+     */
+    firstTokenTimeoutMs: number;
+    /** Overrides the per-model default thinking limit (`chatThinking`); empty keeps the default. */
+    thinkingLevel: '' | 'minimal' | 'low' | 'medium' | 'high';
   };
   conversations: {
     /** An OPEN conversation with no message for this many hours is closed by the sweep. */
@@ -217,6 +224,9 @@ export const configuration = (): AppConfig => ({
     historyMessages: parseInt(process.env.AI_CHAT_HISTORY_MESSAGES ?? '10', 10),
     maxOutputTokens: parseInt(process.env.AI_CHAT_MAX_OUTPUT_TOKENS ?? '400', 10),
     totalTimeoutMs: parseInt(process.env.AI_CHAT_TOTAL_TIMEOUT_MS ?? '60000', 10),
+    firstTokenTimeoutMs: parseInt(process.env.AI_CHAT_FIRST_TOKEN_TIMEOUT_MS ?? '20000', 10),
+    thinkingLevel: (process.env.AI_CHAT_THINKING_LEVEL ??
+      '') as AppConfig['aiChat']['thinkingLevel'],
   },
   conversations: {
     idleCloseHours: parseInt(process.env.CONVERSATION_IDLE_CLOSE_HOURS ?? '24', 10),

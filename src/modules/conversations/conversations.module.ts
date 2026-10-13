@@ -3,6 +3,7 @@ import { AiCoachingModule } from '@modules/ai-coaching/ai-coaching.module';
 import { ChildrenModule } from '@modules/children/children.module';
 import { PlansModule } from '@modules/plans/plans.module';
 import { ProgressModule } from '@modules/progress/progress.module';
+import { ConversationThemesModule } from './conversation-themes.module';
 import { CloseConversationController } from './features/close-conversation/close-conversation.controller';
 import { CloseConversationService } from './features/close-conversation/close-conversation.service';
 import { ConversationEventsController } from './features/conversation-events/conversation-events.controller';
@@ -41,7 +42,13 @@ import { InProcessConversationEventBus } from './shared/in-process-conversation-
  * by Postgres LISTEN/NOTIFY for several instances (see the bus for the seam).
  */
 @Module({
-  imports: [AiCoachingModule, ChildrenModule, PlansModule, ProgressModule],
+  imports: [
+    AiCoachingModule,
+    ChildrenModule,
+    ConversationThemesModule,
+    PlansModule,
+    ProgressModule,
+  ],
   controllers: [
     ListAiChatTopicsController,
     CreateAiConversationController,

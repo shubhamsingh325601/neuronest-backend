@@ -1,12 +1,12 @@
 import type { AiStructuredRequest } from '@common/ai/ai.service';
-import { coachingTipPromptV2 } from '@modules/ai-coaching/prompts/coaching-tip.v2';
+import { coachingTipPromptV3 } from '@modules/ai-coaching/prompts/coaching-tip.v3';
 import { COACHING_TIP_CAPABILITY } from './ai-coaching.constants';
 import type { BuiltCoachingContext } from './coaching-context.builder';
 import { checkCoachingTip } from './coaching-safety.filter';
 import { coachingTipSchema, type CoachingTipContent } from './coaching-tip.schema';
 
 /** The prompt version every coaching-tip request is made with. Bump here, and only here. */
-export const coachingTipPrompt = coachingTipPromptV2;
+export const coachingTipPrompt = coachingTipPromptV3;
 
 /**
  * The one definition of a coaching-tip request. The request path, the background job and the

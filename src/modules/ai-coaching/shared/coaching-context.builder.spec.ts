@@ -33,7 +33,14 @@ const child: ChildDto = {
   updatedAt: now,
 };
 
-function make(overrides: { day?: unknown; tips?: unknown[]; average?: number | null } = {}) {
+function make(
+  overrides: {
+    day?: unknown;
+    tips?: unknown[];
+    average?: number | null;
+    chats?: { themes: string[]; followUpSuggested: boolean };
+  } = {},
+) {
   const todayFocus = {
     get: jest.fn().mockResolvedValue({
       plan: { id: 'plan-1', childId: 'child-1', createdById: 'clinician-1', notes: 'private' },
@@ -77,12 +84,16 @@ function make(overrides: { day?: unknown; tips?: unknown[]; average?: number | n
       ],
     }),
   };
+  const summaryThemes = {
+    read: jest.fn().mockResolvedValue(overrides.chats ?? { themes: [], followUpSuggested: false }),
+  };
   const builder = new CoachingContextBuilder(
     todayFocus as never,
     weeklySummary as never,
     coaching as never,
+    summaryThemes as never,
   );
-  return { builder, todayFocus, weeklySummary, coaching };
+  return { builder, todayFocus, weeklySummary, coaching, summaryThemes };
 }
 
 describe('CoachingContextBuilder', () => {
@@ -98,6 +109,47 @@ describe('CoachingContextBuilder', () => {
     expect(Object.keys(context.planDay!).sort()).toEqual(['dayNumber', 'instructions', 'title']);
     expect(Object.keys(context.lastWeek).sort()).toEqual(['daysLogged', 'sleepMinutesAverage']);
     expect(Object.keys(context.clinicianTips[0]).sort()).toEqual(['body', 'title']);
+  });
+
+  it('adds recentChats (themes and the follow-up flag only) when closed chats have themes', async () => {
+    const { builder, summaryThemes } = make({
+      chats: { themes: ['sleep', 'routines'], followUpSuggested: true },
+    });
+
+    const { context, inputHash } = await builder.build(child, caller, now);
+    const without = await make().builder.build(child, caller, now);
+
+    expect(summaryThemes.read).toHaveBeenCalledWith('child-1');
+    expect(Object.keys(context).sort()).toEqual([
+      'ageYears',
+      'clinicianTips',
+      'lastWeek',
+      'planDay',
+      'recentChats',
+    ]);
+    expect(context.recentChats).toEqual({
+      themes: ['sleep', 'routines'],
+      followUpSuggested: true,
+    });
+    expect(Object.keys(context.recentChats!).sort()).toEqual(['followUpSuggested', 'themes']);
+    expect(inputHash(3)).not.toBe(without.inputHash(3)); // a new chat theme warrants a regeneration
+  });
+
+  it('omits recentChats when there are no themes, even if a follow-up was flagged', async () => {
+    const { context } = await make({
+      chats: { themes: [], followUpSuggested: true },
+    }).builder.build(child, caller, now);
+
+    expect(context).not.toHaveProperty('recentChats');
+  });
+
+  it('caps the themes at five', async () => {
+    const themes = ['sleep', 'meltdowns', 'sensory', 'routines', 'transitions', 'school'];
+    const { context } = await make({
+      chats: { themes, followUpSuggested: false },
+    }).builder.build(child, caller, now);
+
+    expect(context.recentChats!.themes).toEqual(themes.slice(0, 5));
   });
 
   it('never carries an id, a name, the date of birth, mood/behaviour/trend or plan metadata', async () => {

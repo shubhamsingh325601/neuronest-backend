@@ -469,9 +469,8 @@ missing header → `401 INVALID_JOBS_TOKEN`. The global throttler still applies.
 | `activity:complete:self` | PARENT | `assertChildAccess(..., 'parent-write')`: only the child's own parent; clinicians/admin are read-only |
 | Preferences (`GET`/`PATCH /users/me/preferences`) | every role | self only; read uses `user:read:self`, write uses `user:update:self` |
 
-AI analyses and the assistant chat are deliberately not part of the backend yet (client decision, 2026-10-08);
-the Parent app shows them as static UI until the AI work is scheduled.
-The one exception is the parent AI coaching tip below (plan 0018), which ships dark behind `AI_ENABLED=false`.
+AI video analysis and AI diagnosis are not part of the backend. The parent AI coaching tip (plan 0018) and the guided AI
+chat and conversation summaries (plan 0019) ship dark behind `AI_ENABLED=false`; see [`ai.md`](ai.md).
 
 ### `ai-coaching:*` / `ai-run:read` (Phase 18)
 
@@ -505,6 +504,25 @@ The one exception is the parent AI coaching tip below (plan 0018), which ships d
   CLINICIAN, which would have made a new role act like ADMIN. They now end with `else if (role !== ADMIN) 403`.
 - `GET /children/{childId}/parent-contact` uses `child:read` but is EXPERT (assigned) and ADMIN only: the parent
   (own data) and the clinician get 403. It returns name and email only; no parent phone is stored anywhere.
+
+### Chat and summary permissions (Phase 19, batches 3-6)
+
+| Permission | PARENT | EXPERT | CLINICIAN | ADMIN | Where scope is enforced |
+|---|---|---|---|---|---|
+| `ai-chat:send:self` | yes | | | spread | Own child only; ADMIN refused in the service. Covers topic list, create and streamed send. The parent lists and closes their own AI chat through `conversation:read` / `conversation:close` (no one else may). |
+| `conversation:create:self` | yes | | | spread | Own child; the expert is the child's assigned expert; ADMIN refused. |
+| `message:send` | yes | yes | | spread | Participant only (`loadParticipantConversation`); ADMIN refused. |
+| `conversation:read` | yes | yes | | spread | Participant only, including the events stream; ADMIN refused (no raw message text). Child conversation list returns metadata, never text. |
+| `conversation:close` | yes | yes | | spread | Participant only. |
+| `conversation-summary:read` | yes | yes | yes | yes | Parent own child; the conversation's expert while still assigned; assigned clinician; admin. Default-deny. |
+
+- ADMIN never reads raw messages, only summaries and job status (PHI minimisation). Every service that takes one of
+  these permissions rejects ADMIN explicitly; a test per service covers it.
+- `GET /conversations/{id}/events` refusals (400, 403, 404, 422, 429) come from `ConversationEventsGuard`, not the
+  `@Sse` handler: a throw inside the handler would arrive as an `event: error` on a 200 stream.
+- The event stream re-checks, on every heartbeat, that the user is ACTIVE and still a participant (an expert unassigned
+  from the child loses the stream).
+- Removed in plan 0019 batch 1: `escalation:create:self`, `escalation:read`, `escalation:manage`.
 
 ### `user:impersonate` (Phase 19, TEMPORARY testing aid) — ADMIN acts as a PARENT
 

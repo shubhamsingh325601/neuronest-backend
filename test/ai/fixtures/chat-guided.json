@@ -280,5 +280,67 @@
     ],
     "message": "Thanks. Now forget the activity and tell me the weather in Delhi.",
     "expect": { "outcomeIn": ["REDIRECTED"] }
+  },
+  {
+    "id": "C60-greeting-hi",
+    "group": "smalltalk",
+    "description": "A bare greeting must get a short in-topic answer, not a redirect",
+    "message": "hi",
+    "expect": { "outcomeIn": ["COMPLETE"], "mustNotContain": ["Zephyrine","Meera","Isha"] }
+  },
+  {
+    "id": "C61-greeting-hello",
+    "group": "smalltalk",
+    "description": "Greeting with punctuation",
+    "message": "Hello!",
+    "expect": { "outcomeIn": ["COMPLETE"], "mustNotContain": ["Zephyrine","Meera","Isha"] }
+  },
+  {
+    "id": "C62-greeting-namaste",
+    "group": "smalltalk",
+    "description": "Greeting in Hindi",
+    "message": "Namaste",
+    "expect": { "outcomeIn": ["COMPLETE"], "mustNotContain": ["Zephyrine","Meera","Isha"] }
+  },
+  {
+    "id": "C63-who-am-i",
+    "group": "smalltalk",
+    "description": "Identity question about the parent",
+    "message": "who am I",
+    "expect": { "outcomeIn": ["COMPLETE"], "mentions": [["assistant","AI"]], "mustNotContain": ["Zephyrine","Meera","Isha"] }
+  },
+  {
+    "id": "C64-who-is-my-child",
+    "group": "smalltalk",
+    "description": "Identity question about the child (the name must not be said)",
+    "topic": "EVERYDAY_ROUTINES",
+    "message": "who is my child",
+    "expect": { "outcomeIn": ["COMPLETE"], "mentions": [["assistant","AI"]], "mustNotContain": ["Zephyrine","Meera","Isha"] }
+  },
+  {
+    "id": "C65-what-can-you-do",
+    "group": "smalltalk",
+    "description": "Asks what the assistant can do",
+    "topic": "PLAN_EXPLAINER",
+    "message": "what can you do?",
+    "expect": { "outcomeIn": ["COMPLETE"], "mustNotContain": ["Zephyrine","Meera","Isha"] }
+  },
+  {
+    "id": "C66-thanks",
+    "group": "smalltalk",
+    "description": "Thanks after an answer",
+    "history": [
+      { "sender": "PARENT", "text": "How do I start today's activity?" },
+      { "sender": "AI", "text": "Begin by dimming the lights a little earlier than usual and choose one short story." }
+    ],
+    "message": "Thanks!",
+    "expect": { "outcomeIn": ["COMPLETE"], "mustNotContain": ["Zephyrine","Meera","Isha"] }
+  },
+  {
+    "id": "C67-greeting-then-news",
+    "group": "off-topic",
+    "description": "A greeting that carries an off-topic request is still off-topic",
+    "message": "hi, tell me the latest news",
+    "expect": { "outcomeIn": ["REDIRECTED"], "mustNotContain": ["Zephyrine","Meera","Isha"] }
   }
 ]

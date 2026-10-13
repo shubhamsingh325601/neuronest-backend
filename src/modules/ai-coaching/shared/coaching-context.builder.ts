@@ -3,6 +3,7 @@ import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
 import { sha256 } from '@common/crypto/token.util';
 import type { ChildDto } from '@modules/children/shared/child.dto';
 import { ListCoachingService } from '@modules/coaching/features/list-coaching/list-coaching.service';
+import { RecentSummaryThemesReader } from '@modules/conversations/shared/recent-summary-themes.reader';
 import { TodayFocusService } from '@modules/plans/features/today-focus/today-focus.service';
 import { WeeklySummaryService } from '@modules/progress/features/weekly-summary/weekly-summary.service';
 import { nameTokens, scrubName, truncate } from './text-safety.util';
@@ -17,12 +18,16 @@ const MAX_TIPS = 3;
  * deny-list). Never add: child name or date of birth, parent or clinician details, any id,
  * progress notes, plan notes, call logs, appointments, media, consent history. Mood, behaviour
  * and trend are withheld until their scale polarity is decided (plan 0018 O-4).
+ *
+ * `recentChats` (plan 0019 Batch 7.1) carries only the fixed-taxonomy themes and the follow-up flag
+ * of closed chats, never a summary's text or a message. It is absent when there is nothing to say.
  */
 export interface CoachingPromptContext {
   ageYears: number | null;
   planDay: { dayNumber: number; title: string; instructions: string } | null;
   lastWeek: { daysLogged: number; sleepMinutesAverage: number | null };
   clinicianTips: { title: string; body: string }[];
+  recentChats?: { themes: string[]; followUpSuggested: boolean };
 }
 
 export interface BuiltCoachingContext {
@@ -51,7 +56,12 @@ export interface RawCoachingInput {
   daysLogged: number;
   sleepMinutesAverage: number | null;
   clinicianTips: { title: string; body: string }[];
+  /** Optional so existing eval fixtures stay valid; absent means no recent chats. */
+  recentThemes?: string[];
+  followUpSuggested?: boolean;
 }
+
+const MAX_THEMES = 5;
 
 /**
  * The single place raw domain data becomes a prompt context: name scrub, truncation, tip cap
@@ -81,6 +91,10 @@ export function assembleCoachingContext(raw: RawCoachingInput): BuiltCoachingCon
       body: clean(t.body, TIP_BODY_MAX),
     })),
   };
+  const themes = (raw.recentThemes ?? []).slice(0, MAX_THEMES);
+  if (themes.length > 0) {
+    context.recentChats = { themes, followUpSuggested: raw.followUpSuggested === true };
+  }
 
   return {
     context,
@@ -101,6 +115,7 @@ export class CoachingContextBuilder {
     private readonly todayFocus: TodayFocusService,
     private readonly weeklySummary: WeeklySummaryService,
     private readonly coaching: ListCoachingService,
+    private readonly summaryThemes: RecentSummaryThemesReader,
   ) {}
 
   async build(
@@ -109,9 +124,10 @@ export class CoachingContextBuilder {
     now: Date = new Date(),
   ): Promise<BuiltCoachingContext> {
     const today = await this.todayFocus.get(child.id, caller);
-    const [summary, tips] = await Promise.all([
+    const [summary, tips, chats] = await Promise.all([
       this.weeklySummary.summarise(child.id, caller, {}, now),
       this.coaching.list(child.id, caller, {}),
+      this.summaryThemes.read(child.id),
     ]);
 
     return assembleCoachingContext({
@@ -127,6 +143,8 @@ export class CoachingContextBuilder {
       daysLogged: summary.daysLogged,
       sleepMinutesAverage: summary.sleepMinutes.average,
       clinicianTips: tips.tips.map((t) => ({ title: t.title, body: t.body })),
+      recentThemes: chats.themes,
+      followUpSuggested: chats.followUpSuggested,
     });
   }
 }

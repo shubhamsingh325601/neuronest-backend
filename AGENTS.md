@@ -59,6 +59,7 @@ To maintain a lean context window, **do not read the entire `docs/` directory**.
 | **Modify schema, run migrations, Docker** | `.claude/skills/prisma-migration/` | [`docs/database-and-docker.md`](docs/database-and-docker.md)<br>[`docs/schema-decisions.md`](docs/schema-decisions.md) | Relational normalization, UUIDv4 keys, JSONB, `migrate dev` vs `deploy`, Docker Postgres lifecycle. |
 | **Write or run unit / E2E tests** | — | [`docs/testing.md`](docs/testing.md) | Unit test mocking (`PrismaService`, `EmailService`), Docker throwaway Postgres, test data truncation, guardrails. |
 | **Auth logic, tokens, password reset** | — | [`docs/auth-flows.md`](docs/auth-flows.md) | Argon2id hashing, rotating refresh tokens, family reuse revocation, email verification sequences. |
+| **AI features: coaching tip, guided chat, summaries** | — | [`docs/ai.md`](docs/ai.md) | AI port and layout, allow-list context, PII/name scrubbing, output filters, hash-pinned prompts, streaming protocol, summary retention, evals. |
 | **Understand architecture or scalability** | — | [`docs/architecture.md`](docs/architecture.md) | Modular monolith topology, request pipeline, observability (Pino, Sentry), 2–3 year growth seams. |
 | **Check project status or delivery plans** | — | [`docs/plans/README.md`](docs/plans/README.md) | Delivery plans per phase; current active milestone. |
 

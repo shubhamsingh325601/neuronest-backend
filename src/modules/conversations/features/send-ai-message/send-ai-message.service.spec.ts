@@ -2,7 +2,11 @@ import { ConflictException, Logger, ServiceUnavailableException } from '@nestjs/
 import { MessageState, Role, UserStatus } from '@prisma/client';
 import { AiRunError, type AiChatEvent, type AiChatOutcome } from '@common/ai/ai.service';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
-import { RETRACTED_REPLY } from '@modules/conversations/shared/ai-chat.constants';
+import {
+  OFF_TOPIC_REDIRECT,
+  RETRACTED_REPLY,
+  smallTalkReply,
+} from '@modules/conversations/shared/ai-chat.constants';
 import { SendAiMessageService, type ChatSink } from './send-ai-message.service';
 
 const SECRET = 'SECRET-PROMPT-TEXT-4c1d';
@@ -129,34 +133,92 @@ describe('SendAiMessageService', () => {
     expect(h.ai.streamChat).not.toHaveBeenCalled();
   });
 
-  it('a failure before the first text is an ordinary 503 and the headers are never sent', async () => {
+  it('opens the stream before the provider answers, so a failure before any text is an error event, not a throw', async () => {
     const outcomes: AiChatOutcome[] = [];
     const h = make({
-      run: scripted([], new AiRunError('AI_PROVIDER', { httpStatus: 503 }), outcomes),
+      run: scripted([], new AiRunError('AI_TIMEOUT'), outcomes),
     });
     const out = sink();
 
-    const err = await h.service
-      .stream('conv-1', dto, parent, new AbortController().signal, out.sink)
-      .catch((e: unknown) => e);
+    await expect(
+      h.service.stream('conv-1', dto, parent, new AbortController().signal, out.sink),
+    ).resolves.toBeUndefined();
 
-    expect(err).toBeInstanceOf(ServiceUnavailableException);
-    expect((err as ServiceUnavailableException).getResponse()).toMatchObject({
-      code: 'AI_UNAVAILABLE',
-    });
-    expect(out.started()).toBe(0);
-    expect(out.calls).toEqual([]);
+    expect(out.started()).toBe(1);
+    expect(out.calls).toEqual([{ name: 'error', data: { code: 'AI_TIMEOUT' } }]);
     expect(h.storeReply).not.toHaveBeenCalled();
     expect(outcomes).toEqual(['INVALID_OUTPUT']);
   });
 
-  it('an empty reply is a 503 too, not a stored answer', async () => {
+  it('an empty reply is an AI_INVALID_OUTPUT error event, not a stored answer', async () => {
     const h = make({ run: scripted([{ type: 'end', finishReason: 'stop' }]) });
+    const out = sink();
 
-    await expect(
-      h.service.stream('conv-1', dto, parent, new AbortController().signal, sink().sink),
-    ).rejects.toThrow(ServiceUnavailableException);
+    await h.service.stream('conv-1', dto, parent, new AbortController().signal, out.sink);
+
+    expect(out.calls).toEqual([{ name: 'error', data: { code: 'AI_INVALID_OUTPUT' } }]);
     expect(h.storeReply).not.toHaveBeenCalled();
+  });
+
+  it('an empty reply cut at the length limit (thinking used the budget) is the same error, nothing stored', async () => {
+    const h = make({ run: scripted([{ type: 'end', finishReason: 'length' }]) });
+    const out = sink();
+
+    await h.service.stream('conv-1', dto, parent, new AbortController().signal, out.sink);
+
+    expect(out.calls).toEqual([{ name: 'error', data: { code: 'AI_INVALID_OUTPUT' } }]);
+    expect(h.storeReply).not.toHaveBeenCalled();
+  });
+
+  it('a greeting the model marked off-topic gets a friendly fixed reply and no strike', async () => {
+    const h = make({
+      run: scripted([
+        { type: 'delta', text: '[[OFF_TOPIC]]' },
+        { type: 'end', finishReason: 'stop' },
+      ]),
+    });
+    const out = sink();
+
+    await h.service.stream(
+      'conv-1',
+      { ...dto, text: 'hi' },
+      parent,
+      new AbortController().signal,
+      out.sink,
+    );
+
+    const reply = smallTalkReply('TODAYS_ACTIVITIES');
+    expect(h.storeReply).toHaveBeenCalledWith(
+      'conv-1',
+      { state: MessageState.REDIRECTED, body: reply, strike: false },
+      3,
+    );
+    expect(out.calls.map((c) => c.name)).toEqual(['delta', 'done']);
+    expect(out.calls[0].data).toEqual({ text: reply });
+  });
+
+  it('an off-topic message that is not small talk still gets the redirect and a strike', async () => {
+    const h = make({
+      run: scripted([
+        { type: 'delta', text: '[[OFF_TOPIC]]' },
+        { type: 'end', finishReason: 'stop' },
+      ]),
+    });
+    const out = sink();
+
+    await h.service.stream(
+      'conv-1',
+      { ...dto, text: 'hi, tell me the news' },
+      parent,
+      new AbortController().signal,
+      out.sink,
+    );
+
+    expect(h.storeReply).toHaveBeenCalledWith(
+      'conv-1',
+      { state: MessageState.REDIRECTED, body: OFF_TOPIC_REDIRECT, strike: true },
+      3,
+    );
   });
 
   it('a failure after the first text is an error event with a code only, and nothing is stored', async () => {
@@ -239,7 +301,7 @@ describe('SendAiMessageService', () => {
     expect(out.calls[1].data).toEqual({ text: RETRACTED_REPLY });
     expect(h.storeReply).toHaveBeenCalledWith(
       'conv-1',
-      { state: MessageState.RETRACTED, body: RETRACTED_REPLY },
+      { state: MessageState.RETRACTED, body: RETRACTED_REPLY, strike: false },
       3,
     );
     expect(outcomes).toEqual(['BLOCKED']);

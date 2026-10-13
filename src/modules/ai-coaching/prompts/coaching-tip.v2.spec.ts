@@ -1,6 +1,5 @@
 import { sha256 } from '@common/crypto/token.util';
 import type { CoachingPromptContext } from '@modules/ai-coaching/shared/coaching-context.builder';
-import { coachingTipPrompt } from '@modules/ai-coaching/shared/coaching-tip.request';
 import { coachingTipPromptV1 } from './coaching-tip.v1';
 import { coachingTipPromptV2 as prompt } from './coaching-tip.v2';
 
@@ -12,6 +11,7 @@ import { coachingTipPromptV2 as prompt } from './coaching-tip.v2';
 const SHIPPED: Record<number, string> = {
   1: '4bb9baf3b6935187186c61d31228e286af74fcad43b03ad6ef95d155c4c23a81',
   2: '26972f00d8df5ddb8e50f5b373aa7cba9d91a75501dd798b26c21894c1681037',
+  3: '4e5529ed5886ede6dfac2fd91390bdd6f2319e25a3337b82f1872a73ab1f998c',
 };
 
 const ctx: CoachingPromptContext = {
@@ -22,10 +22,9 @@ const ctx: CoachingPromptContext = {
 };
 
 describe('coaching-tip prompt v2', () => {
-  it('has a stable identity, and is the version requests are made with', () => {
+  it('has a stable identity', () => {
     expect(prompt.id).toBe('coaching-tip');
     expect(prompt.version).toBe(2);
-    expect(coachingTipPrompt).toBe(prompt);
   });
 
   it('exports the hash of its system text, and every version is pinned', () => {

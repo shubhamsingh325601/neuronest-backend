@@ -28,7 +28,7 @@ describe('buildChatRequest', () => {
 
     expect(req).toMatchObject({
       capability: 'chat-reply',
-      prompt: { id: 'chat-reply', version: 1 },
+      prompt: { id: 'chat-reply', version: 2 },
       actor: { userId: 'u1', childId: 'c1' },
       maxOutputTokens: 400,
       signal,

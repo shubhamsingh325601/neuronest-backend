@@ -110,7 +110,9 @@ describe('AiChatContextBuilder', () => {
   const now = new Date('2026-10-11T00:00:00Z');
 
   function make() {
-    const prisma = { conversationSummary: { findMany: jest.fn().mockResolvedValue([]) } };
+    const summaryThemes = {
+      read: jest.fn().mockResolvedValue({ themes: [], followUpSuggested: false }),
+    };
     const todayFocus = {
       get: jest.fn().mockResolvedValue({
         plan: { id: 'plan-1' },
@@ -127,12 +129,12 @@ describe('AiChatContextBuilder', () => {
       summarise: jest.fn().mockResolvedValue({ daysLogged: 5, sleepMinutes: { average: 500 } }),
     };
     const builder = new AiChatContextBuilder(
-      prisma as never,
+      summaryThemes as never,
       todayFocus as never,
       plans as never,
       weekly as never,
     );
-    return { builder, prisma, todayFocus, plans, weekly };
+    return { builder, summaryThemes, todayFocus, plans, weekly };
   }
 
   it('calls the domain services with the real caller, and only the ones the topic needs', async () => {
@@ -159,29 +161,21 @@ describe('AiChatContextBuilder', () => {
     });
   });
 
-  it('RECENT_PROGRESS: last week plus the themes of ready summaries, taxonomy only', async () => {
-    const { builder, prisma, weekly, todayFocus } = make();
-    prisma.conversationSummary.findMany.mockResolvedValue([
-      {
-        content: {
-          themes: ['sleep', 'not-a-theme', 'routines'],
-          overview: 'Zephyrine slept badly',
-        },
-      },
-      { content: { themes: ['sleep', 'sensory'] } },
-      { content: null },
-    ]);
+  it('RECENT_PROGRESS: last week plus the themes of ready summaries, themes only', async () => {
+    const { builder, summaryThemes, weekly, todayFocus } = make();
+    summaryThemes.read.mockResolvedValue({
+      themes: ['sleep', 'routines'],
+      followUpSuggested: true,
+    });
 
     const built = await builder.build(AiChatTopic.RECENT_PROGRESS, child, caller, now);
 
     expect(todayFocus.get).not.toHaveBeenCalled();
     expect(weekly.summarise).toHaveBeenCalledWith('c1', caller, {}, now);
+    expect(summaryThemes.read).toHaveBeenCalledWith('c1');
     expect(built.context.lastWeek).toEqual({ daysLogged: 5, sleepMinutesAverage: 500 });
-    expect(built.context.recentThemes).toEqual(['sleep', 'routines', 'sensory']);
-    expect(JSON.stringify(built.context)).not.toContain('Zephyrine');
-    expect(prisma.conversationSummary.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { childId: 'c1', status: 'READY' }, take: 3 }),
-    );
+    expect(built.context.recentThemes).toEqual(['sleep', 'routines']);
+    expect(JSON.stringify(built.context)).not.toMatch(/followUp|Zephyrine/);
   });
 
   it('a child with no active plan is an empty plan, not an error', async () => {

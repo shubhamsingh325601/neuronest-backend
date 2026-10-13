@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ChildrenModule } from '@modules/children/children.module';
 import { CoachingModule } from '@modules/coaching/coaching.module';
+import { ConversationThemesModule } from '@modules/conversations/conversation-themes.module';
 import { PlansModule } from '@modules/plans/plans.module';
 import { ProgressModule } from '@modules/progress/progress.module';
 import { GenerateCoachingTipController } from './features/generate-coaching-tip/generate-coaching-tip.controller';
@@ -17,7 +18,7 @@ import { CoachingTipGenerator } from './shared/coaching-tip.generator';
  * those modules' exported services, called with the real caller — never their tables.
  */
 @Module({
-  imports: [ChildrenModule, PlansModule, ProgressModule, CoachingModule],
+  imports: [ChildrenModule, PlansModule, ProgressModule, CoachingModule, ConversationThemesModule],
   controllers: [GenerateCoachingTipController, GetCoachingTipController],
   providers: [
     AiAccessService,

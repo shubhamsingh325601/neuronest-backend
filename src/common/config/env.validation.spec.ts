@@ -101,7 +101,19 @@ describe('envValidationSchema', () => {
         AI_CHAT_HISTORY_MESSAGES: 10,
         AI_CHAT_MAX_OUTPUT_TOKENS: 400,
         AI_CHAT_TOTAL_TIMEOUT_MS: 60000,
+        AI_CHAT_FIRST_TOKEN_TIMEOUT_MS: 20000,
+        AI_CHAT_THINKING_LEVEL: '',
       });
+    });
+
+    it('accepts only known thinking levels and a sane first-token timeout', () => {
+      expect(validate({ ...base, AI_CHAT_THINKING_LEVEL: 'low' }).error).toBeUndefined();
+      expect(validate({ ...base, AI_CHAT_THINKING_LEVEL: 'max' }).error?.message).toContain(
+        'AI_CHAT_THINKING_LEVEL',
+      );
+      expect(validate({ ...base, AI_CHAT_FIRST_TOKEN_TIMEOUT_MS: '500' }).error?.message).toContain(
+        'AI_CHAT_FIRST_TOKEN_TIMEOUT_MS',
+      );
     });
 
     it('rejects non-positive caps and a message limit above what the API accepts', () => {

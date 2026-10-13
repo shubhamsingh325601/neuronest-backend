@@ -14,10 +14,10 @@ const SHIPPED: Record<number, string> = {
 };
 
 describe('chat prompt v1', () => {
-  it('has a stable identity, and is the version requests are made with', () => {
+  it('keeps its identity; version 1 is no longer the one requests are made with', () => {
     expect(prompt.id).toBe('chat-reply');
     expect(prompt.version).toBe(1);
-    expect(chatPrompt).toBe(prompt);
+    expect(chatPrompt).not.toBe(prompt);
   });
 
   it('exports the hash of its rules and topic fragments, and the version is pinned', () => {

@@ -17,6 +17,9 @@ There is deliberately no microservice mesh, event bus, or distributed database a
 | `users` | Current user profile (`GET /users/me`), self-deactivation |
 | `clinicians` | Admin-created clinician lifecycle: create, invite (emailed setup link), list/get/update, resend invitation |
 | `children` | Core Care Domain foundation: the `Child` record and clinician↔child assignment |
+| `experts` | Admin-created EXPERT accounts, password reset, expert↔child assignment (Phase 19) |
+| `conversations` | Guided AI chat (SSE streaming), parent↔expert chat, summaries of closed chats, idle-close and purge jobs (Phase 19) |
+| `ai-coaching` | Parent AI coaching tip and the shared AI access check (Phase 18); AI conventions in [ai.md](ai.md) |
 | `health` | Liveness and database connectivity probes |
 
 ### Common Infrastructure Modules
@@ -171,7 +174,18 @@ Background work (async email, stale-media expiry) runs on a small custom queue �
 - **Hosting:** Render free and Hostinger shared do not keep Node alive between requests. Accepted: nothing is lost (jobs live in Postgres); work resumes at the next start/request or admin trigger. First emails are sent by the kick in the same request. On an always-on VPS the sweep simply becomes reliable — no code change.
 - **Adding a job type:** register a handler in the owning module's `onModuleInit` (`JobHandlerRegistry.register`) and enqueue with `JobQueueService.enqueue(tx, spec)` followed by a post-commit `kick()`. SMS/push notifications are just new job types.
 
-### 5. Forward-Compatible Data Modeling
+### 5. Live Delivery: SSE and the Chat Event Bus (Phase 19)
+
+Chat uses server-sent events from Nest, with Postgres as the only store of message text. Two streams exist: the AI reply
+stream (`POST /ai-conversations/{id}/messages`, a manual response that is flushed on the first provider delta) and the
+parent↔expert event stream (`GET /conversations/{id}/events`, Nest `@Sse`). The event stream is an accelerator: the cursor
+read (`GET .../messages?afterSeq=`) is the correctness path, and each wake-up re-reads the database, so a lost event repairs
+itself. `ConversationEventBus` is an abstract class with an in-process implementation (ids only); it assumes **one backend
+instance**. For several instances, replace it with Postgres `LISTEN/NOTIFY` on a direct (non-pooled) connection. The
+per-user and per-conversation stream caps are also in-process. Hosting must not buffer `text/event-stream` (measured on Render
+staging; repeat on Hostinger before chat ships there); a 15 s heartbeat comment keeps proxies open.
+
+### 6. Forward-Compatible Data Modeling
 - **Relational Normalization (3NF)** ensures referential integrity as core data volume expands.
 - **PostgreSQL `jsonb`** is utilized for extensible schemas (clinical responses, flexible metadata, audit snapshots) without requiring disruptive schema migrations.
 
@@ -184,3 +198,4 @@ Background work (async email, stale-media expiry) runs on a small custom queue �
 - [Testing Architecture](testing.md) — Unit test mocking, E2E test setup, guardrail suites.
 - [Authentication Sequences](auth-flows.md) — Step-by-step token flows and state transitions.
 - [Role-Based Access Control (RBAC)](rbac.md) — Static permission mapping and authorization guards.
+- [AI Conventions](ai.md) — AI port, safety rules, chat streaming, summaries, evals.

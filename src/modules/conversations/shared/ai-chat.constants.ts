@@ -95,3 +95,12 @@ export function withFooter(text: string): string {
 export function withoutFooter(body: string): string {
   return body.endsWith(AI_CHAT_FOOTER) ? body.slice(0, -AI_CHAT_FOOTER.length).trimEnd() : body;
 }
+
+/**
+ * Shown when the model marked a plain greeting, thanks or "who am I" as off-topic anyway (plan 0019 section 14).
+ * A strike is for leaving the topic, not for saying hello. Fixed text, one per picked topic label.
+ */
+export function smallTalkReply(topicId: string): string {
+  const label = findChatTopic(topicId)?.label.toLowerCase() ?? 'your child';
+  return `Hello! I'm an AI assistant in this app. I can't see names, but I'm here to help you, the parent, with ${label}. What would you like to ask?`;
+}

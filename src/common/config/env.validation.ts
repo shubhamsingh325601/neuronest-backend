@@ -52,8 +52,7 @@ export function validateEmailEnv(
 ): unknown {
   if (env.NODE_ENV !== 'production') return env;
 
-  const required =
-    env.EMAIL_PROVIDER === 'brevo' ? ['BREVO_API_KEY'] : ['RESEND_API_KEY'];
+  const required = env.EMAIL_PROVIDER === 'brevo' ? ['BREVO_API_KEY'] : ['RESEND_API_KEY'];
   for (const key of required) {
     if (!env[key]) {
       return helpers.message({
@@ -191,6 +190,8 @@ export const envValidationSchema = Joi.object({
   AI_CHAT_HISTORY_MESSAGES: Joi.number().integer().min(0).max(50).default(10),
   AI_CHAT_MAX_OUTPUT_TOKENS: Joi.number().integer().min(50).max(8192).default(400),
   AI_CHAT_TOTAL_TIMEOUT_MS: Joi.number().integer().min(5000).max(300000).default(60000),
+  AI_CHAT_FIRST_TOKEN_TIMEOUT_MS: Joi.number().integer().min(2000).max(120000).default(20000),
+  AI_CHAT_THINKING_LEVEL: Joi.string().valid('', 'minimal', 'low', 'medium', 'high').default(''),
 
   // Conversation retention (plan 0019 section 8). The backstop may not come before the normal purge.
   CONVERSATION_IDLE_CLOSE_HOURS: Joi.number().integer().min(1).default(24),

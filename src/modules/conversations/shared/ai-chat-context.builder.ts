@@ -1,20 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { AiChatTopic, SummaryStatus } from '@prisma/client';
+import { AiChatTopic } from '@prisma/client';
 import type { AuthenticatedUser } from '@common/authz/jwt-payload.type';
-import { PrismaService } from '@common/prisma/prisma.service';
 import { ageInYears } from '@modules/ai-coaching/shared/coaching-context.builder';
 import { nameTokens, scrubName, truncate } from '@modules/ai-coaching/shared/text-safety.util';
 import type { ChildDto } from '@modules/children/shared/child.dto';
 import { GetPlanService } from '@modules/plans/features/get-plan/get-plan.service';
 import { TodayFocusService } from '@modules/plans/features/today-focus/today-focus.service';
 import { WeeklySummaryService } from '@modules/progress/features/weekly-summary/weekly-summary.service';
-import { SUMMARY_THEMES } from './conversation-summary.content';
+import { RecentSummaryThemesReader } from './recent-summary-themes.reader';
 
 const TITLE_MAX = 200;
 const INSTRUCTIONS_MAX = 1500;
 const MAX_SECTIONS = 10;
 const MAX_DAY_TITLES = 30;
-const RECENT_SUMMARIES = 3;
 const MAX_THEMES = 5;
 
 /**
@@ -106,7 +104,7 @@ export function assembleChatContext(topic: AiChatTopic, raw: RawChatInput): Buil
 @Injectable()
 export class AiChatContextBuilder {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly summaryThemes: RecentSummaryThemesReader,
     private readonly todayFocus: TodayFocusService,
     private readonly plans: GetPlanService,
     private readonly weeklySummary: WeeklySummaryService,
@@ -158,30 +156,9 @@ export class AiChatContextBuilder {
       const summary = await this.weeklySummary.summarise(child.id, caller, {}, now);
       raw.daysLogged = summary.daysLogged;
       raw.sleepMinutesAverage = summary.sleepMinutes.average;
-      raw.themes = await this.recentThemes(child.id);
+      raw.themes = (await this.summaryThemes.read(child.id)).themes;
     }
 
     return assembleChatContext(topic, raw);
-  }
-
-  /** Themes only (a fixed taxonomy), from the latest READY summaries of this child. */
-  private async recentThemes(childId: string): Promise<string[]> {
-    const summaries = await this.prisma.conversationSummary.findMany({
-      where: { childId, status: SummaryStatus.READY },
-      orderBy: { generatedAt: 'desc' },
-      take: RECENT_SUMMARIES,
-      select: { content: true },
-    });
-    const themes = new Set<string>();
-    for (const { content } of summaries) {
-      const list = (content as { themes?: unknown } | null)?.themes;
-      if (!Array.isArray(list)) continue;
-      for (const theme of list) {
-        if (typeof theme === 'string' && (SUMMARY_THEMES as readonly string[]).includes(theme)) {
-          themes.add(theme);
-        }
-      }
-    }
-    return [...themes];
   }
 }

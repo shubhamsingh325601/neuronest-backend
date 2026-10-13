@@ -4,7 +4,6 @@ import {
   HttpStatus,
   Injectable,
   Logger,
-  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -28,6 +27,7 @@ import {
   AI_CHAT_FOOTER,
   OFF_TOPIC_REDIRECT,
   RETRACTED_REPLY,
+  smallTalkReply,
   withFooter,
 } from '@modules/conversations/shared/ai-chat.constants';
 import { AiChatContextBuilder } from '@modules/conversations/shared/ai-chat-context.builder';
@@ -36,11 +36,12 @@ import { appendMessage, lockConversation } from '@modules/conversations/shared/a
 import { ChatReplyProcessor } from '@modules/conversations/shared/chat-reply.processor';
 import { loadOwnAiConversation } from '@modules/conversations/shared/load-own-ai-conversation';
 import type { NameGroup } from '@modules/conversations/shared/pii-redaction';
+import { isSmallTalk } from '@modules/conversations/shared/small-talk';
 import { SendAiMessageDto } from './dto/send-ai-message.dto';
 
 /** Where the reply goes. The controller turns these into server-sent events. */
 export interface ChatSink {
-  /** Called once, just before the first event: the controller sends the response headers. */
+  /** Called once, before the provider is called: the controller sends the headers and a first heartbeat. */
   start(): void;
   event(name: 'delta' | 'retract' | 'done' | 'error', data: Record<string, unknown>): void;
 }
@@ -55,6 +56,8 @@ interface ParentTurn {
 interface ReplyToStore {
   state: MessageState;
   body: string;
+  /** False for a redirect of plain small talk: the parent did not leave the topic. */
+  strike: boolean;
 }
 
 /**
@@ -141,6 +144,7 @@ export class SendAiMessageService {
         names.flatMap((n) => n.tokens),
         signal,
         sink,
+        isSmallTalk(dto.text) ? smallTalkReply(conversation.topic) : null,
       );
     } finally {
       this.active.delete(id);
@@ -292,19 +296,18 @@ export class SendAiMessageService {
     blockedNames: string[],
     signal: AbortSignal,
     sink: ChatSink,
+    smallTalk: string | null,
   ): Promise<void> {
     const run = this.ai.streamChat(request);
     const processor = new ChatReplyProcessor(blockedNames);
-    let started = false;
     let ended = false;
     let verdict: AiChatOutcome = 'INVALID_OUTPUT';
     const chat = this.config.get('aiChat', { infer: true });
+    // Everything that can be refused has been. Open the stream now so the client can show a typing state while
+    // the provider thinks (it can take a minute); from here on a failure is an `error` event, never a throw.
+    sink.start();
     try {
       for await (const event of run.events) {
-        if (event.type === 'delta' && !started) {
-          started = true;
-          sink.start();
-        }
         if (event.type === 'end') ended = true;
         const actions =
           event.type === 'delta' ? processor.push(event.text) : processor.end(event.finishReason);
@@ -322,16 +325,15 @@ export class SendAiMessageService {
 
       const outcome = processor.outcome;
       if (outcome === 'EMPTY') throw new AiRunError('AI_INVALID_OUTPUT');
-      const reply = this.replyToStore(outcome, processor.text);
+      const reply = this.replyToStore(outcome, processor.text, smallTalk);
       verdict = outcome === 'RETRACTED' ? 'BLOCKED' : 'COMPLETE';
 
       const { message, closed } = await this.storeReply(conversationId, reply, chat.offTopicLimit);
       if (outcome === 'COMPLETE') sink.event('delta', { text: `\n\n${AI_CHAT_FOOTER}` });
-      if (outcome === 'REDIRECTED') sink.event('delta', { text: OFF_TOPIC_REDIRECT });
+      if (outcome === 'REDIRECTED') sink.event('delta', { text: reply.body });
       sink.event('done', this.donePayload(message, closed));
     } catch (err) {
       this.logFailure(err);
-      if (!started) throw this.problemFor(err);
       sink.event('error', { code: this.errorCode(err) });
     } finally {
       await run.finish(verdict);
@@ -341,14 +343,17 @@ export class SendAiMessageService {
   private replyToStore(
     outcome: 'COMPLETE' | 'REDIRECTED' | 'RETRACTED',
     text: string,
+    smallTalk: string | null,
   ): ReplyToStore {
     switch (outcome) {
       case 'REDIRECTED':
-        return { state: MessageState.REDIRECTED, body: OFF_TOPIC_REDIRECT };
+        return smallTalk
+          ? { state: MessageState.REDIRECTED, body: smallTalk, strike: false }
+          : { state: MessageState.REDIRECTED, body: OFF_TOPIC_REDIRECT, strike: true };
       case 'RETRACTED':
-        return { state: MessageState.RETRACTED, body: RETRACTED_REPLY };
+        return { state: MessageState.RETRACTED, body: RETRACTED_REPLY, strike: false };
       case 'COMPLETE':
-        return { state: MessageState.COMPLETE, body: withFooter(text) };
+        return { state: MessageState.COMPLETE, body: withFooter(text), strike: false };
     }
   }
 
@@ -372,7 +377,7 @@ export class SendAiMessageService {
         state: reply.state,
       });
       let closed = false;
-      if (reply.state === MessageState.REDIRECTED) {
+      if (reply.strike) {
         const strikes = locked.offTopicCount + 1;
         closed = strikes >= offTopicLimit;
         await tx.conversation.update({
@@ -388,21 +393,6 @@ export class SendAiMessageService {
     });
     if (result.closed) await this.queue.kick();
     return result;
-  }
-
-  /** A failure before anything was sent is an ordinary 503; the provider's own words never leave. */
-  private problemFor(err: unknown): HttpException {
-    if (err instanceof HttpException) return err;
-    if (err instanceof AiRunError && err.code === 'AI_DISABLED') {
-      return new ServiceUnavailableException({
-        code: 'AI_DISABLED',
-        message: 'AI chat is not enabled.',
-      });
-    }
-    return new ServiceUnavailableException({
-      code: 'AI_UNAVAILABLE',
-      message: 'The assistant is unavailable right now. Please try again.',
-    });
   }
 
   /**

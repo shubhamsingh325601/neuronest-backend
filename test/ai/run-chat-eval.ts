@@ -27,7 +27,7 @@ import { ChatReplyProcessor } from '@modules/conversations/shared/chat-reply.pro
  * - Output is ids, counts and reason codes. It never prints a prompt, a fixture or model text.
  */
 
-const GROUPS = ['on-topic', 'off-topic', 'persona', 'injection', 'pii', 'suppression'] as const;
+const GROUPS = ['on-topic', 'off-topic', 'persona', 'injection', 'pii', 'suppression', 'smalltalk'] as const;
 const OUTCOMES = ['COMPLETE', 'REDIRECTED', 'RETRACTED'] as const;
 
 const fixtureSchema = z.strictObject({
@@ -176,7 +176,12 @@ async function liveRun(fixtures: Fixture[]): Promise<void> {
     {
       get: (key: string) =>
         key === 'aiChat'
-          ? { maxOutputTokens: MAX_OUTPUT_TOKENS, totalTimeoutMs: 60000 }
+          ? {
+              maxOutputTokens: MAX_OUTPUT_TOKENS,
+              totalTimeoutMs: 60000,
+              firstTokenTimeoutMs: envInt('AI_CHAT_FIRST_TOKEN_TIMEOUT_MS', 20000),
+              thinkingLevel: process.env.AI_CHAT_THINKING_LEVEL ?? '',
+            }
           : {
               enabled: true,
               model: spec,

@@ -5,6 +5,7 @@ import { PasswordService } from '@common/crypto/password.service';
 import {
   AI_CHAT_FOOTER,
   OFF_TOPIC_REDIRECT,
+  smallTalkReply,
   RETRACTED_REPLY,
 } from '@modules/conversations/shared/ai-chat.constants';
 import { createTestApp, type TestContext } from './helpers/test-app';
@@ -316,6 +317,35 @@ describe('AI chat (e2e)', () => {
       expect(ctx.ai.chatOutcomes).toEqual(['BLOCKED']);
     });
 
+    it('never strikes a greeting or "who am I", even when the model marks it off-topic', async () => {
+      const { parent, childId } = await family();
+      const id = await openChat(parent, childId);
+      for (const [i, text] of ['hi', 'who am I', 'who is my child', 'Hello!'].entries()) {
+        ctx.ai.willStreamChat({ deltas: ['[[OFF', '_TOPIC]]'] });
+        const res = await send(id, parent.token, text, `g-${i}`);
+
+        const events = parseSse(res.text);
+        expect(events.map((e) => e.event)).toEqual(['delta', 'done']);
+        expect(events[0].data.text).toBe(smallTalkReply('TODAYS_ACTIVITIES'));
+        expect(events[1].data).toMatchObject({ state: 'REDIRECTED', conversationClosed: false });
+      }
+
+      const row = await ctx.prisma.conversation.findUniqueOrThrow({ where: { id } });
+      expect(row).toMatchObject({ offTopicCount: 0, status: 'OPEN' });
+    });
+
+    it('answers a greeting the model answered normally as an ordinary reply with the footer', async () => {
+      const { parent, childId } = await family();
+      const id = await openChat(parent, childId);
+      ctx.ai.willStreamChat({ deltas: ['Hello! I am an AI assistant. ', 'What would you like to ask?'] });
+
+      const res = await send(id, parent.token, 'hi', 'g-ok');
+
+      const events = parseSse(res.text);
+      expect(events[events.length - 1].data).toMatchObject({ state: 'COMPLETE' });
+      expect((await stored(id))[1].body.endsWith(AI_CHAT_FOOTER)).toBe(true);
+    });
+
     it('answers an off-topic message with the fixed redirect and closes the chat on the third strike', async () => {
       const { parent, childId } = await family();
       const id = await openChat(parent, childId);
@@ -342,19 +372,20 @@ describe('AI chat (e2e)', () => {
   });
 
   describe('failures', () => {
-    it('503 before the first text, nothing stored as an answer; the same message can be retried', async () => {
+    it('opens the stream before the provider answers: a failure before any text is an error event, nothing stored; the same message can be retried', async () => {
       const { parent, childId } = await family();
       const id = await openChat(parent, childId);
       ctx.ai.willStreamChat({
         deltas: [],
-        fail: new AiRunError('AI_PROVIDER', { retryable: true, httpStatus: 503 }),
+        fail: new AiRunError('AI_TIMEOUT', { retryable: true }),
       });
 
       const failed = await send(id, parent.token, 'Hello', 'f-1');
 
-      expect(failed.status).toBe(503);
-      expect(failed.body.code).toBe('AI_UNAVAILABLE');
-      expect(failed.headers['content-type']).toMatch(/application\/problem\+json/);
+      expect(failed.status).toBe(200);
+      expect(failed.headers['content-type']).toMatch(/text/event-stream/);
+      expect(failed.text.startsWith(': hb')).toBe(true); // first bytes are a heartbeat
+      expect(parseSse(failed.text)).toEqual([{ event: 'error', data: { code: 'AI_TIMEOUT' } }]);
       expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT']);
 
       ctx.ai.willStreamChat({ deltas: ['Here is help. '] });

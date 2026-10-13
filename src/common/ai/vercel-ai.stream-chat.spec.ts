@@ -45,28 +45,41 @@ interface Script {
   then?: 'close' | { fail: Error } | 'silent';
 }
 
+/** The options the SDK passed to the mock provider, per call, in order. */
+const calls: { maxOutputTokens?: number; providerOptions?: unknown }[] = [];
+
 function modelFor(script: Script) {
   return new MockLanguageModelV3({
-    doStream: async (options: { abortSignal?: AbortSignal }) => ({
-      stream: new ReadableStream({
-        start(controller) {
-          for (const part of script.parts) controller.enqueue(part);
-          const then = script.then ?? 'close';
-          if (then === 'close') controller.close();
-          // Later, so the reader has taken the parts first (erroring at once would discard them).
-          else if (then !== 'silent') setTimeout(() => controller.error(then.fail), 20);
-          else {
-            options.abortSignal?.addEventListener('abort', () => {
-              try {
-                controller.error(new DOMException('aborted', 'AbortError'));
-              } catch {
-                /* already closed */
-              }
-            });
-          }
-        },
-      }),
-    }),
+    doStream: async (options: {
+      abortSignal?: AbortSignal;
+      maxOutputTokens?: number;
+      providerOptions?: unknown;
+    }) => {
+      calls.push({
+        maxOutputTokens: options.maxOutputTokens,
+        providerOptions: options.providerOptions,
+      });
+      return {
+        stream: new ReadableStream({
+          start(controller) {
+            for (const part of script.parts) controller.enqueue(part);
+            const then = script.then ?? 'close';
+            if (then === 'close') controller.close();
+            // Later, so the reader has taken the parts first (erroring at once would discard them).
+            else if (then !== 'silent') setTimeout(() => controller.error(then.fail), 20);
+            else {
+              options.abortSignal?.addEventListener('abort', () => {
+                try {
+                  controller.error(new DOMException('aborted', 'AbortError'));
+                } catch {
+                  /* already closed */
+                }
+              });
+            }
+          },
+        }),
+      };
+    },
   } as never);
 }
 
@@ -76,7 +89,9 @@ function setup(opts: {
   enabled?: boolean;
   capacity?: boolean | boolean[];
   chunkTimeoutMs?: number;
+  firstTokenTimeoutMs?: number;
 }) {
+  calls.length = 0;
   const runs: AiRunRecordInput[] = [];
   const recorder = {
     record: jest.fn(async (r: AiRunRecordInput) => {
@@ -97,7 +112,12 @@ function setup(opts: {
   const config = {
     get: (key: string) =>
       key === 'aiChat'
-        ? { maxOutputTokens: 400, totalTimeoutMs: 60000 }
+        ? {
+            maxOutputTokens: 400,
+            totalTimeoutMs: 60000,
+            firstTokenTimeoutMs: opts.firstTokenTimeoutMs ?? 20000,
+            thinkingLevel: '',
+          }
         : {
             enabled: opts.enabled ?? true,
             model: PRIMARY,
@@ -227,7 +247,93 @@ describe('VercelAiService.streamChat', () => {
     expect(h.runs[0]).toMatchObject({ status: AiRunStatus.INVALID_OUTPUT, outputTokens: 30 });
   });
 
+  describe('thinking limit', () => {
+    it('asks Gemini 3.5 for minimal thinking and adds room for it to the output limit', async () => {
+      const h = setup({
+        models: { [PRIMARY]: { parts: [textStart, delta('Hi.'), textEnd, finish()] } },
+      });
+
+      await read(h.service.streamChat(request()));
+
+      expect(calls).toEqual([
+        {
+          maxOutputTokens: 528,
+          providerOptions: { google: { thinkingConfig: { thinkingLevel: 'minimal' } } },
+        },
+      ]);
+    });
+  });
+
   describe('failures', () => {
+    it('a reply that hit the length limit before any text (thinking) is a failed attempt, tokens kept', async () => {
+      const h = setup({ models: { [PRIMARY]: { parts: [textStart, textEnd, finish('length')] } } });
+
+      const err = await failureOf(read(h.service.streamChat(request())));
+
+      expect(err).toMatchObject({ code: 'AI_INVALID_OUTPUT', errorClass: 'LengthWithoutText' });
+      expect(h.runs[0]).toMatchObject({
+        status: AiRunStatus.INVALID_OUTPUT,
+        errorClass: 'LengthWithoutText',
+        outputTokens: 30,
+      });
+    });
+
+    it('tries the fallback model after a length-without-text attempt, recording both', async () => {
+      const h = setup({
+        fallback: FALLBACK,
+        models: {
+          [PRIMARY]: { parts: [textStart, textEnd, finish('length')] },
+          [FALLBACK]: { parts: [textStart, delta('Hello.'), textEnd, finish()] },
+        },
+      });
+      const run = h.service.streamChat(request());
+
+      const events = await read(run);
+      await run.finish('COMPLETE');
+
+      expect(events[0]).toEqual({ type: 'delta', text: 'Hello.' });
+      expect(h.runs.map((r) => [r.attempt, r.status])).toEqual([
+        [1, AiRunStatus.INVALID_OUTPUT],
+        [2, AiRunStatus.SUCCEEDED],
+      ]);
+      expect(h.runs[0].outputTokens).toBe(30);
+    });
+
+    it('a provider that takes the request but sends nothing is cut at the first-token timeout', async () => {
+      const h = setup({
+        firstTokenTimeoutMs: 60,
+        models: { [PRIMARY]: { parts: [], then: 'silent' } },
+      });
+      const started = Date.now();
+
+      const err = await failureOf(read(h.service.streamChat(request())));
+
+      expect(err).toMatchObject({ code: 'AI_TIMEOUT' });
+      expect(Date.now() - started).toBeLessThan(5000);
+      expect(h.runs[0]).toMatchObject({ status: AiRunStatus.TIMEOUT });
+    });
+
+    it('tries the fallback model when the first model never produces a first token', async () => {
+      const h = setup({
+        firstTokenTimeoutMs: 60,
+        fallback: FALLBACK,
+        models: {
+          [PRIMARY]: { parts: [], then: 'silent' },
+          [FALLBACK]: { parts: [textStart, delta('Quick.'), textEnd, finish()] },
+        },
+      });
+      const run = h.service.streamChat(request());
+
+      const events = await read(run);
+      await run.finish('COMPLETE');
+
+      expect(events[0]).toEqual({ type: 'delta', text: 'Quick.' });
+      expect(h.runs.map((r) => [r.attempt, r.status])).toEqual([
+        [1, AiRunStatus.TIMEOUT],
+        [2, AiRunStatus.SUCCEEDED],
+      ]);
+    });
+
     it('an error before the first text is thrown, recorded once, and never logged by the SDK', async () => {
       const h = setup({
         models: { [PRIMARY]: { parts: [{ type: 'error', error: apiError(503) }] } },

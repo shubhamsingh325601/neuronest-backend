@@ -16,11 +16,8 @@ import {
   type AiStructuredRequest,
   type AiStructuredResult,
 } from './ai.service';
-import {
-  classifyFailure,
-  STATUS_TO_CODE,
-  type ClassifiedFailure,
-} from './vercel-error.classifier';
+import { chatThinking } from './thinking-options';
+import { classifyFailure, STATUS_TO_CODE, type ClassifiedFailure } from './vercel-error.classifier';
 
 type AiConfig = AppConfig['ai'];
 
@@ -247,11 +244,19 @@ export class VercelAiService extends AiService {
       };
       state.current = current;
 
+      const thinking = chatThinking(provider, modelId, chat.thinkingLevel || undefined);
       let sent = false;
+      let firstTokenTimedOut = false;
       let reported: ClassifiedFailure | undefined;
       let failure: ClassifiedFailure | undefined;
       let finishReason: string | undefined;
       let aborted = false;
+      // `timeout.chunkMs` only starts when the first stream chunk arrives, which is after the provider has
+      // answered the request: a provider that sits on the request for a minute is cut by `totalMs` alone.
+      const firstTokenTimer = setTimeout(() => {
+        firstTokenTimedOut = true;
+        controller.abort();
+      }, chat.firstTokenTimeoutMs);
       try {
         const result = streamText({
           model: resolved.model,
@@ -260,7 +265,9 @@ export class VercelAiService extends AiService {
           maxRetries: 0,
           abortSignal: controller.signal,
           timeout: { chunkMs: cfg.timeoutMs, totalMs: chat.totalTimeoutMs },
-          maxOutputTokens: req.maxOutputTokens ?? chat.maxOutputTokens,
+          // Thinking is counted inside the output limit: add room for it so the visible reply keeps its share.
+          maxOutputTokens: (req.maxOutputTokens ?? chat.maxOutputTokens) + thinking.headroomTokens,
+          providerOptions: thinking.providerOptions,
           // Never the SDK default (it logs the error object, which holds the prompt): class and status only.
           onError: ({ error }) => {
             reported = classifyFailure(error);
@@ -270,6 +277,7 @@ export class VercelAiService extends AiService {
           if (part.type === 'text-delta') {
             if (part.text.length === 0) continue;
             sent = true;
+            clearTimeout(firstTokenTimer);
             yield { type: 'delta', text: part.text };
           } else if (part.type === 'error') {
             failure = reported ?? classifyFailure(part.error);
@@ -289,6 +297,7 @@ export class VercelAiService extends AiService {
         // The loop itself throws on a connection reset mid-stream.
         failure = classifyFailure(err);
       } finally {
+        clearTimeout(firstTokenTimer);
         req.signal.removeEventListener('abort', onClientLeft);
       }
 
@@ -296,7 +305,16 @@ export class VercelAiService extends AiService {
         await this.recordChat(state, AiRunStatus.CLIENT_ABORTED);
         return;
       }
-      if (aborted) failure = classifyFailure({ name: 'TimeoutError' });
+      if (aborted || firstTokenTimedOut) failure = classifyFailure({ name: 'TimeoutError' });
+      if (!failure && finishReason === 'length' && !sent) {
+        // The limit was spent before any text (thinking): there is no reply to cut short, so it is a failed attempt.
+        failure = {
+          status: AiRunStatus.INVALID_OUTPUT,
+          code: 'AI_INVALID_OUTPUT',
+          retryable: false,
+          errorClass: 'LengthWithoutText',
+        };
+      }
       if (!failure && finishReason !== 'stop' && finishReason !== 'length') {
         failure =
           finishReason === 'content-filter'
@@ -338,6 +356,8 @@ export class VercelAiService extends AiService {
         status: failure.status,
         errorClass: failure.errorClass,
         httpStatus: failure.httpStatus,
+        inputTokens: current.usage?.inputTokens,
+        outputTokens: current.usage?.outputTokens,
         latencyMs: Date.now() - current.started,
       });
       state.current = undefined;
