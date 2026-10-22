@@ -96,6 +96,12 @@ export class JwtAuthGuard implements CanActivate {
       ...(payload.imp ? { impersonatedBy: await this.verifyImpersonator(payload.imp, account.role) } : {}),
     };
     (request as Request & { user: AuthenticatedUser }).user = user;
+    // From here every log line of this request (including its completion line) names the caller.
+    request.log?.setBindings({
+      userId: user.id,
+      role: user.role,
+      ...(user.impersonatedBy ? { impersonatedBy: user.impersonatedBy } : {}),
+    });
     return true;
   }
 

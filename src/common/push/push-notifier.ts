@@ -24,6 +24,10 @@ export class PushNotifier {
         where: { childId, clinician: { status: UserStatus.ACTIVE } },
         select: { clinicianId: true },
       });
+      if (assignments.length === 0) {
+        this.logger.log({ childId }, 'push skipped: no active clinician assigned to the child');
+        return;
+      }
       await this.push.sendToUsers(
         assignments.map((assignment) => assignment.clinicianId),
         message,
@@ -39,6 +43,7 @@ export class PushNotifier {
         select: { parentId: true },
       });
       if (!child) {
+        this.logger.warn({ childId }, 'push skipped: child not found');
         return;
       }
       const preferences = await this.prisma.userPreference.findUnique({
@@ -46,6 +51,7 @@ export class PushNotifier {
         select: { appointmentReminders: true },
       });
       if (preferences && !preferences.appointmentReminders) {
+        this.logger.log({ childId }, 'push skipped: parent turned appointment updates off');
         return;
       }
       await this.push.sendToUsers([child.parentId], message);

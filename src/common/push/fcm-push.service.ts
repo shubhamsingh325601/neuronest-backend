@@ -10,6 +10,9 @@ const DEAD_TOKEN_CODES = new Set([
   'messaging/invalid-registration-token',
 ]);
 
+/** A dry-run send to a made-up token: these answers prove the credentials and the FCM API work. */
+const CREDENTIALS_OK_CODES = new Set([...DEAD_TOKEN_CODES, 'messaging/invalid-argument']);
+
 /** FCM allows at most 500 tokens in one multicast call. */
 const BATCH_SIZE = 500;
 
@@ -25,6 +28,10 @@ export class FcmPushService extends PushService {
     if (getApps().length === 0) {
       initializeApp({ credential: cert(serviceAccount) });
     }
+    this.logger.log(
+      `Firebase push is on (project ${serviceAccount.projectId ?? 'unknown'}); checking credentials`,
+    );
+    void this.verifyCredentials();
   }
 
   async sendToUsers(userIds: string[], message: PushMessage): Promise<void> {
@@ -36,10 +43,19 @@ export class FcmPushService extends PushService {
         where: { userId: { in: userIds } },
         select: { token: true },
       });
+      if (devices.length === 0) {
+        // The usual reason "no push arrived": the app never registered its token for this user.
+        this.logger.log(
+          { users: userIds.length, devices: 0, title: message.title },
+          'push not sent: no registered devices',
+        );
+        return;
+      }
       for (let start = 0; start < devices.length; start += BATCH_SIZE) {
         await this.sendBatch(
           devices.slice(start, start + BATCH_SIZE).map((device) => device.token),
           message,
+          userIds.length,
         );
       }
     } catch (err) {
@@ -47,12 +63,13 @@ export class FcmPushService extends PushService {
     }
   }
 
-  private async sendBatch(tokens: string[], message: PushMessage): Promise<void> {
+  private async sendBatch(tokens: string[], message: PushMessage, users: number): Promise<void> {
     const result = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title: message.title, body: message.body },
       data: message.data,
-      android: { priority: 'high' },
+      android: { priority: 'high', notification: { sound: 'default' } },
+      apns: { payload: { aps: { sound: 'default' } } },
     });
     const dead = tokens.filter((_, index) => {
       const code = result.responses[index]?.error?.code;
@@ -60,6 +77,45 @@ export class FcmPushService extends PushService {
     });
     if (dead.length > 0) {
       await this.prisma.deviceToken.deleteMany({ where: { token: { in: dead } } });
+    }
+
+    // Counts and FCM error codes only: never the tokens, which are credentials for the phone.
+    const failures: Record<string, number> = {};
+    for (const response of result.responses) {
+      const code = response.error?.code;
+      if (code) failures[code] = (failures[code] ?? 0) + 1;
+    }
+    const summary = {
+      users,
+      devices: tokens.length,
+      sent: result.successCount,
+      failed: result.failureCount,
+      pruned: dead.length,
+      failures,
+      title: message.title,
+    };
+    if (result.failureCount > dead.length) {
+      this.logger.warn(summary, 'push sent with failures');
+    } else {
+      this.logger.log(summary, 'push sent');
+    }
+  }
+
+  /** Dry-run send at boot, so wrong credentials or a disabled FCM API show up in the logs on deploy. */
+  private async verifyCredentials(): Promise<void> {
+    try {
+      await getMessaging().send({ token: 'neuronest-startup-check', data: { check: '1' } }, true);
+      this.logger.log('Firebase credentials verified');
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? '';
+      if (CREDENTIALS_OK_CODES.has(code)) {
+        this.logger.log('Firebase credentials verified');
+        return;
+      }
+      this.logger.error(
+        { code },
+        `Firebase rejected the credentials, pushes will fail: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }

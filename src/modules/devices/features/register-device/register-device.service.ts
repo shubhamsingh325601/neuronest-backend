@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { RegisterDeviceDto } from './dto/register-device.dto';
 
@@ -8,6 +8,8 @@ import { RegisterDeviceDto } from './dto/register-device.dto';
  */
 @Injectable()
 export class RegisterDeviceService {
+  private readonly logger = new Logger(RegisterDeviceService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async register(userId: string, dto: RegisterDeviceDto): Promise<void> {
@@ -17,5 +19,7 @@ export class RegisterDeviceService {
       create: { userId, token: dto.token, platform },
       update: { userId, platform, lastSeenAt: new Date() },
     });
+    // Never the token itself: it is the address of the phone.
+    this.logger.log({ platform }, 'push device registered');
   }
 }

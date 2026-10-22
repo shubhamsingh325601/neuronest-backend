@@ -140,9 +140,10 @@ export const envValidationSchema = Joi.object({
     .default('')
     .when('NODE_ENV', { is: 'production', then: Joi.string().required() }),
 
-  // Push notifications (Firebase Cloud Messaging). Both empty = push is off; sends are logged and skipped.
-  FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').default(''),
-  FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().allow('').default(''),
+  // Push notifications (Firebase Cloud Messaging). All empty = push is off; sends are logged and skipped.
+  FIREBASE_PROJECT_ID: Joi.string().allow('').default(''),
+  FIREBASE_CLIENT_EMAIL: Joi.string().allow('').default(''),
+  FIREBASE_PRIVATE_KEY: Joi.string().allow('').default(''),
 
   THROTTLE_TTL_SEC: Joi.number().integer().positive().default(60),
   THROTTLE_LIMIT: Joi.number().integer().positive().default(100),
@@ -215,6 +216,10 @@ export const envValidationSchema = Joi.object({
   LOG_LEVEL: Joi.string()
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent')
     .default('info'),
+  // Unset: pretty in development, json elsewhere. Set `pretty` to keep hosted logs human-readable.
+  LOG_FORMAT: Joi.string().valid('pretty', 'json'),
+  // Free-form deployment label (staging, production, ...); defaults to NODE_ENV.
+  APP_ENV: Joi.string().allow('').default(''),
 
   // Seed-only — not required for the app to boot. `tlds: false` so dev-only
   // addresses like `admin@neuronest.local` (no IANA TLD) are accepted.

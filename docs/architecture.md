@@ -136,9 +136,12 @@ NeuroNest uses a self-contained authentication architecture rather than external
 ## 6. Observability & Error Handling
 
 - **Structured JSON Logging (`nestjs-pino`)**:
-  - Every request is tagged with a unique `requestId` (`x-request-id` header or UUIDv4).
+  - Every request is tagged with a unique id (`x-request-id` header or UUIDv4): logged as `reqId` on every line of that request, echoed in the response header, and returned as `requestId` in error bodies. Search the host's logs for it to see the whole request.
+  - One slim completion line per request (`POST /v1/... 200 2634ms`, plus `userId`, `role`, `ip`, `ua`); headers and query strings are never logged. `/v1/health` logs at debug, 4xx at warn, 5xx at error. Format lives in `src/common/logging/http-log.options.ts`.
+  - `JwtAuthGuard` binds `userId`/`role` to the request logger, so lines written after authentication name the caller.
   - Sensitive parameters (passwords, tokens, authorization headers) are redacted automatically.
-  - Pretty-printing enabled in local development; high-performance JSON emitted in production.
+  - `LOG_FORMAT=pretty` gives one readable line per log (default in development); `json` is the default elsewhere. `APP_ENV` (staging, production, ...) is stamped on JSON lines and Sentry events.
+- **Push (FCM)**: `FcmPushService` logs `push sent` with counts (`devices`, `sent`, `failed`, `pruned`, FCM error codes), never tokens, and verifies the credentials with a dry-run send on boot.
 - **RFC 9457 Problem Details**:
   - All errors (validation, business logic, unauthorized access, server crashes) conform to the RFC 9457 standard (`application/problem+json`).
   - See [`docs/api-conventions.md`](api-conventions.md) for full envelope details.

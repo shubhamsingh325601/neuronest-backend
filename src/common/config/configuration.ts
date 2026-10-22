@@ -44,10 +44,10 @@ export interface AppConfig {
     apiSecret: string;
   };
   push: {
-    /** Firebase service-account JSON (raw or base64), for hosts with no file system. */
-    serviceAccountJson: string;
-    /** Path to the service-account JSON file, for local runs. Empty JSON and path = push is off. */
-    serviceAccountPath: string;
+    /** The three fields of the Firebase service-account key. All empty = push is off. */
+    projectId: string;
+    clientEmail: string;
+    privateKey: string;
   };
   throttle: {
     ttlSec: number;
@@ -134,6 +134,10 @@ export interface AppConfig {
     ttlMin: number;
   };
   logLevel: string;
+  /** `pretty` = one readable line per log; `json` = machine-readable. Default: pretty in development, json elsewhere. */
+  logFormat: 'pretty' | 'json';
+  /** Deployment label (development, staging, production) stamped on logs and Sentry events. */
+  appEnv: string;
   admin: {
     email: string;
     password: string;
@@ -179,8 +183,9 @@ export const configuration = (): AppConfig => ({
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? '',
   },
   push: {
-    serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
-    serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
+    projectId: process.env.FIREBASE_PROJECT_ID ?? '',
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL ?? '',
+    privateKey: process.env.FIREBASE_PRIVATE_KEY ?? '',
   },
   throttle: {
     ttlSec: parseInt(process.env.THROTTLE_TTL_SEC ?? '60', 10),
@@ -244,6 +249,10 @@ export const configuration = (): AppConfig => ({
     ttlMin: parseInt(process.env.IMPERSONATION_TTL_MIN ?? '60', 10),
   },
   logLevel: process.env.LOG_LEVEL ?? 'info',
+  logFormat:
+    (process.env.LOG_FORMAT as AppConfig['logFormat'] | undefined) ??
+    ((process.env.NODE_ENV ?? 'development') === 'development' ? 'pretty' : 'json'),
+  appEnv: process.env.APP_ENV || process.env.NODE_ENV || 'development',
   admin: {
     email: process.env.ADMIN_EMAIL ?? '',
     password: process.env.ADMIN_PASSWORD ?? '',
