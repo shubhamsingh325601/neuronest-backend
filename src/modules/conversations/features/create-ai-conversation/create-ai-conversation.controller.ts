@@ -18,7 +18,7 @@ export class CreateAiConversationController {
   @ApiOperation({
     operationId: 'aiConversationCreate',
     summary:
-      'Parent (own child): start an AI chat on one guided topic. 422 for a topic that is not an AI chat.',
+      'Parent (own child): start an AI chat on one guided topic. The chat already holds the assistant greeting (seq 1, no footer). 422 for a topic that is not an AI chat.',
   })
   create(
     @Param('childId', ParseUUIDPipe) childId: string,

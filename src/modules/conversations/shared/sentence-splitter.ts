@@ -19,15 +19,26 @@ const ABBREVIATIONS = new Set([
 /** A reply with no sentence end for this long is cut at a space so the filter still sees it in pieces. */
 const MAX_PIECE_CHARS = 240;
 
+/** A list line as the chat prompt asks for it (plan 0020 section 3 row 6): `- item` or `1. step`. */
+const LIST_ITEM = /^(?:- |\d{1,2}\. )/;
+/** The start of a list line that is not complete yet. */
+const LIST_ITEM_START = /^(?:-|\d{1,2}\.?)?$/;
+
 /**
  * Index just past the first sentence that the text already confirms, or -1. A sentence is confirmed by
  * its end mark, the whitespace after it, and the first character of what follows (so `Dr. Rao`, `3.5`
- * and `1. Do this` are not cut). The returned index is after the whitespace, so no piece starts with it.
+ * and `1. Do this` are not cut). A line break before a list line also confirms the piece before it, so list
+ * items are released one by one. The returned index is after the whitespace, so no piece starts with it.
  */
 function findBoundary(buf: string): number {
   for (let i = 0; i < buf.length; i++) {
     const c = buf[i];
     const paragraph = c === '\n' && buf[i + 1] === '\n';
+    if (c === '\n' && !paragraph) {
+      const rest = buf.slice(i + 1);
+      if (LIST_ITEM.test(rest)) return i + 1;
+      if (rest.length < 4 && LIST_ITEM_START.test(rest)) return -1; // cannot tell yet
+    }
     if (!TERMINATORS.has(c) && !paragraph) continue;
 
     let j = i + 1;

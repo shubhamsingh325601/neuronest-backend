@@ -17,7 +17,8 @@ export class ListMessagesController {
   @ApiOkResponse({ type: ListMessagesResponseDto })
   @ApiOperation({
     operationId: 'messageList',
-    summary: 'Participant: read messages after a seq, oldest first.',
+    summary:
+      'Participant: read messages after a seq, oldest first. An AI chat starts with the assistant greeting (seq 1); the first parent message is seq 2.',
   })
   list(
     @Param('id', ParseUUIDPipe) id: string,

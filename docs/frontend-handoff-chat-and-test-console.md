@@ -57,7 +57,7 @@ Endpoints, all with the parent token:
 |---|---|
 | `GET /v1/ai-chat/topics` | `{ version, data: [{ id, label, description, kind }] }`. `kind` is `AI` (open a chat with `id`), `ROUTE` (`BOOK_CALL`, `TALK_TO_EXPERT`: open another screen, not a chat) or `UNAVAILABLE` (`AI_ASSESSMENT`: show "coming soon"). Never hard-code the list; render what the server returns. |
 | `GET /v1/children` | The parent's children. A chat belongs to one child. |
-| `POST /v1/children/{childId}/ai-conversations` | Body `{ topic }` (an `id` whose kind is `AI`). `201` returns the conversation `{ id, kind:'AI', topic, childId, status:'OPEN', ... }`. `422 AI_TOPIC_NOT_A_CHAT` / `AI_TOPIC_UNAVAILABLE` for the other kinds. |
+| `POST /v1/children/{childId}/ai-conversations` | Body `{ topic }` (an `id` whose kind is `AI`). `201` returns the conversation `{ id, kind:'AI', topic, childId, status:'OPEN', ... }`. The new chat already holds the assistant's greeting (see "The opening greeting" below). `422 AI_TOPIC_NOT_A_CHAT` / `AI_TOPIC_UNAVAILABLE` for the other kinds. |
 | `POST /v1/ai-conversations/{id}/messages` | Body `{ text, clientMessageId }`. **Response is a stream** (see below). |
 | `GET /v1/conversations/{id}/messages?afterSeq=&limit=` | Works for AI chats too (read the history). `{ purged, items: Message[] }`, oldest first, `limit` 1..100 (default 50). After the retention purge: `{ purged: true, items: [] }`. |
 | `POST /v1/conversations/{id}/close` | The parent can close an AI chat. Idempotent. |
@@ -66,29 +66,54 @@ Endpoints, all with the parent token:
 
 `Message` is `{ id, seq, sender: 'PARENT'|'EXPERT'|'AI', state: 'COMPLETE'|'RETRACTED'|'REDIRECTED', body, clientMessageId|null, createdAt }`.
 
+**The opening greeting.** Creating an AI chat stores the first message for you: `sender 'AI'`, `state 'COMPLETE'`, `seq 1`,
+a fixed text for the topic that greets the parent and the child by first name and invites one question. It has **no
+footer** and no model call was made. So `GET .../messages` returns it first, and the parent's first message is `seq 2`
+(do not assume the first message is the parent's). Render it as a normal AI bubble. It does not count towards the
+message limits or the off-topic strikes.
+
 **The send stream.** Send the POST with `Accept: text/event-stream`, read the body as a stream, split on a blank
 line. Each block is `event: <name>` + `data: <json>`. A block starting with `:` is a heartbeat comment (ignore it,
-but it proves the connection is alive; one is sent every 15 s). Events:
+but it proves the connection is alive; one is sent every 15 s). The **first bytes** are always such a comment (`: hb`),
+sent as soon as the request is accepted and before the model is called, so show the typing indicator when you see it.
+Events:
 
 - `delta` `{ text }`: **append** `text` to the AI bubble. Text arrives sentence by sentence (not word by word) because
   each sentence is safety-checked before it is sent. The last `delta` of a normal reply is a fixed "This is AI
   guidance, not a diagnosis..." footer; show it as part of the reply.
+  **Lists:** a reply may contain list lines. A line that starts with `- ` is a bullet, a line that starts with `1. `,
+  `2. ` ... is a numbered step (at most 5 lines, a blank line before the list). Render those lines as a list; everything
+  else is plain text. There is no bold, header, link or emoji markup. List items arrive one per `delta` and each item is
+  safety-checked on its own.
+- A plain "hi", thanks or "who am I" that the model wrongly treated as off-topic gets a fixed friendly `delta` and `done`
+  with `state: 'REDIRECTED'`, but it is **not** a strike (`conversationClosed` stays false).
 - `retract` `{ text }`: **replace everything shown in this bubble** with `text` (the reply failed a safety check
   after part of it was already shown). Treat it as final; the `done` event follows.
 - `done` `{ messageId, seq, state, conversationClosed }`: the reply is stored. `state` is `COMPLETE`, `REDIRECTED`
   (the question was off-topic; the reply is a fixed "I can only help with..." text) or `RETRACTED`. If
   `conversationClosed` is true (the third off-topic reply closes the chat) disable the input and offer "pick a topic".
-- `error` `{ code }`: the stream failed after it started. Codes: `AI_FAILED`, `AI_TIMEOUT`, `AI_PROVIDER`,
-  `AI_RATE_LIMITED`, `AI_BUDGET`, `AI_INVALID_OUTPUT`, `AI_BLOCKED`, `CONVERSATION_CLOSED` (the chat was closed while
-  the reply was being written). The partial text on screen was **not stored**; mark the bubble as failed and offer
-  "try again" with the **same** `clientMessageId` (the server then regenerates without storing the parent message twice).
+- `error` `{ code }`: the reply failed. Because the response has already started (the `: hb` comment), **every
+  provider failure is an `error` event, never a `503`**. The partial text on screen was **not stored**; mark the bubble
+  as failed and offer "try again" with the **same** `clientMessageId` (the server then regenerates without storing the
+  parent message twice). Suggested wording per code (show your own text, never the code):
+
+  | `error.code` | Meaning | Friendly message |
+  |---|---|---|
+  | `AI_RATE_LIMITED` | The AI provider is busy (too many requests) | "The assistant is busy right now. Please try again in a minute." |
+  | `AI_TIMEOUT` | No answer in time | "That took too long. Please try again." |
+  | `AI_PROVIDER` | The provider failed | "The assistant is having trouble. Please try again." |
+  | `AI_BUDGET` | The app's daily AI budget is used up | "The assistant is resting for today. Please try again tomorrow." |
+  | `AI_INVALID_OUTPUT`, `AI_BLOCKED` | The reply failed a safety check or was empty | "I couldn't answer that. Please rephrase, or talk to your child's expert." |
+  | `CONVERSATION_CLOSED` | The chat was closed while the reply was written | "This chat was closed. Start a new one." |
+  | `AI_FAILED` (or any other code) | Anything else | "Something went wrong. Please try again." |
 
 Problems that arrive **before** the stream starts are ordinary JSON errors with an HTTP status (no events):
 `400` validation, `403` (not this parent's chat, or an admin token), `404`, `409 CONVERSATION_CLOSED`,
 `409 AI_CHAT_OFF_TOPIC_LIMIT` (chat closed after three off-topic messages), `409 AI_CHAT_BUSY` (a reply is already being
 written for this chat: wait), `409 AI_CHAT_REPLY_UNAVAILABLE`, `409 CLIENT_MESSAGE_ID_IN_USE`, `422 MESSAGE_TOO_LONG`
 (server limit is lower than the 2000-char schema maximum; default 1000), `422 NOT_AN_AI_CONVERSATION`,
-`429 AI_CHAT_LIMIT_REACHED` (daily or per-chat message cap), `503 AI_DISABLED`, `503 AI_UNAVAILABLE`.
+`429 AI_CHAT_LIMIT_REACHED` (daily or per-chat message cap), `503 AI_DISABLED` (AI is switched off). A provider
+failure is **not** a `503`: it arrives as an `error` event on the 200 stream (table above).
 
 Rules for `clientMessageId`: generate a new UUID per user message; reuse it only to retry that same message. Sending
 the same id again after a stored reply replays that reply as `delta`/`retract` + `done`.
@@ -100,8 +125,8 @@ answer. The parent message stays stored. This is a supported action, so give the
 
 For each message sent, record and display (a table plus a "copy as CSV" button):
 
-- `ttfb`: ms from `fetch` start to the response headers (headers are sent when the first text is ready, so this is
-  also close to the time of the first delta).
+- `ttfb`: ms from `fetch` start to the response headers (headers and a first `: hb` are sent before the model is
+  called, so this is short; it is **not** the time to the first text. Use `firstDelta` for that).
 - `firstDelta`: ms to the first `delta` event.
 - `total`: ms to the `done` (or `error`) event.
 - number of `delta` events and of network chunks (many events in one chunk = a proxy is buffering; flag it).

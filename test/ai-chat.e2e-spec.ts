@@ -172,6 +172,26 @@ describe('AI chat (e2e)', () => {
       expect((await http().get('/v1/ai-chat/topics')).status).toBe(401);
     });
 
+    it('opens with the fixed greeting by name: AI, COMPLETE, seq 1, no footer, not a turn or a strike', async () => {
+      const { parent, childId } = await family({ childName: 'Zephyrine Rao', parentName: 'Meera Rao' });
+
+      const id = await openChat(parent, childId, 'PLAN_EXPLAINER');
+
+      const rows = await stored(id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ seq: 1, sender: 'AI', state: 'COMPLETE', senderId: null });
+      expect(rows[0].body).toContain('Hello Meera!');
+      expect(rows[0].body).toContain("Zephyrine's plan");
+      expect(rows[0].body).not.toContain(AI_CHAT_FOOTER);
+      expect(ctx.ai.calls).toHaveLength(0); // no model call
+      const row = await ctx.prisma.conversation.findUniqueOrThrow({ where: { id } });
+      expect(row).toMatchObject({ lastMessageSeq: 1, offTopicCount: 0 });
+      const list = await http().get('/v1/conversations/' + id + '/messages').set(auth(parent.token));
+      expect(list.body.items.map((m: { seq: number; sender: string }) => [m.seq, m.sender])).toEqual([
+        [1, 'AI'],
+      ]);
+    });
+
     it('opens an AI chat on an AI topic, and refuses a route, an unavailable or an unknown topic', async () => {
       const { parent, childId } = await family();
       const create = (token: string, topic: string) =>
@@ -223,7 +243,7 @@ describe('AI chat (e2e)', () => {
       const res = await send(
         id,
         parent.token,
-        'Zephyrine hates bedtime. Mail meera@example.com or 9876543210',
+        'Zephyrine hates bedtime. Isha Verma said hi. Mail meera@example.com or 9876543210',
         'm-1',
       );
 
@@ -239,27 +259,31 @@ describe('AI chat (e2e)', () => {
       );
       expect(events[events.length - 1]).toMatchObject({
         event: 'done',
-        data: { seq: 2, state: 'COMPLETE', conversationClosed: false },
+        data: { seq: 3, state: 'COMPLETE', conversationClosed: false },
       });
 
       const rows = await stored(id);
       expect(rows.map((r) => [r.seq, r.sender, r.state])).toEqual([
-        [1, 'PARENT', 'COMPLETE'],
-        [2, 'AI', 'COMPLETE'],
+        [1, 'AI', 'COMPLETE'], // the greeting
+        [2, 'PARENT', 'COMPLETE'],
+        [3, 'AI', 'COMPLETE'],
       ]);
-      expect(rows[0].body).toContain('Zephyrine'); // the parent's own words are kept until purge
-      expect(rows[1].body).toBe(deltas.join(''));
+      expect(rows[1].body).toContain('Isha Verma'); // the parent's own words are kept until purge
+      expect(rows[2].body).toBe(deltas.join(''));
 
-      // The model saw redacted text and the topic's context, never names or contact details.
+      // The model saw the first names and the topic's context, but no care-team name or contact detail.
       const [call] = ctx.ai.calls;
       expect(call.capability).toBe('chat-reply');
       expect(call.actor).toEqual({ userId: parent.id, childId });
       const seen = JSON.stringify(call.messages) + call.system;
-      expect(seen).not.toMatch(/Zephyrine|Meera|meera@example|9876543210/);
+      expect(seen).not.toMatch(/Isha|Verma|Rao|meera@example|9876543210/);
+      expect(call.system).toContain('<parent_name>Meera</parent_name>');
+      expect(call.system).toContain('<child_name>Zephyrine</child_name>');
       expect(call.messages).toEqual([
         {
           role: 'user',
-          content: 'the child hates bedtime. Mail an email address or a phone number',
+          content:
+            'Zephyrine hates bedtime. the clinician said hi. Mail an email address or a phone number',
         },
       ]);
       expect(call.system).toContain('Bedtime routine');
@@ -294,7 +318,7 @@ describe('AI chat (e2e)', () => {
       const res = await send(id, parent.token, 'Help', 'l-1');
 
       expect(res.status).toBe(200);
-      const [, reply] = await stored(id);
+      const [, , reply] = await stored(id);
       expect(reply.state).toBe('COMPLETE');
       expect(reply.body).toBe(`One idea. Another idea.\n\n${AI_CHAT_FOOTER}`);
     });
@@ -312,7 +336,7 @@ describe('AI chat (e2e)', () => {
       expect(events.map((e) => e.event)).toEqual(['delta', 'retract', 'done']);
       expect(events[1].data.text).toBe(RETRACTED_REPLY);
       expect(events[2].data).toMatchObject({ state: 'RETRACTED' });
-      const [, reply] = await stored(id);
+      const [, , reply] = await stored(id);
       expect(reply).toMatchObject({ sender: 'AI', state: 'RETRACTED', body: RETRACTED_REPLY });
       expect(ctx.ai.chatOutcomes).toEqual(['BLOCKED']);
     });
@@ -326,7 +350,7 @@ describe('AI chat (e2e)', () => {
 
         const events = parseSse(res.text);
         expect(events.map((e) => e.event)).toEqual(['delta', 'done']);
-        expect(events[0].data.text).toBe(smallTalkReply('TODAYS_ACTIVITIES'));
+        expect(events[0].data.text).toBe(smallTalkReply('TODAYS_ACTIVITIES', 'Parent'));
         expect(events[1].data).toMatchObject({ state: 'REDIRECTED', conversationClosed: false });
       }
 
@@ -343,7 +367,7 @@ describe('AI chat (e2e)', () => {
 
       const events = parseSse(res.text);
       expect(events[events.length - 1].data).toMatchObject({ state: 'COMPLETE' });
-      expect((await stored(id))[1].body.endsWith(AI_CHAT_FOOTER)).toBe(true);
+      expect((await stored(id))[2].body.endsWith(AI_CHAT_FOOTER)).toBe(true);
     });
 
     it('answers an off-topic message with the fixed redirect and closes the chat on the third strike', async () => {
@@ -386,13 +410,13 @@ describe('AI chat (e2e)', () => {
       expect(failed.headers['content-type']).toMatch(/text\/event-stream/);
       expect(failed.text.startsWith(': hb')).toBe(true); // first bytes are a heartbeat
       expect(parseSse(failed.text)).toEqual([{ event: 'error', data: { code: 'AI_TIMEOUT' } }]);
-      expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT']);
+      expect((await stored(id)).map((m) => m.sender)).toEqual(['AI', 'PARENT']);
 
       ctx.ai.willStreamChat({ deltas: ['Here is help. '] });
       const retry = await send(id, parent.token, 'Hello', 'f-1');
 
       expect(retry.status).toBe(200);
-      expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT', 'AI']);
+      expect((await stored(id)).map((m) => m.sender)).toEqual(['AI', 'PARENT', 'AI']);
     });
 
     it('turns a failure after the first text into an error event and stores no answer', async () => {
@@ -408,7 +432,7 @@ describe('AI chat (e2e)', () => {
       expect(res.status).toBe(200);
       const events = parseSse(res.text);
       expect(events[events.length - 1]).toEqual({ event: 'error', data: { code: 'AI_TIMEOUT' } });
-      expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT']);
+      expect((await stored(id)).map((m) => m.sender)).toEqual(['AI', 'PARENT']);
     });
   });
 
@@ -427,7 +451,7 @@ describe('AI chat (e2e)', () => {
       expect(events.map((e) => e.event)).toEqual(['delta', 'done']);
       expect(events[1].data.messageId).toBe(firstDone.data.messageId);
       expect(ctx.ai.calls).toHaveLength(1);
-      expect(await stored(id)).toHaveLength(2);
+      expect(await stored(id)).toHaveLength(3);
     });
 
     it('refuses everyone but the owning parent, before anything is stored or called', async () => {
@@ -441,7 +465,7 @@ describe('AI chat (e2e)', () => {
       expect(
         (await send('00000000-0000-4000-8000-000000000000', parent.token, 'Hi', 'x-3')).status,
       ).toBe(404);
-      expect(await stored(id)).toHaveLength(0);
+      expect(await stored(id)).toHaveLength(1); // only the greeting
       expect(ctx.ai.calls).toHaveLength(0);
     });
 
@@ -460,7 +484,7 @@ describe('AI chat (e2e)', () => {
 
       const list = await http().get(`/v1/conversations/${id}/messages`).set(auth(parent.token));
       expect(list.status).toBe(200);
-      expect(list.body.items.map((m: { sender: string }) => m.sender)).toEqual(['PARENT', 'AI']);
+      expect(list.body.items.map((m: { sender: string }) => m.sender)).toEqual(['AI', 'PARENT', 'AI']);
     });
   });
 
@@ -473,7 +497,7 @@ describe('AI chat (e2e)', () => {
 
       expect(res.status).toBe(422);
       expect(res.body.code).toBe('MESSAGE_TOO_LONG');
-      expect(await stored(id)).toHaveLength(0);
+      expect(await stored(id)).toHaveLength(1);
     });
 
     it('429 once a chat has its maximum number of parent messages', async () => {
@@ -482,19 +506,40 @@ describe('AI chat (e2e)', () => {
       await ctx.prisma.message.createMany({
         data: Array.from({ length: 40 }, (_, i) => ({
           conversationId: id,
-          seq: i + 1,
+          seq: i + 2, // seq 1 is the greeting
           sender: 'PARENT' as const,
           senderId: parent.id,
           body: 'x',
         })),
       });
-      await ctx.prisma.conversation.update({ where: { id }, data: { lastMessageSeq: 40 } });
+      await ctx.prisma.conversation.update({ where: { id }, data: { lastMessageSeq: 41 } });
 
       const res = await send(id, parent.token, 'One more', 'c-2');
 
       expect(res.status).toBe(429);
       expect(res.body.code).toBe('AI_CHAT_LIMIT_REACHED');
       expect(ctx.ai.calls).toHaveLength(0);
+    });
+
+    it('does not count the greeting as a turn: 39 parent messages still leave room for the 40th', async () => {
+      const { parent, childId } = await family();
+      const id = await openChat(parent, childId);
+      await ctx.prisma.message.createMany({
+        data: Array.from({ length: 39 }, (_, i) => ({
+          conversationId: id,
+          seq: i + 2,
+          sender: 'PARENT' as const,
+          senderId: parent.id,
+          body: 'x',
+          createdAt: new Date(Date.now() - 3 * 24 * 3_600_000), // not in today's daily count
+        })),
+      });
+      await ctx.prisma.conversation.update({ where: { id }, data: { lastMessageSeq: 40 } });
+      ctx.ai.willStreamChat({ deltas: ['Fine. '] });
+
+      const res = await send(id, parent.token, 'The fortieth', 'c-39');
+
+      expect(res.status).toBe(200);
     });
 
     it('429 once the parent has sent the daily maximum across all chats', async () => {
@@ -504,7 +549,7 @@ describe('AI chat (e2e)', () => {
       await ctx.prisma.message.createMany({
         data: Array.from({ length: 30 }, (_, i) => ({
           conversationId: first,
-          seq: i + 1,
+          seq: i + 2,
           sender: 'PARENT' as const,
           senderId: parent.id,
           body: 'x',
@@ -559,11 +604,11 @@ describe('AI chat (e2e)', () => {
       }
 
       expect(ctx.ai.chatAborts).toBe(1);
-      expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT']);
+      expect((await stored(id)).map((m) => m.sender)).toEqual(['AI', 'PARENT']);
       // The chat is free again: the same message can be answered.
       ctx.ai.willStreamChat({ deltas: ['Back again. '] });
       expect((await send(id, parent.token, 'Hello', 'a-1')).status).toBe(200);
-      expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT', 'AI']);
+      expect((await stored(id)).map((m) => m.sender)).toEqual(['AI', 'PARENT', 'AI']);
     });
   });
 
@@ -609,7 +654,7 @@ describe('AI chat (e2e)', () => {
         data: { code: 'CONVERSATION_CLOSED' },
       });
       expect(events.map((e) => e.event)).not.toContain('done');
-      expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT']);
+      expect((await stored(id)).map((m) => m.sender)).toEqual(['AI', 'PARENT']);
     });
   });
 
@@ -634,7 +679,11 @@ describe('AI chat (e2e)', () => {
       const list = await http().get(`/v1/conversations/${id}/messages`).set(auth(parent.token));
       expect(list.status).toBe(200);
       expect(list.body.purged).toBe(false);
-      expect(list.body.items.map((m: { sender: string }) => m.sender)).toEqual(['PARENT', 'AI']);
+      expect(list.body.items.map((m: { sender: string }) => m.sender)).toEqual([
+        'AI',
+        'PARENT',
+        'AI',
+      ]);
 
       const close = await http().post(`/v1/conversations/${id}/close`).set(auth(parent.token));
       expect(close.status).toBeLessThan(300);

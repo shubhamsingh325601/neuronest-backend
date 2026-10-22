@@ -1,7 +1,7 @@
 import type { AiChatTopic, MessageSender } from '@prisma/client';
 import type { AiChatRequest } from '@common/ai/ai.service';
 import { truncate } from '@modules/ai-coaching/shared/text-safety.util';
-import { chatPromptV2 as prompt } from '@modules/conversations/prompts/chat.v2';
+import { chatPromptV3 as prompt } from '@modules/conversations/prompts/chat.v3';
 import { CHAT_CAPABILITY, withoutFooter } from './ai-chat.constants';
 import type { ChatPromptContext } from './ai-chat-context.builder';
 import { redactPii, type NameGroup } from './pii-redaction';

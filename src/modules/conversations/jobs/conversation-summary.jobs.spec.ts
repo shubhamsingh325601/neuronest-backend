@@ -132,6 +132,18 @@ describe('ConversationSummaryJobs', () => {
     });
   });
 
+  it('leaves out the fixed greeting (seq 1) of an AI chat, but not the first message of a human chat', async () => {
+    prisma.conversation.findUnique.mockResolvedValue(
+      conversation({ kind: ConversationKind.AI, expert: null }),
+    );
+    await jobs.summarise(job());
+    expect(prisma.message.findMany.mock.calls[0][0].where).toEqual({
+      conversationId: 'c-1',
+      state: 'COMPLETE',
+      seq: { gt: 1 },
+    });
+  });
+
   it('the post-check rejects a summary that leaks a name, including a clinician name', async () => {
     await jobs.summarise(job());
     const { postCheck } = ai.generateStructured.mock.calls[0][0];

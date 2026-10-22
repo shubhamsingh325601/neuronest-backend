@@ -71,10 +71,10 @@ Findings from the code that shape this plan:
 | 15 | Persona rules (§6) and the AI disclosure footer are constants in code, not model-dependent. | A model can be talked out of a rule. |
 | 16 | **The AI chat is topic-guided, defined in code.** The topic list is a versioned constant (`AI_CHAT_TOPICS`), returned by an endpoint; it is not stored in the database, not admin-editable, and not an LLM tool. Each topic fixes its prompt fragment and its context allow-list. | Owner: the flow is handled by code. An admin-editable list could break the flow or smuggle in arbitrary instructions. |
 | 17 | **Off-topic control is layered and best-effort:** topic-bound prompt and context, an off-topic marker the pipeline replaces with a fixed redirect, and hard caps (length, daily messages, per-conversation turns, off-topic strikes). | Prompts can be bypassed; the caps and the absence of tools/web cannot. |
-| 18 | **PII is handled in code, not by the prompt:** inbound parent text is redacted before the model sees it; context is an allow-list; the AI is told never to ask for personal details; the output filter blocks names and contact details. | Same rule as 0018 Q6: defence in depth, best effort, G1 stays the real privacy control. |
+| 18 | **PII is handled in code, not by the prompt:** inbound parent text is redacted before the model sees it; context is an allow-list; the AI is told never to ask for personal details; the output filter blocks names and contact details. | Same rule as 0018 Q6: defence in depth, best effort, G1 stays the real privacy control. **Superseded for two names by plan 0020 (2026-10-22):** the child's display name and the parent's first name now go to the model (test data only until G1); care-team names stay hidden, scrubbed and blocked. Summaries and coaching tips still hide every name. |
 | 19 | The "AI assessment" topic exists in the list as `UNAVAILABLE` and the server refuses to open it. | Placeholder for the later plan; no gate table until a feature uses it. |
 | 20 | **Off-topic marker check uses the prefix rule** (§6.4 item 2), not a fixed character buffer. | Owner approved the §14 spike results, 2026-10-10. Measured on 46 streamed calls. |
-| 21 | **`flushHeaders()` is deferred until the first provider part** (first delta or error). | Owner decision, 2026-10-10 (§14 consequence 3). |
+| 21 | **`flushHeaders()` is deferred until the first provider part** (first delta or error). **Superseded by plan 0020:** headers and a leading `: hb` are sent before the provider call. | Owner decision, 2026-10-10 (§14 consequence 3). |
 | 22 | **`finishReason 'length'` (reply cut at `maxOutputTokens`) is COMPLETE after trimming.** Send the whole sentences already released, drop the unfinished last fragment, append the footer, store as COMPLETE, `ai_runs.status = SUCCEEDED`. No new message state. Only `'stop'` and trimmed `'length'` are COMPLETE; `'other'`, a thrown loop, an `error` part or a foreign `abort` are failures. | Owner decision, 2026-10-11 (recommended option A). |
 | 23 | **`AiRunStatus` gains one value, `CLIENT_ABORTED`** (our own `AbortController` fired because the client left), stored with null tokens, added by a forward migration (`ALTER TYPE ... ADD VALUE`) in Batch 5. Stalls and total timeouts use the existing `TIMEOUT`; mid-stream `'other'` or a thrown loop uses `PROVIDER_ERROR`. Not built yet. | Owner decision, 2026-10-11. |
 | 24 | **Parent contact is name + email only.** No parent phone number is stored anywhere (`users` has no phone; only `ClinicianProfile` does), so §5 and §12 promised a field that does not exist. | Owner decision, 2026-10-11. A parent phone is a later, separate change. |
@@ -241,13 +241,13 @@ Each topic has its own prompt fragment. The system prompt is `chat.v1` = shared 
 
 1. Validate; authorise (`AiAccessService`: flag, role, ownership; ADMIN refused); topic must be `AI` kind; daily limit, turn cap, project budget.
 2. Persist the parent message (`seq`), idempotent on `clientMessageId`.
-3. `redactPii()`; build the allow-listed context; call `AiService.streamChat()` (new second port method; response headers are flushed only when the first provider part arrives, so a failure before that is an ordinary problem response or a silent fallback attempt; `streamText`, no tools, `maxRetries: 0`, timeout, `maxOutputTokens`). Fallback model only **before the first chunk**.
+3. `redactPii()`; build the allow-listed context; call `AiService.streamChat()` (new second port method; **superseded (plan 0020, shipped after this batch): the response headers and a first `: hb` comment are sent before the provider is called, because the provider can take a minute; every provider failure is then an `error` event, never a `503`** — the original design was: headers flushed only when the first provider part arrives, so a failure before that is an ordinary problem response or a silent fallback attempt; `streamText`, no tools, `maxRetries: 0`, timeout, `maxOutputTokens`). Fallback model only **before the first chunk**.
 4. Marker check on the buffered start; then the sentence splitter, `checkChatChunk()` (0018 blocklist, name-leak, URL/HTML/markdown checks, plus persona-breach phrases such as "as your doctor", "I diagnose"), then emit `delta`.
 5. On a filter hit: stop, emit `retract`, store the message with `state = RETRACTED` and the safe constant; `ai_runs.status = BLOCKED`.
 6. On a normal end: append the footer by code, persist the AI message, record tokens and cost, emit `done`.
 7. A client disconnect aborts the provider call; partial text is **not** stored as COMPLETE.
 
-Errors raised before the stream starts are RFC 9457 problems (`AI_CHAT_LIMIT_REACHED`, `AI_CHAT_OFF_TOPIC_LIMIT`, `CONVERSATION_CLOSED`, `MESSAGE_TOO_LONG`, `AI_TOPIC_UNAVAILABLE`); failures mid-stream are an `error` event.
+Errors raised before the stream starts are RFC 9457 problems (`AI_CHAT_LIMIT_REACHED`, `AI_CHAT_OFF_TOPIC_LIMIT`, `CONVERSATION_CLOSED`, `MESSAGE_TOO_LONG`, `AI_TOPIC_UNAVAILABLE`); failures after the stream starts, which now includes every provider failure, are an `error` event (see the supersession note in step 3).
 
 ## 7. Summary: what it may contain
 
@@ -445,7 +445,7 @@ Setup: `chat.v1`-style system prompt (persona rules + `TODAYS_ACTIVITIES` fragme
 #### Consequences for later batches (recommendations; the plan text is not changed)
 1. **§6.4 item 2 wording:** the marker check buffers by prefix, not "about 24 characters". Proposed: the prefix rule above.
 2. **Stream outcome table for Batch 5.4:** `finishReason 'stop'` = COMPLETE; `'other'`/`'error'`, a thrown loop, an `error` part, an `abort` part not caused by our own disconnect = failure (error event, nothing stored as COMPLETE); `'length'` is open (store as COMPLETE with the footer, or treat as failure?); `'content-filter'` = BLOCKED like 0018.
-3. **Defer `flushHeaders()` until the first provider part (first delta or `error`).** Costs nothing (the first delta takes ~1 s anyway and the marker check needs it) and lets a pre-first-chunk provider failure become an ordinary problem response or a silent fallback-model attempt. After the first delta, failures become `error` events.
+3. **Defer `flushHeaders()` until the first provider part (first delta or `error`). Superseded by plan 0020 (headers and `: hb` go out before the provider call; see §6.5 step 3).** Costs nothing (the first delta takes ~1 s anyway and the marker check needs it) and lets a pre-first-chunk provider failure become an ordinary problem response or a silent fallback-model attempt. After the first delta, failures become `error` events.
 4. **`ai_runs` for streams:** abort and timeout runs have no usage. Record `status` (`ABORTED`/`TIMED_OUT`-style) with null tokens; this needs a decision on whether `AiRunStatus` gains values (a new forward migration in Batch 3/5, not in Batch 1).
 5. **Do not rely on `AllExceptionsFilter` for the SSE route** (see the table). Consider a `headersSent` guard in the filter as a small independent fix (not made here).
 6. **Throttle/guards:** this spike did not exercise `AppThrottlerGuard` or pino-http on a long response; check in Batch 5.4 that the guard does not buffer or double-count a streaming handler.
@@ -523,6 +523,19 @@ staff user id (an id, not a name). Left as is; say if experts should not see it.
 
 - **7.3 verified (2026-10-13):** lint and build clean; unit 157 suites / 1168 tests green; e2e 36 suites, 517 of 518 pass. The one failure is the same date-dependent `progress.e2e-spec` "weekly summary computes aggregates..." test described under Batch 6 (unrelated, not changed).
 - **Still open after Batch 7:** clinician sign-off and a live `npm run ai:eval` for coaching prompt v3; `AI_ENABLED=false` makes a closed chat's summary job go DEAD; Hostinger SSE probe; the date-dependent progress test; launch gates (§11). Nothing here is committed.
+
+### Chat latency and model findings (recorded by plan 0020, 2026-10-22 and 2026-10-23)
+
+Facts about the provider and the SDK that shaped the chat code. The first six come from the owner's earlier live sessions and are recorded here as given; the last two lines were measured by plan 0020's implementation run.
+
+- Raw REST latency on `gemini-3.5-flash-lite` was 60-79 s for a short chat reply. That is why the response now opens before the provider is called (§6.5 step 3 note).
+- The SDK's `chunkMs` timeout is armed only after the first stream chunk, so it cannot guard time-to-first-token. `AI_CHAT_FIRST_TOKEN_TIMEOUT_MS` does that job.
+- Thinking tokens count inside `maxOutputTokens`: a bare "hi" on `gemini-3.5-flash` spent 407 thinking tokens of a 400 limit and returned no text (`finishReason: length`). `chatThinking` adds headroom and picks the lowest level.
+- `thinkingBudget: 0` is an HTTP 400 on `gemini-3.5-flash-lite`; Gemini 3 models take `thinkingLevel` instead.
+- `gemini-3.1-pro` returned 429 on this key.
+- `gemini-3-flash-preview` (the model in use on staging): median about 1.4 s to a reply, and a free-tier limit of about 6 requests per minute.
+- Plan 0020 baseline, `ai:diagnose:chat` on `gemini-3-flash-preview` (variant `app`), chat.v2 with the old context (about 690 input tokens): time to first text 1191, 949, 905 and 1485 ms for "hi", "who am I", a news request and a melatonin question (median of the four about 1.07 s); one request, "what should I do today", failed with a provider 503.
+- Plan 0020, same probe with chat.v3 and the richer context (about 1,000-1,010 input tokens, +45%): 1114, 936, 1212 and 946 ms for the same four messages (median about 1.03 s); the same "what should I do today" message failed again with a provider 503. No `finishReason: length`, no thinking tokens, in every completed call. Later calls on this key returned 429 (see plan 0020 §9 for what was and was not verified).
 
 ## 15. How to resume
 

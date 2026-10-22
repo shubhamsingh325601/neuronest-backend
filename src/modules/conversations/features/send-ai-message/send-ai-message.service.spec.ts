@@ -58,7 +58,10 @@ function make(opts: { run?: ReturnType<typeof scripted> } = {}) {
     assertCanChat: jest.fn().mockResolvedValue({ id: 'c1', name: 'Alex', parentId: 'p1' }),
   };
   const contexts = {
-    build: jest.fn().mockResolvedValue({ context: { ageYears: 6 }, nameTokens: [] }),
+    build: jest.fn().mockResolvedValue({
+      ageYears: 6,
+      family: { parentName: 'Meera', childName: 'Alex', gender: null },
+    }),
   };
   const ai = { streamChat: jest.fn().mockReturnValue(opts.run ?? scripted([])) };
   const service = new SendAiMessageService(
@@ -187,7 +190,7 @@ describe('SendAiMessageService', () => {
       out.sink,
     );
 
-    const reply = smallTalkReply('TODAYS_ACTIVITIES');
+    const reply = smallTalkReply('TODAYS_ACTIVITIES', 'Meera');
     expect(h.storeReply).toHaveBeenCalledWith(
       'conv-1',
       { state: MessageState.REDIRECTED, body: reply, strike: false },
@@ -372,5 +375,58 @@ describe('SendAiMessageService', () => {
         sink().sink,
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('reads the names, the context and the history together, not one after another', async () => {
+    const h = make({
+      run: scripted([
+        { type: 'delta', text: 'Ok. ' },
+        { type: 'end', finishReason: 'stop' },
+      ]),
+    });
+    const started: string[] = [];
+    const releases: (() => void)[] = [];
+    const slow = (name: string, value: unknown) =>
+      jest.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            started.push(name);
+            releases.push(() => resolve(value));
+          }),
+      );
+    jest.spyOn(h.service as never, 'nameGroups').mockImplementation(slow('names', []) as never);
+    h.contexts.build = slow('context', {
+      ageYears: 6,
+      family: { parentName: 'Meera', childName: 'Alex', gender: null },
+    });
+    h.prisma.message.findMany = slow('history', [{ sender: 'PARENT', body: 'Hello' }]);
+
+    const run = h.service.stream('conv-1', dto, parent, new AbortController().signal, sink().sink);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(started.sort()).toEqual(['context', 'history', 'names']);
+    releases.forEach((release) => release());
+    await run;
+    expect(h.ai.streamChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks and removes only the care-team names; the child and parent first names stay', async () => {
+    const h = make();
+    jest.restoreAllMocks();
+    (h.prisma as Record<string, unknown>).child = {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({
+        clinicianAssignments: [{ clinician: { name: 'Isha Verma' } }],
+        expertAssignments: [{ expert: { name: 'Dev Anand' } }],
+      }),
+    } as never;
+
+    const groups = await (
+      h.service as unknown as { nameGroups(childId: string): Promise<unknown> }
+    ).nameGroups('c1');
+
+    expect(groups).toEqual([
+      { tokens: ['Verma', 'Isha'], placeholder: 'the clinician' },
+      { tokens: ['Anand', 'Dev'], placeholder: 'the expert' },
+    ]);
   });
 });

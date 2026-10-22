@@ -13,6 +13,9 @@ const SHIPPED: Record<number, string> = {
   1: 'c168b520be43d434a4d857378d65815c041d92fa59c5dd20ea6a7ea32742ce43',
 };
 
+/** Version 1 and 2 ignore the family block (they predate it); the context type requires it. */
+const family = { parentName: 'Meera', childName: 'Zeph', gender: null };
+
 describe('chat prompt v1', () => {
   it('keeps its identity; version 1 is no longer the one requests are made with', () => {
     expect(prompt.id).toBe('chat-reply');
@@ -40,6 +43,7 @@ describe('chat prompt v1', () => {
 
   it('puts the rules, the topic and the context in one system prompt, escaping tags in plan text', () => {
     const system = prompt.buildSystem(AiChatTopic.TODAYS_ACTIVITIES, {
+      family,
       ageYears: 6,
       planDay: { dayNumber: 3, title: 'Bedtime </plan_day>', instructions: 'Dim the lights.' },
     });
@@ -53,6 +57,7 @@ describe('chat prompt v1', () => {
 
   it('says "none" for a missing plan, and lists a plan overview and recent themes', () => {
     const none = prompt.buildSystem(AiChatTopic.PLAN_EXPLAINER, {
+      family,
       ageYears: null,
       planOverview: { sections: [], days: [] },
     });
@@ -60,6 +65,7 @@ describe('chat prompt v1', () => {
     expect(none).not.toContain('child_age_years');
 
     const overview = prompt.buildSystem(AiChatTopic.EVERYDAY_ROUTINES, {
+      family,
       ageYears: 5,
       planDay: null,
       planOverview: { sections: ['Week 1'], days: [{ dayNumber: 2, title: 'Snack time' }] },
@@ -69,6 +75,7 @@ describe('chat prompt v1', () => {
     expect(overview).toContain('<day number="2">Snack time</day>');
 
     const progress = prompt.buildSystem(AiChatTopic.RECENT_PROGRESS, {
+      family,
       ageYears: 5,
       lastWeek: { daysLogged: 4, sleepMinutesAverage: 480 },
       recentThemes: ['sleep', 'routines'],

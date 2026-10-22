@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  ConversationKind,
   ConversationStatus,
   MessageState,
   SummaryStatus,
@@ -95,7 +96,12 @@ export class ConversationSummaryJobs implements OnModuleInit {
 
     const kind = conversation.kind;
     const messages = await this.prisma.message.findMany({
-      where: { conversationId, state: MessageState.COMPLETE },
+      // The fixed greeting of an AI chat (seq 1) is not part of what was discussed.
+      where: {
+        conversationId,
+        state: MessageState.COMPLETE,
+        ...(kind === ConversationKind.AI ? { seq: { gt: 1 } } : {}),
+      },
       orderBy: { seq: 'asc' },
       select: { sender: true, body: true },
     });

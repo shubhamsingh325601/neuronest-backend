@@ -41,7 +41,7 @@ export class SendAiMessageController {
   @ApiOperation({
     operationId: 'aiConversationSend',
     summary:
-      'Parent (own chat): send a message to the AI assistant and stream its reply. Idempotent on clientMessageId.',
+      'Parent (own chat): send a message to the AI assistant and stream its reply. Idempotent on clientMessageId. A reply may contain list lines starting "- " or "1. ".',
   })
   async send(
     @Param('id', ParseUUIDPipe) id: string,

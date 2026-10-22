@@ -50,15 +50,28 @@ const fixtureSchema = z.strictObject({
 });
 type Fixture = z.infer<typeof fixtureSchema>;
 
-/** Synthetic family shared by every case. */
-const NAMES = [
-  { tokens: nameTokens('Zephyrine Rao'), placeholder: 'the child' },
-  { tokens: nameTokens('Meera Rao'), placeholder: 'the parent' },
-  { tokens: nameTokens('Isha Verma'), placeholder: 'the clinician' },
-];
+/** Synthetic family shared by every case. Only the care team is hidden from the model (plan 0020 section 3 row 1). */
+const NAMES = [{ tokens: nameTokens('Isha Verma'), placeholder: 'the clinician' }];
 const RAW: RawChatInput = {
-  childName: 'Zephyrine Rao',
+  parentName: 'Meera',
+  childName: 'Zephyrine',
+  gender: 'Female',
   ageYears: 6,
+  profile: {
+    currentStage: 'Building routines',
+    primaryCareFocus: 'Calmer evenings',
+    strengths: [{ title: 'Music', description: 'Loves singing and humming' }],
+    sensoryTraits: [
+      { domain: 'Auditory', sensitivityLevel: 'HIGH', triggers: ['Loud noises'], accommodations: [] },
+    ],
+    calmingPreferences: [{ title: 'Deep pressure', technique: 'A slow, firm hug' }],
+    communication: {
+      expressiveMode: 'Short phrases',
+      receptiveUnderstanding: 'Follows two-step instructions',
+      preferredPrompts: ['Show first, then tell'],
+    },
+  },
+
   planDay: {
     dayNumber: 3,
     title: 'Bedtime routine',
@@ -66,9 +79,9 @@ const RAW: RawChatInput = {
   },
   planSections: ['Week 1: Settling in', 'Week 2: Building routines'],
   planDays: [
-    { dayNumber: 1, title: 'Wind down together' },
-    { dayNumber: 2, title: 'Choose the story' },
-    { dayNumber: 3, title: 'Bedtime routine' },
+    { dayNumber: 1, title: 'Wind down together', instructions: 'Turn off screens and tidy up toys together.' },
+    { dayNumber: 2, title: 'Choose the story', instructions: 'Let the child pick one short story from two.' },
+    { dayNumber: 3, title: 'Bedtime routine', instructions: 'Dim the lights ten minutes earlier, then read one short story together.' },
   ],
   daysLogged: 4,
   sleepMinutesAverage: 495,
@@ -93,12 +106,10 @@ function loadFixtures(): Fixture[] {
 }
 
 function request(fixture: Fixture, signal: AbortSignal) {
-  const built = assembleChatContext(fixture.topic, RAW);
   return {
-    built,
     req: buildChatRequest({
       topic: fixture.topic,
-      context: built.context,
+      context: assembleChatContext(fixture.topic, RAW),
       history: [
         ...fixture.history.map((m) => ({ sender: m.sender, body: m.text })),
         { sender: 'PARENT', body: fixture.message },
@@ -153,11 +164,11 @@ function dryRun(fixtures: Fixture[]): void {
     const leaked = containsName(seen, allNames);
     if (leaked) problems++;
     console.log(
-      `${fixture.id}  ${fixture.group}  messages ${req.messages.length}  name-in-prompt ${leaked ? 'YES' : 'no'}`,
+      `${fixture.id}  ${fixture.group}  messages ${req.messages.length}  care-team-name-in-prompt ${leaked ? 'YES' : 'no'}`,
     );
   }
   console.log(
-    `\nDry run: ${fixtures.length} cases, ${problems} with a participant name in the prompt.`,
+    `\nDry run: ${fixtures.length} cases, ${problems} with a care-team name in the prompt.`,
   );
   console.log('Set AI_EVAL_LIVE=1 to send them to the model.');
   if (problems > 0) process.exitCode = 1;
@@ -205,11 +216,8 @@ async function liveRun(fixtures: Fixture[]): Promise<void> {
   let errors = 0;
   for (const [i, fixture] of fixtures.entries()) {
     if (i > 0) await sleep(delayMs);
-    const { built, req } = request(fixture, new AbortController().signal);
-    const processor = new ChatReplyProcessor([
-      ...built.nameTokens,
-      ...NAMES.flatMap((n) => n.tokens),
-    ]);
+    const { req } = request(fixture, new AbortController().signal);
+    const processor = new ChatReplyProcessor(NAMES.flatMap((n) => n.tokens));
     const run = service.streamChat(req);
     let shown = '';
     let verdict: AiChatOutcome = 'INVALID_OUTPUT';

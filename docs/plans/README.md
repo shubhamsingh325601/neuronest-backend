@@ -24,6 +24,7 @@ New plans start from [`TEMPLATE.md`](TEMPLATE.md).
 | 0017 | Phase 17 — Parent App Integration Gaps (profile, care plan, password-reset code, call prep) | Done | [0017-phase-17-parent-app-integration.md](0017-phase-17-parent-app-integration.md) |
 | 0018 | Phase 18 — AI Foundation (Vercel AI SDK, Gemini-first) and Parent AI Coaching Tip | Done | [0018-phase-18-ai-foundation.md](0018-phase-18-ai-foundation.md) |
 | 0019 | Phase 19 — Expert Role, Guided AI Chat (streaming), Expert Chat, Conversation Summaries and Retention | Active | [0019-phase-19-conversations-and-summaries.md](0019-phase-19-conversations-and-summaries.md) |
+| 0020 | Phase 20 — Personal AI Chat (names, profile, plan detail, lists, opening greeting) | Done | [0020-phase-20-personal-ai-chat.md](0020-phase-20-personal-ai-chat.md) |
 
 Plans 0009–0014 come from the frontend's V1 backend handoff
 (`docs/NeuroNest_Backend_V1_Developer_Handoff.docx`), audited against the code on

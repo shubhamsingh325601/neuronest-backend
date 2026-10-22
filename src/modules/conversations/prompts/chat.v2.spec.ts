@@ -1,7 +1,6 @@
 import { AiChatTopic } from '@prisma/client';
 import { sha256 } from '@common/crypto/token.util';
 import { OFF_TOPIC_MARKER } from '@modules/conversations/shared/ai-chat.constants';
-import { chatPrompt } from '@modules/conversations/shared/ai-chat.request';
 import { chatPromptV1 } from './chat.v1';
 import { chatPromptV2 as prompt } from './chat.v2';
 
@@ -10,11 +9,13 @@ const SHIPPED: Record<number, string> = {
   2: 'af2dd9878d7615e55605a46f20b27cafb69139a1a6d0d9368e2c39e7d9ed0f42',
 };
 
+/** Version 1 and 2 ignore the family block (they predate it); the context type requires it. */
+const family = { parentName: 'Meera', childName: 'Zeph', gender: null };
+
 describe('chat prompt v2', () => {
-  it('is the version requests are made with, and keeps the chat-reply identity', () => {
+  it('keeps the chat-reply identity (chat.v3 is the version requests are made with now)', () => {
     expect(prompt.id).toBe('chat-reply');
     expect(prompt.version).toBe(2);
-    expect(chatPrompt).toBe(prompt);
   });
 
   it('exports the hash of its rules and topic fragments, and the version is pinned', () => {
@@ -50,6 +51,7 @@ describe('chat prompt v2', () => {
 
   it('still builds the rules, the topic and the context into one system prompt', () => {
     const system = prompt.buildSystem(AiChatTopic.EVERYDAY_ROUTINES, {
+      family,
       ageYears: 6,
       planDay: null,
       planOverview: { sections: [], days: [] },

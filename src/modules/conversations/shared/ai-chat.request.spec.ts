@@ -5,14 +5,18 @@ import { buildChatRequest } from './ai-chat.request';
 
 const signal = new AbortController().signal;
 const names = [
-  { tokens: nameTokens('Zephyrine Rao'), placeholder: 'the child' },
-  { tokens: nameTokens('Meera Rao'), placeholder: 'the parent' },
+  { tokens: nameTokens('Isha Verma'), placeholder: 'the clinician' },
+  { tokens: nameTokens('Dev Anand'), placeholder: 'the expert' },
 ];
 
 function build(history: { sender: MessageSender; body: string }[], maxMessageChars = 1000) {
   return buildChatRequest({
     topic: AiChatTopic.TODAYS_ACTIVITIES,
-    context: { ageYears: 6, planDay: null },
+    context: {
+      ageYears: 6,
+      family: { parentName: 'Meera', childName: 'Zeph', gender: null },
+      planDay: null,
+    },
     history,
     names,
     maxMessageChars,
@@ -28,7 +32,7 @@ describe('buildChatRequest', () => {
 
     expect(req).toMatchObject({
       capability: 'chat-reply',
-      prompt: { id: 'chat-reply', version: 2 },
+      prompt: { id: 'chat-reply', version: 3 },
       actor: { userId: 'u1', childId: 'c1' },
       maxOutputTokens: 400,
       signal,
@@ -40,7 +44,7 @@ describe('buildChatRequest', () => {
     const req = build([
       {
         sender: MessageSender.PARENT,
-        body: 'Zephyrine and Meera: mail me at a.b@example.com then see https://x.example.org then call 98765 43210 and id 123456',
+        body: 'Zeph and Meera asked Isha Verma and Dev: mail me at a.b@example.com then see https://x.example.org then call 98765 43210 and id 123456',
       },
     ]);
 
@@ -48,7 +52,7 @@ describe('buildChatRequest', () => {
       {
         role: 'user',
         content:
-          'the child and the parent: mail me at an email address then see a link then call a phone number and id a number',
+          'Zeph and Meera asked the clinician and the expert: mail me at an email address then see a link then call a phone number and id a number',
       },
     ]);
   });

@@ -31,9 +31,19 @@ describe('SentenceSplitter', () => {
       ['Ask Dr. Rao or Mrs. Iyer, e.g. at the call. ', 'Then wait.'],
     ],
     [
-      'numbered steps stay with their text',
+      'numbered steps stay with their text, one piece per step',
       'Do these:\n1. Dim the lights.\n2. Read a story.',
-      ['Do these:\n1. Dim the lights.\n', '2. Read a story.'],
+      ['Do these:\n', '1. Dim the lights.\n', '2. Read a story.'],
+    ],
+    [
+      'bullet lines after a paragraph are one piece each, even without an end mark',
+      'Try this.\n\n- Dim the lights\n- Read a story\n- Say goodnight',
+      ['Try this.\n\n', '- Dim the lights\n', '- Read a story\n', '- Say goodnight'],
+    ],
+    [
+      'a dash inside a line or a number in a sentence is not a list line',
+      'Wait - then go.\nIt takes 10 minutes. Then 2. more',
+      ['Wait - then go.\n', 'It takes 10 minutes. ', 'Then 2. more'],
     ],
     [
       'closing quotes and brackets stay with the sentence',

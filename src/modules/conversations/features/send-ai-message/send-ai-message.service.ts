@@ -120,17 +120,24 @@ export class SendAiMessageService {
         return;
       }
 
-      const names = await this.nameGroups(child.id, child.name, caller.id);
-      const built = await this.contexts.build(conversation.topic, child, caller);
-      const history = await this.prisma.message.findMany({
-        where: { conversationId: id, state: MessageState.COMPLETE, seq: { lte: turn.parent.seq } },
-        orderBy: { seq: 'desc' },
-        take: chat.historyMessages + 1,
-        select: { sender: true, body: true },
-      });
+      // Independent reads: run them together, the first token waits for the slowest one.
+      const [names, context, history] = await Promise.all([
+        this.nameGroups(child.id),
+        this.contexts.build(conversation.topic, child, caller),
+        this.prisma.message.findMany({
+          where: {
+            conversationId: id,
+            state: MessageState.COMPLETE,
+            seq: { lte: turn.parent.seq },
+          },
+          orderBy: { seq: 'desc' },
+          take: chat.historyMessages + 1,
+          select: { sender: true, body: true },
+        }),
+      ]);
       const request = buildChatRequest({
         topic: conversation.topic,
-        context: built.context,
+        context,
         history: history.reverse(),
         names,
         maxMessageChars: chat.maxMessageChars,
@@ -144,7 +151,9 @@ export class SendAiMessageService {
         names.flatMap((n) => n.tokens),
         signal,
         sink,
-        isSmallTalk(dto.text) ? smallTalkReply(conversation.topic) : null,
+        isSmallTalk(dto.text)
+          ? smallTalkReply(conversation.topic, context.family.parentName)
+          : null,
       );
     } finally {
       this.active.delete(id);
@@ -260,25 +269,19 @@ export class SendAiMessageService {
     };
   }
 
-  /** Names to remove from the parent's text and to block in the reply: child, parent, care team. */
-  private async nameGroups(
-    childId: string,
-    childName: string,
-    parentId: string,
-  ): Promise<NameGroup[]> {
-    const [parent, team] = await Promise.all([
-      this.prisma.user.findUniqueOrThrow({ where: { id: parentId }, select: { name: true } }),
-      this.prisma.child.findUniqueOrThrow({
-        where: { id: childId },
-        select: {
-          clinicianAssignments: { select: { clinician: { select: { name: true } } } },
-          expertAssignments: { select: { expert: { select: { name: true } } } },
-        },
-      }),
-    ]);
+  /**
+   * Names to remove from the parent's text and to block in the reply: the care team only. The child's and the
+   * parent's first names are allowed (plan 0020 section 3 row 1).
+   */
+  private async nameGroups(childId: string): Promise<NameGroup[]> {
+    const team = await this.prisma.child.findUniqueOrThrow({
+      where: { id: childId },
+      select: {
+        clinicianAssignments: { select: { clinician: { select: { name: true } } } },
+        expertAssignments: { select: { expert: { select: { name: true } } } },
+      },
+    });
     return [
-      { tokens: nameTokens(childName), placeholder: 'the child' },
-      { tokens: nameTokens(parent.name), placeholder: 'the parent' },
       ...team.clinicianAssignments.map(({ clinician }) => ({
         tokens: nameTokens(clinician.name),
         placeholder: 'the clinician',

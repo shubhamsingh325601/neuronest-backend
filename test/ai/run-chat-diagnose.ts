@@ -7,7 +7,10 @@ import { streamText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { chatThinking } from '@common/ai/thinking-options';
 import { nameTokens } from '@modules/ai-coaching/shared/text-safety.util';
-import { assembleChatContext } from '@modules/conversations/shared/ai-chat-context.builder';
+import {
+  assembleChatContext,
+  type RawChatInput,
+} from '@modules/conversations/shared/ai-chat-context.builder';
 import { buildChatRequest } from '@modules/conversations/shared/ai-chat.request';
 import { ChatReplyProcessor } from '@modules/conversations/shared/chat-reply.processor';
 
@@ -40,16 +43,44 @@ const MESSAGES = [
   'Should I give my child melatonin to sleep?',
 ];
 
-const RAW = {
-  childName: 'Zephyrine Rao',
+const RAW: RawChatInput = {
+  parentName: 'Meera',
+  childName: 'Zephyrine',
+  gender: 'Female',
   ageYears: 6,
+  profile: {
+    currentStage: 'Building routines',
+    primaryCareFocus: 'Calmer evenings',
+    strengths: [{ title: 'Music', description: 'Loves singing and humming' }],
+    sensoryTraits: [
+      {
+        domain: 'Auditory',
+        sensitivityLevel: 'HIGH',
+        triggers: ['Loud noises'],
+        accommodations: [],
+      },
+    ],
+    calmingPreferences: [{ title: 'Deep pressure', technique: 'A slow, firm hug' }],
+    communication: {
+      expressiveMode: 'Short phrases',
+      receptiveUnderstanding: 'Follows two-step instructions',
+      preferredPrompts: ['Show first, then tell'],
+    },
+  },
+
   planDay: {
     dayNumber: 3,
     title: 'Bedtime routine',
     instructions: 'Dim the lights ten minutes earlier, then read one short story together.',
   },
   planSections: ['Week 1: Settling in', 'Week 2: Building routines'],
-  planDays: [{ dayNumber: 3, title: 'Bedtime routine' }],
+  planDays: [
+    {
+      dayNumber: 3,
+      title: 'Bedtime routine',
+      instructions: 'Dim the lights ten minutes earlier, then read one short story together.',
+    },
+  ],
   daysLogged: 4,
   sleepMinutesAverage: 495,
   themes: ['sleep'],
@@ -70,11 +101,11 @@ function loadKey(): void {
 const ms = (n: number): string => `${Math.round(n)}`.padStart(6);
 
 async function probe(modelId: string, variant: string, message: string): Promise<void> {
-  const built = assembleChatContext(AiChatTopic.TODAYS_ACTIVITIES, RAW);
-  const names = [{ tokens: nameTokens('Zephyrine Rao'), placeholder: 'the child' }];
+  const context = assembleChatContext(AiChatTopic.TODAYS_ACTIVITIES, RAW);
+  const names = [{ tokens: nameTokens('Isha Verma'), placeholder: 'the clinician' }];
   const req = buildChatRequest({
     topic: AiChatTopic.TODAYS_ACTIVITIES,
-    context: built.context,
+    context,
     history: [{ sender: 'PARENT', body: message }],
     names,
     maxMessageChars: 1000,
@@ -95,7 +126,7 @@ async function probe(modelId: string, variant: string, message: string): Promise
   let text = '';
   let failure = '';
   const types = new Map<string, number>();
-  const processor = new ChatReplyProcessor(built.nameTokens);
+  const processor = new ChatReplyProcessor(names.flatMap((n) => n.tokens));
   try {
     const result = streamText({
       model: google.languageModel(modelId),
@@ -148,7 +179,7 @@ async function probe(modelId: string, variant: string, message: string): Promise
       `  finish ${finishReason}/${raw}  ${usage}  textLen ${text.length}  marker ${marker}` +
       `  processor ${processor.outcome}  parts ${[...types].map(([k, v]) => `${k}×${v}`).join(',')}` +
       (failure ? `  FAIL ${failure}` : '') +
-      (process.env.AI_DIAG_SHOW === '1' ? `\n    text: ${JSON.stringify(text.slice(0, 160))}` : ''),
+      (process.env.AI_DIAG_SHOW === '1' ? `\n    text: ${JSON.stringify(text.slice(0, 700))}` : ''),
   );
 }
 

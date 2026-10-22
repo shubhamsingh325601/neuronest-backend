@@ -149,6 +149,18 @@ describe('ChatReplyProcessor', () => {
       expect(processor.push('More text. ')).toEqual([]);
     });
 
+    it('lets list lines through one by one, and still retracts a bad item', () => {
+      const ok = run(['Try this:\n\n- Dim the lights\n- Read ', 'a story\n1. Say goodnight']);
+      expect(ok.processor.outcome).toBe('COMPLETE');
+      expect(shown(ok.actions)).toBe(
+        'Try this:\n\n- Dim the lights\n- Read a story\n1. Say goodnight',
+      );
+
+      const bad = run(['Try this:\n\n- Dim the lights\n- Give a vitamin\n- Read a story']);
+      expect(bad.processor.outcome).toBe('RETRACTED');
+      expect(shown(bad.actions)).toBe('Try this:\n\n- Dim the lights\n');
+    });
+
     it('retracts a name, a link, a clinician claim and a diagnosis', () => {
       const bad = [
         ['Zephyrine can try this. ', 'NAME_LEAK'],

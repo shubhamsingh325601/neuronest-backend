@@ -100,7 +100,21 @@ export function withoutFooter(body: string): string {
  * Shown when the model marked a plain greeting, thanks or "who am I" as off-topic anyway (plan 0019 section 14).
  * A strike is for leaving the topic, not for saying hello. Fixed text, one per picked topic label.
  */
-export function smallTalkReply(topicId: string): string {
+export function smallTalkReply(topicId: string, parentName: string): string {
   const label = findChatTopic(topicId)?.label.toLowerCase() ?? 'your child';
-  return `Hello! I'm an AI assistant in this app. I can't see names, but I'm here to help you, the parent, with ${label}. What would you like to ask?`;
+  return `Hello ${parentName}! I'm an AI assistant in this app, here to help you with ${label}. What would you like to ask?`;
+}
+
+/**
+ * The first message of every AI chat (plan 0020 section 3 row 7): fixed text per topic, stored by code when the
+ * chat is created, no model call and no footer. Wording is product copy and may change.
+ */
+export function chatGreeting(topicId: string, parentName: string, childName: string): string {
+  const help: Record<string, string> = {
+    [AiChatTopic.TODAYS_ACTIVITIES]: `do today's activities with ${childName}, make them easier or shorter, and know what to expect`,
+    [AiChatTopic.PLAN_EXPLAINER]: `understand what ${childName}'s plan, its weeks and its goals mean`,
+    [AiChatTopic.RECENT_PROGRESS]: `look back at how last week went for ${childName}`,
+    [AiChatTopic.EVERYDAY_ROUTINES]: `with everyday routines for ${childName}, like sleep, meals and transitions`,
+  };
+  return `Hello ${parentName}! I'm an AI assistant in this app. I can help you ${help[topicId] ?? `with ${childName}'s care`}. What would you like to ask?`;
 }
