@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { ConversationKind, ConversationStatus, SummaryStatus } from '@prisma/client';
 import { AiRunError, AiService } from '@common/ai/ai.service';
 import { JobHandlerRegistry, type JobContext } from '@common/jobs/job-handler.registry';
+import { JobQueueService } from '@common/jobs/job-queue.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { SUMMARISE_JOB } from './conversation-summary.queue';
 import { ConversationSummaryJobs } from './conversation-summary.jobs';
@@ -17,13 +18,22 @@ const goodOutput = {
 };
 
 describe('ConversationSummaryJobs', () => {
-  const prisma = {
+  const prisma: {
+    conversation: { findUnique: jest.Mock };
+    message: { findMany: jest.Mock };
+    clinicianChildAssignment: { findMany: jest.Mock };
+    conversationSummary: { updateMany: jest.Mock; createMany: jest.Mock };
+    $transaction: jest.Mock;
+  } = {
     conversation: { findUnique: jest.fn() },
     message: { findMany: jest.fn() },
     clinicianChildAssignment: { findMany: jest.fn() },
     conversationSummary: { updateMany: jest.fn(), createMany: jest.fn() },
+    $transaction: jest.fn(),
   };
+  prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
   const ai = { generateStructured: jest.fn() };
+  const queue: { enqueue: jest.Mock } = { enqueue: jest.fn() };
   let jobs: ConversationSummaryJobs;
   let registry: JobHandlerRegistry;
 
@@ -48,6 +58,8 @@ describe('ConversationSummaryJobs', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
+    queue.enqueue.mockResolvedValue(true);
     prisma.conversation.findUnique.mockResolvedValue(conversation());
     prisma.message.findMany.mockResolvedValue([
       { sender: 'PARENT', body: 'Zorya wakes up a lot, call me on 98765 43210' },
@@ -70,6 +82,7 @@ describe('ConversationSummaryJobs', () => {
         { provide: JobHandlerRegistry, useValue: registry },
         { provide: AiService, useValue: ai },
         { provide: ConfigService, useValue: { get: () => ({ maxOutputTokens: 700 }) } },
+        { provide: JobQueueService, useValue: queue },
       ],
     }).compile();
     jobs = moduleRef.get(ConversationSummaryJobs);
@@ -177,6 +190,21 @@ describe('ConversationSummaryJobs', () => {
 
     const call = prisma.conversationSummary.updateMany.mock.calls[0][0];
     expect(call.data).toEqual({ status: SummaryStatus.FAILED, failureReason: 'AI_PROVIDER' });
+  });
+
+  it('reschedules without failing when AI is disabled; the summary stays PENDING', async () => {
+    ai.generateStructured.mockRejectedValue(new AiRunError('AI_DISABLED'));
+
+    await expect(jobs.summarise(job())).resolves.toBeUndefined();
+
+    expect(prisma.conversationSummary.updateMany).not.toHaveBeenCalled();
+    expect(queue.enqueue).toHaveBeenCalledTimes(1);
+    const spec = queue.enqueue.mock.calls[0][1];
+    expect(spec.type).toBe(SUMMARISE_JOB);
+    expect(spec.payload).toEqual({ conversationId: 'c-1' });
+    expect(spec.dedupeKey).toMatch(/^summary:c-1:\d+$/);
+    expect(spec.runAt).toBeInstanceOf(Date);
+    expect((spec.runAt as Date).getTime()).toBeGreaterThan(Date.now());
   });
 
   it('rethrows an unexpected error without touching the summary', async () => {

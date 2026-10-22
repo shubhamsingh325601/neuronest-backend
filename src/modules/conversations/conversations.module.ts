@@ -21,6 +21,8 @@ import { ListConversationSummariesController } from './features/list-conversatio
 import { ListConversationSummariesService } from './features/list-conversation-summaries/list-conversation-summaries.service';
 import { ListConversationsController } from './features/list-conversations/list-conversations.controller';
 import { ListConversationsService } from './features/list-conversations/list-conversations.service';
+import { ListMyConversationsController } from './features/list-my-conversations/list-my-conversations.controller';
+import { ListMyConversationsService } from './features/list-my-conversations/list-my-conversations.service';
 import { ListMessagesController } from './features/list-messages/list-messages.controller';
 import { ListMessagesService } from './features/list-messages/list-messages.service';
 import { SendAiMessageController } from './features/send-ai-message/send-ai-message.controller';
@@ -59,6 +61,7 @@ import { InProcessConversationEventBus } from './shared/in-process-conversation-
     ConversationEventsController,
     CloseConversationController,
     ListConversationsController,
+    ListMyConversationsController,
     GetConversationSummaryController,
     ListConversationSummariesController,
   ],
@@ -75,6 +78,7 @@ import { InProcessConversationEventBus } from './shared/in-process-conversation-
     ListMessagesService,
     CloseConversationService,
     ListConversationsService,
+    ListMyConversationsService,
     GetConversationSummaryService,
     ListConversationSummariesService,
     ConversationJobs,

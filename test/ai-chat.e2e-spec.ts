@@ -383,7 +383,7 @@ describe('AI chat (e2e)', () => {
       const failed = await send(id, parent.token, 'Hello', 'f-1');
 
       expect(failed.status).toBe(200);
-      expect(failed.headers['content-type']).toMatch(/text/event-stream/);
+      expect(failed.headers['content-type']).toMatch(/text\/event-stream/);
       expect(failed.text.startsWith(': hb')).toBe(true); // first bytes are a heartbeat
       expect(parseSse(failed.text)).toEqual([{ event: 'error', data: { code: 'AI_TIMEOUT' } }]);
       expect((await stored(id)).map((m) => m.sender)).toEqual(['PARENT']);

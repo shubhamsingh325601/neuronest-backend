@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   ConversationStatus,
@@ -9,6 +9,7 @@ import {
 import { AiRunError, AiService } from '@common/ai/ai.service';
 import type { AppConfig } from '@common/config/configuration';
 import { JobHandlerRegistry, type JobContext } from '@common/jobs/job-handler.registry';
+import { JobQueueService } from '@common/jobs/job-queue.service';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { nameTokens } from '@modules/ai-coaching/shared/text-safety.util';
 import { conversationSummaryPromptV1 as prompt } from '@modules/conversations/prompts/conversation-summary.v1';
@@ -21,6 +22,10 @@ import type { NameGroup } from '@modules/conversations/shared/pii-redaction';
 import { SUMMARISE_JOB } from './conversation-summary.queue';
 
 const OPEN_STATES: SummaryStatus[] = [SummaryStatus.PENDING, SummaryStatus.FAILED];
+
+const HOUR_MS = 3_600_000;
+/** How long to wait before trying the summary again when AI is turned off. */
+const AI_DISABLED_RETRY_MS = HOUR_MS;
 
 /** A malformed payload is a permanent bug, so throw. */
 function payloadConversationId(job: JobContext): string {
@@ -40,11 +45,14 @@ function payloadConversationId(job: JobContext): string {
  */
 @Injectable()
 export class ConversationSummaryJobs implements OnModuleInit {
+  private readonly logger = new Logger(ConversationSummaryJobs.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: JobHandlerRegistry,
     private readonly ai: AiService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly queue: JobQueueService,
   ) {}
 
   onModuleInit(): void {
@@ -136,6 +144,13 @@ export class ConversationSummaryJobs implements OnModuleInit {
         }),
       );
     } catch (err) {
+      // AI_ENABLED=false must not burn retries and leave a DEAD job; the summary row stays
+      // PENDING and a fresh job is queued for the next hour (bucketed dedupe key keeps that
+      // idempotent per hour).
+      if (err instanceof AiRunError && err.code === 'AI_DISABLED') {
+        await this.reschedule(conversationId);
+        return;
+      }
       if (err instanceof AiRunError) await this.markFailed(conversationId, err.code);
       // `AiRunError`'s message is derived from its code, so this is safe for `Job.lastError`.
       throw err;
@@ -166,6 +181,23 @@ export class ConversationSummaryJobs implements OnModuleInit {
         generatedAt: new Date(),
       },
     });
+  }
+
+  private async reschedule(conversationId: string): Promise<void> {
+    const runAt = new Date(Date.now() + AI_DISABLED_RETRY_MS);
+    const bucket = Math.floor(runAt.getTime() / HOUR_MS);
+    await this.prisma.$transaction(async (tx) => {
+      await this.queue.enqueue(tx, {
+        type: SUMMARISE_JOB,
+        payload: { conversationId },
+        dedupeKey: `summary:${conversationId}:${bucket}`,
+        runAt,
+      });
+    });
+    this.logger.warn(
+      { conversationId, runAt },
+      'AI is disabled; rescheduled conversation summary',
+    );
   }
 
   private async markFailed(conversationId: string, reason: string): Promise<void> {

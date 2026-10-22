@@ -203,6 +203,11 @@ describe('Child progress tracking (e2e)', () => {
     });
 
     it('computes aggregates and trend for the default previous full week', async () => {
+      // Clear entries written by earlier tests: on Mon-Wed, their isoDay(1..3) entries
+      // land in the previous-full-week window and skew daysLogged (observed flake, Batch 6
+      // notes). The child schema has one child per parent, so we scrub instead of adding one.
+      await ctx.prisma.progressEntry.deleteMany({ where: { childId } });
+
       const lastWeek = addDays(mondayOf(isoDay(0)), -7);
       const priorWeek = addDays(lastWeek, -7);
       // Prior week: low. Last week: high.
