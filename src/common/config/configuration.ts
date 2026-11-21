@@ -168,7 +168,7 @@ export const configuration = (): AppConfig => ({
   verification: {
     emailTtlMin: parseInt(process.env.EMAIL_VERIFICATION_TTL_MIN ?? '10', 10),
     emailMaxAttempts: parseInt(process.env.EMAIL_VERIFICATION_MAX_ATTEMPTS ?? '5', 10),
-    passwordResetTtlMin: parseInt(process.env.PASSWORD_RESET_TTL_MIN ?? '60', 10),
+    passwordResetTtlMin: parseInt(process.env.PASSWORD_RESET_TTL_MIN ?? '15', 10),
     accountSetupTtlHours: parseInt(process.env.ACCOUNT_SETUP_TTL_HOURS ?? '72', 10),
   },
   email: {
